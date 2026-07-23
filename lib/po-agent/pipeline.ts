@@ -258,7 +258,14 @@ export async function processInbound(
 }
 
 function threadOf(message: InboundMessage): ThreadRef {
-  return { threadId: message.threadId, inReplyToMessageId: message.messageId, subject: reSubject(message.subject) };
+  return {
+    threadId: message.threadId,
+    inReplyToMessageId: message.messageId,
+    rfcMessageId: message.headers?.["message-id"],
+    references: message.headers?.["references"],
+    to: message.from,
+    subject: reSubject(message.subject),
+  };
 }
 
 async function actOnDecision(

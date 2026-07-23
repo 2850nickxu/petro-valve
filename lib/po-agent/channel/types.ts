@@ -29,8 +29,13 @@ export interface OutboundReply {
 
 export interface ThreadRef {
   threadId: string;
+  /** Provider message id being replied to. */
   inReplyToMessageId?: string;
+  /** RFC-2822 Message-ID header of the message being replied to (for In-Reply-To). */
+  rfcMessageId?: string;
   references?: string;
+  /** Recipient of the reply (the buyer). */
+  to?: string;
   subject?: string;
 }
 

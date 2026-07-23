@@ -28,7 +28,7 @@ function ageMs(nowIso: string, updatedAtIso: string): number {
 }
 
 function threadOf(session: PoSession): ThreadRef {
-  return { threadId: session.threadId, subject: "Re: your purchase order" };
+  return { threadId: session.threadId, to: session.buyer?.email, subject: "Re: your purchase order" };
 }
 
 export async function sweepLifecycle(deps: LifecycleDeps): Promise<SweepResult> {

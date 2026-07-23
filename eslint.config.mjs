@@ -24,6 +24,22 @@ export default tseslint.config(
     },
   },
   {
+    // Node scripts (.mjs) run in Node — declare its globals.
+    files: ["scripts/**/*"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        process: "readonly",
+        Buffer: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly",
+        fetch: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+      },
+    },
+  },
+  {
     // Scripts and mocks are pragmatic; relax further.
     files: ["scripts/**/*", "tests/**/*"],
     rules: {
