@@ -126,6 +126,7 @@ export async function processInbound(
     const idres = await identify(deps.ctx, message.from);
     session.buyer = idres.buyer ?? undefined;
     audit("identified", { found: Boolean(idres.buyer), companyApproved: idres.companyApproved });
+    if (!opts.dryRun && deps.store) await deps.store.bumpCounter(ym(now()), "received");
 
     const channel = resolveChannel({
       channelMap: deps.config.channelMap,
@@ -238,6 +239,7 @@ export async function processInbound(
     } else {
       const actCtx: ActContext = { buyer, channelId: channel.channelId, resolved, extracted, credit, quoteConfig, decision, priorState, ts: now() };
       await actOnDecision(deps, session, message, actCtx);
+      if (deps.store && session.state === "escalated") await deps.store.bumpCounter(ym(now()), "escalations");
     }
 
     await persist();
@@ -250,6 +252,7 @@ export async function processInbound(
         at: now(),
         notified: await fanOutEscalation({ config: deps.config, store: deps.store, sendMail: deps.sendMail, now }, session, ["internal_error"]),
       };
+      await deps.store.bumpCounter(ym(now()), "escalations");
     }
     session.state = "escalated";
     await persist().catch(() => {});
@@ -361,6 +364,7 @@ async function actOnDecision(
       if (store) {
         await store.setTrusted(ctx.buyer.email);
         await store.bumpCounter(ym(ctx.ts), "orders");
+        await store.bumpCounter(ym(ctx.ts), "valueCents", Math.round(res.totals.grandTotal * 100));
       }
     } else if (decision.kind === "quote") {
       const res = await submitQuote(deps.ctx, {

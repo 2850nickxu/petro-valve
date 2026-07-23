@@ -49,6 +49,8 @@ export interface PoStore {
   listQueue(queue: "escalated" | "recent" | "awaiting", limit?: number): Promise<string[]>;
   bumpCounter(yyyymm: string, field: string, by?: number): Promise<number>;
   bumpDailyCap(yyyymmdd: string, field: string, by?: number): Promise<number>;
+  getCounters(yyyymm: string): Promise<Record<string, number>>;
+  loadSessions(ids: string[]): Promise<PoSession[]>;
 }
 
 function queueKey(queue: "escalated" | "recent" | "awaiting"): string {
@@ -140,6 +142,22 @@ export function createPoStore(redis: Redis): PoStore {
     },
     async bumpDailyCap(yyyymmdd, field, by = 1) {
       return await redis.cmd<number>(["HINCRBY", keys.caps(yyyymmdd), field, String(by)]);
+    },
+
+    async getCounters(yyyymm) {
+      const flat = await redis.cmd<string[]>(["HGETALL", keys.counters(yyyymm)]);
+      const out: Record<string, number> = {};
+      for (let i = 0; i + 1 < flat.length; i += 2) out[flat[i]] = Number(flat[i + 1]) || 0;
+      return out;
+    },
+
+    async loadSessions(ids) {
+      const sessions: PoSession[] = [];
+      for (const id of ids) {
+        const s = await this.loadSession(id);
+        if (s) sessions.push(s);
+      }
+      return sessions;
     },
   };
 }
