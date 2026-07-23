@@ -45,8 +45,12 @@ export interface EmailChannel {
   getMessage(messageId: string): Promise<InboundMessage>;
   getAttachment(messageId: string, attachmentId: string): Promise<Buffer>;
   sendReply(thread: ThreadRef, reply: OutboundReply): Promise<{ messageId: string }>;
+  /** Send a NEW email (not a thread reply) — for rep-inbox escalation. */
+  sendEmail(to: string, subject: string, text: string): Promise<boolean>;
   markProcessed(messageId: string): Promise<void>;
   renewSubscription(): Promise<{ expiresAt: string }>;
+  /** True when a message is the agent's own send or an auto-reply (skip it). */
+  isLoopMessage(msg: InboundMessage): boolean;
 }
 
 /** Pluggable extraction: real LLM (ai/extract) or the zero-cred heuristic. */

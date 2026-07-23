@@ -61,6 +61,15 @@ export class SimulatorChannel implements EmailChannel {
     return { messageId };
   }
 
+  async sendEmail(to: string, subject: string, text: string): Promise<boolean> {
+    this.sent.push({ thread: { threadId: "", to, subject }, reply: { subject, text }, messageId: `sim-mail-${++this.counter}` });
+    return true;
+  }
+
+  isLoopMessage(): boolean {
+    return false;
+  }
+
   async markProcessed(): Promise<void> {
     /* no-op */
   }

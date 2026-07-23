@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/po-agent/cron/renew-watch", "schedule": "0 6 * * *" },
+    { "path": "/api/po-agent/cron/poll", "schedule": "*/5 * * * *" }
+  ]
+}
