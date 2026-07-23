@@ -13,6 +13,13 @@ export interface ResolveOptions {
   codeResolver?: ProductCodeResolver;
 }
 
+/** Lines that can actually be ordered: resolved to a product, not blocked, not unresolved. */
+export function submittableLines(lines: ResolvedLine[]): ResolvedLine[] {
+  return lines.filter(
+    (l) => l.productId != null && !l.blockedByAssortment && !l.issues.includes("line_unresolved"),
+  );
+}
+
 export async function resolveLines(
   ctx: StoreContext,
   lines: PoLineItem[],
