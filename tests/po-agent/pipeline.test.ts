@@ -25,7 +25,8 @@ SKU: WIDGET-100 Qty: 10 $9.84`;
 function makeDeps(over: Partial<PipelineDeps> = {}): PipelineDeps {
   return {
     ctx: TEST_CTX,
-    config: getPoAgentConfig({}),
+    // First-order confirmation gate is default-ON; disable it for the direct-submit tests.
+    config: getPoAgentConfig({ PO_AGENT_FIRST_ORDER_CONFIRM: "false" }),
     store: createPoStore(createMockRedis()),
     channel: new SimulatorChannel(),
     extract: resolveExtractor({}), // heuristic (no PO_AGENT_MODEL)

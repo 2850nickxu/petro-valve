@@ -29,6 +29,23 @@ export function resolveExtractor(env: Record<string, string | undefined> = proce
       .join("\n");
     const bodyText = [msg.bodyText, prior?.buyerReply].filter(Boolean).join("\n");
     const extracted = heuristicExtract({ subject: msg.subject, bodyText, extraText });
+
+    // Merge: a short reply (e.g. "CONFIRM") has no SKUs — carry forward the prior PO so a
+    // clarification/confirmation reply doesn't wipe the original line items. (The real LLM
+    // extractor does this via the merge prompt.)
+    if (prior?.priorExtraction && extracted.lines.every((l) => !l.sku)) {
+      return {
+        extracted: {
+          ...prior.priorExtraction,
+          paymentIntent:
+            extracted.paymentIntent !== "unspecified"
+              ? extracted.paymentIntent
+              : prior.priorExtraction.paymentIntent,
+          poNumber: prior.priorExtraction.poNumber ?? extracted.poNumber,
+        },
+        notes: [],
+      };
+    }
     return { extracted, notes: [] };
   };
 }
