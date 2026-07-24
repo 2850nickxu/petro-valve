@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
+import { Badge } from "../../ui";
 import { SessionActions } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -10,85 +11,96 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
   const id = decodeURIComponent(sessionId);
 
   const redis = getRedis();
-  if (!redis) return <Shell><p style={{ color: "#a33" }}>Redis not configured.</p></Shell>;
+  if (!redis) return <div className="card muted">Redis not configured.</div>;
   const store = createPoStore(redis);
   const session = await store.loadSession(id);
-  if (!session) return <Shell><p>Session not found: {id}</p></Shell>;
+  if (!session) return (
+    <>
+      <h1>Session</h1>
+      <div className="card">Not found: <code>{id}</code>. <Link href="/staff/po-inbox">Back to inbox</Link></div>
+    </>
+  );
+
+  const money = (n?: number) => (n != null ? `$${n.toFixed(2)}` : "—");
 
   return (
-    <Shell>
-      <p style={{ color: "#556" }}>
-        {session.buyer?.companyName ?? "unknown company"} · {session.buyer?.email ?? "unknown"} · state:{" "}
-        <strong>{session.state}</strong> · decision: {session.decision?.kind ?? "—"}
-      </p>
+    <>
+      <div className="page-head">
+        <div>
+          <h1>{session.buyer?.companyName ?? "Session"}</h1>
+          <p className="muted">
+            {session.buyer?.email ?? "unknown"} · <Badge kind={session.state}>{session.state}</Badge>{" "}
+            {session.decision && <span className="tag">decision: {session.decision.kind}</span>}
+          </p>
+        </div>
+        <Link href="/staff/po-inbox" className="btn">← Inbox</Link>
+      </div>
 
-      <section style={card}>
+      <div className="card">
         <h3>Actions</h3>
         <SessionActions sessionId={id} />
-      </section>
+      </div>
+
+      {session.result && (session.result.orderId || session.result.quoteId) && (
+        <div className="card">
+          <h3>Result</h3>
+          <div className="kv">
+            {session.result.orderId && (<><span className="k">Order</span><span className="mono">{session.result.orderId}</span></>)}
+            {session.result.quoteId && (<><span className="k">Quote</span><span className="mono">{session.result.quoteNumber ?? session.result.quoteId}</span></>)}
+            {session.result.checkoutUrl && (<><span className="k">Checkout link</span><span><a href={session.result.checkoutUrl}>open</a></span></>)}
+          </div>
+        </div>
+      )}
 
       {session.escalation && (
-        <section style={card}>
+        <div className="card">
           <h3>Escalation</h3>
-          <p>Reasons: {session.escalation.reasons.join(", ")}</p>
-          <p>Notified: {session.escalation.notified.join(", ")}</p>
-        </section>
+          <div className="kv">
+            <span className="k">Reasons</span><span>{session.escalation.reasons.join(", ")}</span>
+            <span className="k">Notified</span><span>{session.escalation.notified.join(", ")}</span>
+          </div>
+        </div>
       )}
 
-      <section style={card}>
-        <h3>Extracted</h3>
-        <pre style={pre}>{JSON.stringify(session.extracted, null, 2)}</pre>
-      </section>
-
-      <section style={card}>
+      <div className="card">
         <h3>Lines</h3>
-        <ul>
-          {(session.resolution ?? []).map((r, i) => (
-            <li key={i}>
-              {r.matchedSku ?? r.line.sku ?? r.line.rawText} × {r.line.quantity ?? "?"} —{" "}
-              {r.calculatedUnitPrice != null ? `$${r.calculatedUnitPrice.toFixed(2)}` : "unpriced"}{" "}
-              {r.issues.length ? `[${r.issues.join(", ")}]` : ""}
-            </li>
-          ))}
-        </ul>
-      </section>
+        <table className="table">
+          <thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Issues</th></tr></thead>
+          <tbody>
+            {(session.resolution ?? []).map((r, i) => (
+              <tr key={i}>
+                <td className="mono">{r.matchedSku ?? r.line.sku ?? r.line.rawText.slice(0, 28)}</td>
+                <td>{r.line.quantity ?? "—"}</td>
+                <td>{money(r.calculatedUnitPrice ?? r.line.statedUnitPrice ?? undefined)}</td>
+                <td className="muted">{r.issues.join(", ") || "ok"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {session.validation && session.validation.length > 0 && (
-        <section style={card}>
+        <div className="card">
           <h3>Issues</h3>
-          <ul>
-            {session.validation.map((v, i) => (
-              <li key={i}><code>{v.kind}</code> — {v.message}</li>
-            ))}
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {session.validation.map((v, i) => (<li key={i}><code>{v.kind}</code> — {v.message}</li>))}
           </ul>
-        </section>
+        </div>
       )}
 
-      <section style={card}>
-        <h3>Audit</h3>
-        <ol style={{ fontSize: 13 }}>
+      <div className="card">
+        <h3>Extracted</h3>
+        <pre className="block">{JSON.stringify(session.extracted, null, 2)}</pre>
+      </div>
+
+      <div className="card">
+        <h3>Audit trail</h3>
+        <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
           {session.audit.map((a, i) => (
-            <li key={i}>
-              <code>{a.at.slice(11, 19)}</code> <strong>{a.event}</strong>{" "}
-              {a.detail ? <code>{JSON.stringify(a.detail)}</code> : null}
-            </li>
+            <li key={i}><code>{a.at.slice(11, 19)}</code> <strong>{a.event}</strong> {a.detail ? <code>{JSON.stringify(a.detail)}</code> : null}</li>
           ))}
         </ol>
-      </section>
-
-      <p><Link href="/staff/po-inbox">← Back to inbox</Link></p>
-    </Shell>
+      </div>
+    </>
   );
 }
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <main style={{ padding: 32, maxWidth: 900, margin: "0 auto" }}>
-      <h1>PO Session</h1>
-      {children}
-    </main>
-  );
-}
-
-const card: React.CSSProperties = { border: "1px solid #e3e3e8", borderRadius: 8, padding: 16, marginBottom: 16 };
-const pre: React.CSSProperties = { background: "#f7f7f9", padding: 12, borderRadius: 6, overflow: "auto", fontSize: 12 };

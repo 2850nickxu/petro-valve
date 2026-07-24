@@ -1,26 +1,30 @@
+import Link from "next/link";
+
 export default function Home() {
   return (
-    <main style={{ padding: 32, maxWidth: 720 }}>
-      <h1>Offline PO Agent</h1>
-      <p>
-        Email-first purchase-order processing for BigCommerce B2B Edition. B2B buyers
-        email a purchase order (PDF, spreadsheet, or plain text); the agent identifies
-        the buyer, parses the PO, enforces the same B2B controls the storefront would,
-        and submits an <strong>order</strong> (pay-on-account) or a <strong>quote</strong>{" "}
-        with a checkout link.
-      </p>
-      <ul>
-        <li>
-          <a href="/demo">Demo simulator</a> — paste a PO and watch the pipeline run
-          (no email or credentials needed).
-        </li>
-        <li>
-          <a href="/staff/po-inbox">Review queue</a> — escalated and recent sessions.
-        </li>
-      </ul>
-      <p style={{ color: "#667", fontSize: 14 }}>
-        Feature-flagged: set <code>PO_AGENT_ENABLED=true</code> to activate. Off by default.
-      </p>
-    </main>
+    <div className="container">
+      <div className="page-head">
+        <div>
+          <h1>Offline PO Agent</h1>
+          <p className="muted">
+            Email-first purchase-order processing for BigCommerce B2B Edition. Buyers email a PO;
+            the agent identifies the buyer, parses it, enforces B2B controls, and submits an order
+            (pay-on-account) or a quote with a checkout link.
+          </p>
+        </div>
+      </div>
+      <div className="grid cols-2">
+        <div className="card">
+          <h3>Admin console</h3>
+          <p className="muted">Dashboard, review queue, sessions, simulator, and settings.</p>
+          <Link className="btn primary" href="/staff">Open admin</Link>
+        </div>
+        <div className="card">
+          <h3>Public demo</h3>
+          <p className="muted">Paste a PO and watch the pipeline run — no credentials needed.</p>
+          <Link className="btn" href="/demo">Open demo</Link>
+        </div>
+      </div>
+    </div>
   );
 }

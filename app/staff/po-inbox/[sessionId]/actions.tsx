@@ -27,22 +27,18 @@ export function SessionActions({ sessionId }: { sessionId: string }) {
     }
   }
 
-  const btn = (action: string, label: string, color: string) => (
-    <button
-      onClick={() => run(action)}
-      disabled={busy != null}
-      style={{ padding: "8px 14px", background: color, color: "white", border: "none", borderRadius: 6, cursor: "pointer", opacity: busy ? 0.6 : 1 }}
-    >
-      {busy === action ? "…" : label}
-    </button>
-  );
-
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-      {btn("force_order", "Force order", "#0a7")}
-      {btn("force_quote", "Force quote", "#07a")}
-      {btn("dismiss", "Dismiss", "#a33")}
-      {msg && <span style={{ color: "#556" }}>{msg}</span>}
+    <div className="toolbar">
+      <button className="btn primary" onClick={() => run("force_order")} disabled={busy != null}>
+        {busy === "force_order" ? "…" : "Force order"}
+      </button>
+      <button className="btn" onClick={() => run("force_quote")} disabled={busy != null}>
+        {busy === "force_quote" ? "…" : "Force quote"}
+      </button>
+      <button className="btn danger" onClick={() => run("dismiss")} disabled={busy != null}>
+        {busy === "dismiss" ? "…" : "Dismiss"}
+      </button>
+      {msg && <span className="muted">{msg}</span>}
     </div>
   );
 }
