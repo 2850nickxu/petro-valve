@@ -97,7 +97,10 @@ export async function createQuote(
     grandTotal: total,
     subtotal: total,
     discount: 0,
-    userEmail: params.contactInfo.email,
+    // Server-to-server creation: the agent is a backend user. Do NOT send a top-level
+    // userEmail — the management /rfq endpoint validates it against B2B Control Panel
+    // *system* users (buyers 422). The buyer stays in contactInfo. (Verified [L2].)
+    isBackendUser: "1",
     expiredAt: params.expiredAt,
     channelId: params.channelId ?? ctx.channelId,
     companyId: params.companyId,
