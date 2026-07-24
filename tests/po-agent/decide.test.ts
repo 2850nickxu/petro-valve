@@ -80,6 +80,9 @@ describe("assessPayOnAccount", () => {
     expect(assessPayOnAccount({ ...ok, creditHold: true }).reasons).toContain("credit_hold");
     expect(assessPayOnAccount({ ...ok, limitPurchases: true, estimatedTotal: 100, availableCredit: 50 }).reasons).toContain("credit_exceeded");
   });
+  it("invalid when the B2B credit feature is disabled (§7.4)", () => {
+    expect(assessPayOnAccount({ ...ok, creditEnabled: false }).valid).toBe(false);
+  });
 });
 
 describe("buyerCanPlaceOrders + isBlocking", () => {

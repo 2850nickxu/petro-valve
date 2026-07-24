@@ -48,7 +48,12 @@ export interface PayOnAccountInputs {
   availableCredit: number;
 }
 
-/** Evaluate pay-on-account validity; reasons map to decision-category issue kinds. */
+/**
+ * Evaluate pay-on-account validity (plan §7.4): requires an enabled terms method AND the
+ * B2B credit feature enabled AND not on hold AND within any credit limit. `reasons` map to
+ * decision-category issue kinds that get surfaced; a disabled credit feature simply makes
+ * pay-on-account invalid (routes to a quote as "no_terms") without a dedicated issue.
+ */
 export function assessPayOnAccount(p: PayOnAccountInputs): {
   valid: boolean;
   reasons: ValidationIssueKind[];
@@ -57,11 +62,7 @@ export function assessPayOnAccount(p: PayOnAccountInputs): {
   if (!p.methodAvailable) reasons.push("payment_method_unavailable");
   if (p.creditEnabled && p.creditHold) reasons.push("credit_hold");
   if (p.limitPurchases && p.estimatedTotal > p.availableCredit) reasons.push("credit_exceeded");
-  // No credit configured at all also disqualifies terms.
-  if (!p.creditEnabled && !p.methodAvailable) {
-    /* already captured by payment_method_unavailable */
-  }
-  return { valid: reasons.length === 0 && p.methodAvailable, reasons };
+  return { valid: reasons.length === 0 && p.methodAvailable && p.creditEnabled, reasons };
 }
 
 function uniq<T>(xs: T[]): T[] {
