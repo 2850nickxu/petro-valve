@@ -3,6 +3,7 @@ import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { computeMetrics, currentYyyymm } from "@/lib/po-agent/metrics";
 import { adminStatus, isOperational } from "@/lib/po-agent/admin-status";
+import { activeStoreSource } from "@/lib/bc-app/request-context";
 import { Stat, Badge, HealthRow } from "./ui";
 import type { PoSession } from "@/lib/po-agent/types";
 
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
   const status = adminStatus();
+  const active = await activeStoreSource();
   const redis = getRedis();
 
   let metrics = computeMetrics({});
@@ -57,7 +59,7 @@ export default async function Dashboard() {
           <h3>System health</h3>
           <div className="health">
             <HealthRow ok={status.enabled} name="PO agent enabled" detail={status.enabled ? "on" : "PO_AGENT_ENABLED"} warn={!status.enabled} />
-            <HealthRow ok={status.store.configured} name="BigCommerce store" detail={status.store.storeHash ?? "not configured"} />
+            <HealthRow ok={active.source !== "none"} name="BigCommerce store" detail={active.storeHash ? `${active.storeHash} · token: ${active.source}` : "not configured"} />
             <HealthRow ok={status.redis} name="Redis (state)" detail={status.redis ? "connected" : "not configured"} />
             <HealthRow ok={status.ai.configured} name="AI model" detail={status.ai.model ?? "heuristic fallback"} warn={!status.ai.configured} />
             <HealthRow ok={status.channelCreds.google || status.channelCreds.microsoft} name="Email channel" detail={status.channelCreds.google ? "gmail" : status.channelCreds.microsoft ? "microsoft" : "none"} warn={!status.channelCreds.google && !status.channelCreds.microsoft} />

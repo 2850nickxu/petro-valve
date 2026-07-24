@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const note = decodePubSubGmail(body);
 
-  const rt = buildRuntime();
+  const rt = await buildRuntime();
   if (rt.ok) {
     const store = rt.deps.store!;
     await store.setLastPushAt(new Date().toISOString());

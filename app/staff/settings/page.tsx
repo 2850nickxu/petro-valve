@@ -1,10 +1,12 @@
 import { adminStatus } from "@/lib/po-agent/admin-status";
+import { listStoreInstalls } from "@/lib/bc-app/store-tokens";
 import { HealthRow } from "../ui";
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
   const s = adminStatus();
+  const installs = await listStoreInstalls();
   const yn = (b: boolean) => (b ? "yes" : "no");
 
   return (
@@ -47,6 +49,27 @@ export default function SettingsPage() {
             <span className="k">Daily submit cap</span><span>{s.limits.dailySubmitCap ?? "off"}</span>
           </div>
         </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <h3>Installed stores (app)</h3>
+        {installs.length ? (
+          <table className="table">
+            <thead><tr><th>Store hash</th><th>Owner</th><th>Installed</th><th>Token</th></tr></thead>
+            <tbody>
+              {installs.map((i) => (
+                <tr key={i.storeHash}>
+                  <td className="mono">{i.storeHash}</td>
+                  <td className="muted">{i.ownerEmail ?? "—"}</td>
+                  <td className="muted mono">{i.installedAt.slice(0, 16).replace("T", " ")}</td>
+                  <td><span className="tag">OAuth (per-store)</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="muted">No app installs yet. The agent is using the env store token. Installing the app captures a per-store OAuth token here.</p>
+        )}
       </div>
 
       <div className="card" style={{ marginTop: 16 }}>

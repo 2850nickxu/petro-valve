@@ -1,5 +1,5 @@
 import { getRedis } from "@/lib/redis";
-import { tryGetStoreContext } from "@/lib/bc/store-context";
+import { resolveStoreContextForHash } from "@/lib/bc-app/resolve-context";
 import { getPoAgentConfig } from "./config";
 import { createPoStore } from "./store";
 import { resolveExtractor } from "./ai/extractor";
@@ -29,11 +29,12 @@ function resolveChannelAdapter(env: Env): { channel: EmailChannel; mailbox: stri
   return { channel: new GoogleChannel({ mailbox, creds, pubsubTopic: env.GOOGLE_PO_PUBSUB_TOPIC }), mailbox };
 }
 
-export function buildRuntime(env: Env = process.env): RuntimeResult {
+export async function buildRuntime(env: Env = process.env, storeHash?: string): Promise<RuntimeResult> {
   const config = getPoAgentConfig(env);
   if (!config.enabled) return { ok: false, error: "PO agent is disabled (PO_AGENT_ENABLED)" };
 
-  const ctx = tryGetStoreContext(env);
+  // Prefer a per-store install token when a store hash is given (Phase B); else env.
+  const ctx = await resolveStoreContextForHash(storeHash ?? null, env);
   if (!ctx) return { ok: false, error: "BigCommerce store context not configured" };
 
   const redis = getRedis(env);

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPoAgentConfig } from "@/lib/po-agent/config";
-import { tryGetStoreContext } from "@/lib/bc/store-context";
+import { resolveRequestStoreContext } from "@/lib/bc-app/request-context";
 import { resolveExtractor } from "@/lib/po-agent/ai/extractor";
 import { SimulatorChannel } from "@/lib/po-agent/channel/simulator";
 import { processInbound } from "@/lib/po-agent/pipeline";
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   const channel = new SimulatorChannel();
   const message = channel.inject({ from, subject: body.subject ?? "", bodyText: body.bodyText ?? "" });
   const extract = resolveExtractor();
-  const ctx = tryGetStoreContext();
+  const ctx = await resolveRequestStoreContext();
 
   if (!ctx) {
     const { extracted } = await extract(message);

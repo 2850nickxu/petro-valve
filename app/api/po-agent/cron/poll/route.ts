@@ -18,7 +18,7 @@ export async function GET(req: Request) {
   if (!verifyInboundSecret(req, config.inboundSecret)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const rt = buildRuntime();
+  const rt = await buildRuntime();
   if (!rt.ok) return NextResponse.json({ error: rt.error }, { status: 503 });
   const store = rt.deps.store!;
 

@@ -35,6 +35,22 @@ export async function deleteStoreInstall(storeHash: string): Promise<void> {
   if (redis) await redis.cmd(["DEL", key(storeHash)]);
 }
 
+/** List installed stores (one-shot SCAN; token omitted). */
+export async function listStoreInstalls(): Promise<Array<Omit<StoreInstall, "accessToken">>> {
+  const redis = getRedis();
+  if (!redis) return [];
+  const [, keys] = await redis.cmd<[string, string[]]>(["SCAN", "0", "MATCH", "poa:app:store:*", "COUNT", "200"]);
+  if (!keys?.length) return [];
+  const raws = await redis.pipeline<string | null>(keys.map((k) => ["GET", k]));
+  return raws
+    .filter((r): r is string => Boolean(r))
+    .map((r) => {
+      const { accessToken: _omit, ...rest } = JSON.parse(r) as StoreInstall;
+      void _omit;
+      return rest;
+    });
+}
+
 /** Resolve a StoreContext for an installed store (Phase-B path). */
 export async function storeContextForInstall(
   storeHash: string,

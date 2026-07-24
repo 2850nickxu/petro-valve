@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
-import { buildRuntime } from "@/lib/po-agent/runtime";
+import { resolveRequestStoreContext } from "@/lib/bc-app/request-context";
 import { submitOrder } from "@/lib/po-agent/core/submit-order";
 import { submitQuote } from "@/lib/po-agent/core/submit-quote";
 import { getQuoteConfigs, getQuoteExpiryDays } from "@/lib/bc/quote-config";
@@ -35,12 +35,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
     if (!session.buyer || !session.resolution) {
       return NextResponse.json({ error: "session missing buyer or resolution" }, { status: 400 });
     }
-    const rt = buildRuntime();
-    if (!rt.ok) return NextResponse.json({ error: rt.error }, { status: 503 });
-    const channelId = session.channelId ?? rt.deps.ctx.channelId;
+    const ctx = await resolveRequestStoreContext();
+    if (!ctx) return NextResponse.json({ error: "BigCommerce store context not configured" }, { status: 503 });
+    const channelId = session.channelId ?? ctx.channelId;
 
     if (action === "force_order") {
-      const res = await submitOrder(rt.deps.ctx, {
+      const res = await submitOrder(ctx, {
         buyer: session.buyer,
         channelId,
         resolvedLines: session.resolution,
@@ -52,8 +52,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
       session.state = "completed_order";
       session.result = { orderId: res.orderId };
     } else {
-      const qc = await getQuoteConfigs(rt.deps.ctx);
-      const res = await submitQuote(rt.deps.ctx, {
+      const qc = await getQuoteConfigs(ctx);
+      const res = await submitQuote(ctx, {
         buyer: session.buyer,
         channelId,
         resolvedLines: session.resolution,

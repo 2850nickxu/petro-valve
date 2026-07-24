@@ -15,10 +15,11 @@ export async function POST(req: Request) {
   if (!verifyInboundSecret(req, config.inboundSecret)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const rt = buildRuntime();
-  if (!rt.ok) return NextResponse.json({ error: rt.error }, { status: 503 });
+  const body = (await req.json().catch(() => ({}))) as { messageId?: string; historyId?: string; storeHash?: string };
 
-  const body = (await req.json().catch(() => ({}))) as { messageId?: string; historyId?: string };
+  // storeHash (optional) targets a specific installed store's OAuth token; else env.
+  const rt = await buildRuntime(process.env, body.storeHash);
+  if (!rt.ok) return NextResponse.json({ error: rt.error }, { status: 503 });
 
   if (body.messageId) {
     const msg = await rt.channel.getMessage(body.messageId);

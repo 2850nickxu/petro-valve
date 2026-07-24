@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const rt = buildRuntime();
+  const rt = await buildRuntime();
   if (rt.ok) {
     const messageIds = notifications.map((n) => n.resourceData?.id).filter((v): v is string => Boolean(v));
     after(async () => {
