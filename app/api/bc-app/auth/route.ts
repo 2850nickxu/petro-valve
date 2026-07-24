@@ -1,5 +1,6 @@
 import { bcAppCreds } from "@/lib/bc-app/config";
 import { saveStoreInstall } from "@/lib/bc-app/store-tokens";
+import { registerAppExtensions } from "@/lib/bc-app/extensions";
 import { appPage } from "@/lib/bc-app/html";
 
 // OAuth install callback (GET /api/bc-app/auth). BigCommerce redirects here with
@@ -56,11 +57,19 @@ export async function GET(req: Request) {
     installedAt: new Date().toISOString(),
   });
 
+  // Register the control-panel App Extensions (Orders + Customers panels) with the OAuth
+  // token. Requires the store_app_extensions_manage scope; non-fatal if it's missing.
+  const ext = await registerAppExtensions({ storeHash, accessToken: json.access_token, channelId: 1 });
+  const extMsg = ext.error
+    ? `<p class="muted">App Extensions not registered: ${ext.error.replace(/</g, "&lt;")} (add the “App Extensions: manage” scope and reinstall).</p>`
+    : `<p class="muted">App Extensions ready: ${ext.created.length} created, ${ext.existing.length} already present (Orders + Customers panels).</p>`;
+
   return appPage(
     "Installed",
     `<h1 class="ok">PO Agent installed</h1>
      <p>Connected to store <code>${storeHash}</code>${json.owner?.email ? ` for <code>${json.owner.email}</code>` : ""}.</p>
      ${saved ? "" : `<p class="bad">Warning: could not persist the token (Redis not configured) — set UPSTASH_REDIS_REST_URL/TOKEN.</p>`}
+     ${extMsg}
      <p class="muted">You can now open the app from your BigCommerce control panel.</p>`,
   );
 }
