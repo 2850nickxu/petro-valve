@@ -42,7 +42,6 @@ export interface PoAgentConfig {
   mode: PoAgentMode;
   channel: Channel;
   model?: string;
-  fallbackModel?: string;
   maxClarifications: number;
   maxRepliesPerThread: number;
   priceTolerancePct: number;
@@ -74,7 +73,6 @@ export function getPoAgentConfig(env: Env = process.env): PoAgentConfig {
     mode: env.PO_AGENT_MODE === "review" ? "review" : "auto",
     channel: env.PO_AGENT_CHANNEL === "microsoft" ? "microsoft" : "google",
     model: env.PO_AGENT_MODEL || undefined,
-    fallbackModel: env.PO_AGENT_FALLBACK_MODEL || undefined,
     maxClarifications: num(env.PO_AGENT_MAX_CLARIFICATIONS, 2),
     maxRepliesPerThread: num(env.PO_AGENT_MAX_REPLIES_PER_THREAD, 6),
     priceTolerancePct: num(env.PO_AGENT_PRICE_TOLERANCE_PCT, 1),
