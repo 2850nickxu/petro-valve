@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { getPoAgentConfig } from "@/lib/po-agent/config";
+import { effectiveEnv } from "@/lib/po-agent/effective-env";
+import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
 import { resolveRequestStoreContext } from "@/lib/bc-app/request-context";
 import { resolveExtractor } from "@/lib/po-agent/ai/extractor";
 import { SimulatorChannel } from "@/lib/po-agent/channel/simulator";
@@ -24,10 +27,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Provide a sender email address (from)." }, { status: 400 });
   }
 
-  const config = getPoAgentConfig();
+  // Resolve settings-overlaid env (per installed store, else global) so a UI-configured
+  // model / API key / behavior takes effect in the simulator too.
+  const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
+  const env = await effectiveEnv(hash ?? undefined);
+  const config = getPoAgentConfig(env);
   const channel = new SimulatorChannel();
   const message = channel.inject({ from, subject: body.subject ?? "", bodyText: body.bodyText ?? "" });
-  const extract = resolveExtractor();
+  const extract = resolveExtractor(env);
   const ctx = await resolveRequestStoreContext();
 
   if (!ctx) {

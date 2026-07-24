@@ -81,14 +81,16 @@ describe("heuristicExtract (zero-cred fallback)", () => {
 });
 
 describe("provider registry", () => {
-  it("hasConfiguredModel + getPoModel gate on PO_AGENT_MODEL", () => {
+  it("hasConfiguredModel requires both a model and its provider key", () => {
     expect(hasConfiguredModel({})).toBe(false);
-    expect(hasConfiguredModel({ PO_AGENT_MODEL: "anthropic:claude-x" })).toBe(true);
+    expect(hasConfiguredModel({ PO_AGENT_MODEL: "anthropic:claude-x" })).toBe(false); // no key
+    expect(hasConfiguredModel({ PO_AGENT_MODEL: "anthropic:claude-x", ANTHROPIC_API_KEY: "sk-x" })).toBe(true);
     expect(() => getPoModel({})).toThrow(/PO_AGENT_MODEL/);
   });
 
-  it("resolves a provider:model id to a model object", () => {
-    const model = poModel("anthropic:claude-sonnet-4-6");
+  it("resolves a provider:model id to a model object using the env key", () => {
+    const model = poModel("anthropic:claude-sonnet-4-6", { ANTHROPIC_API_KEY: "sk-x" });
     expect(model).toBeTruthy();
+    expect(() => poModel("bogus:x")).toThrow(/provider/);
   });
 });

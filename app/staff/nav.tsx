@@ -18,7 +18,7 @@ export function AdminNav() {
     <nav className="admin-nav">
       <div className="inner">
         <span className="brand">
-          <span className="dot" /> PO Agent
+          <span className="dot">PO</span> PO Agent
         </span>
         <div className="links">
           {LINKS.map(([href, label]) => (

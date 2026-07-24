@@ -21,6 +21,7 @@ describe("adminStatus", () => {
       UPSTASH_REDIS_REST_URL: "https://x",
       UPSTASH_REDIS_REST_TOKEN: "t",
       PO_AGENT_MODEL: "anthropic:claude-sonnet-4-6",
+      ANTHROPIC_API_KEY: "sk-x",
       GOOGLE_PO_CLIENT_ID: "c",
       GOOGLE_PO_CLIENT_SECRET: "s",
       GOOGLE_PO_REFRESH_TOKEN: "r",

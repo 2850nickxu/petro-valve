@@ -1,5 +1,6 @@
 import { getRedis } from "@/lib/redis";
 import { resolveStoreContextForHash } from "@/lib/bc-app/resolve-context";
+import { effectiveEnv } from "./effective-env";
 import { getPoAgentConfig } from "./config";
 import { createPoStore } from "./store";
 import { resolveExtractor } from "./ai/extractor";
@@ -29,7 +30,10 @@ function resolveChannelAdapter(env: Env): { channel: EmailChannel; mailbox: stri
   return { channel: new GoogleChannel({ mailbox, creds, pubsubTopic: env.GOOGLE_PO_PUBSUB_TOPIC }), mailbox };
 }
 
-export async function buildRuntime(env: Env = process.env, storeHash?: string): Promise<RuntimeResult> {
+export async function buildRuntime(baseEnv: Env = process.env, storeHash?: string): Promise<RuntimeResult> {
+  // Layer UI-configured settings over env (global + per-store).
+  const env = await effectiveEnv(storeHash, baseEnv);
+
   const config = getPoAgentConfig(env);
   if (!config.enabled) return { ok: false, error: "PO agent is disabled (PO_AGENT_ENABLED)" };
 
