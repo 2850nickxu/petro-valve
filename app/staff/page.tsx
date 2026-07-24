@@ -1,8 +1,11 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { computeMetrics, currentYyyymm } from "@/lib/po-agent/metrics";
 import { adminStatus, isOperational } from "@/lib/po-agent/admin-status";
+import { effectiveEnv } from "@/lib/po-agent/effective-env";
+import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
 import { activeStoreSource } from "@/lib/bc-app/request-context";
 import { Stat, Badge, HealthRow } from "./ui";
 import type { PoSession } from "@/lib/po-agent/types";
@@ -10,7 +13,8 @@ import type { PoSession } from "@/lib/po-agent/types";
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
-  const status = adminStatus();
+  const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
+  const status = adminStatus(await effectiveEnv(hash ?? undefined)); // reflects saved settings
   const active = await activeStoreSource();
   const redis = getRedis();
 

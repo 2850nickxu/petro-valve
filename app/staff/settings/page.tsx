@@ -1,8 +1,9 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { SETTINGS_FIELDS, settingsView, type SettingsScope } from "@/lib/po-agent/settings-store";
 import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
 import { listStoreInstalls } from "@/lib/bc-app/store-tokens";
 import { SettingsForm } from "@/components/settings-form";
+import { GmailConnect } from "@/components/gmail-connect";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,8 @@ export default async function SettingsPage() {
   const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
   const scope: SettingsScope = hash ? `store:${hash}` : "global";
   const [view, installs] = await Promise.all([settingsView(scope), listStoreInstalls()]);
+  const host = (await headers()).get("host") ?? "localhost:3000";
+  const origin = `https://${host}`;
 
   return (
     <>
@@ -21,6 +24,12 @@ export default async function SettingsPage() {
             <span className="tag">{scope === "global" ? "this deployment" : `store ${hash}`}</span>. Secrets are encrypted at rest 🔒.
           </p>
         </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h3>Gmail connection</h3>
+        <p className="muted" style={{ marginTop: -6 }}>Connect the monitored mailbox in-app (no local script). Save your Gmail OAuth client id/secret below first.</p>
+        <GmailConnect origin={origin} />
       </div>
 
       <SettingsForm fields={SETTINGS_FIELDS} view={view} />

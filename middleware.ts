@@ -7,7 +7,7 @@ import { isStaffAuthorized, staffSecret } from "@/lib/po-agent/staff-auth";
 // local dev when no secret is set; closed in production.
 
 export const config = {
-  matcher: ["/staff/:path*", "/api/staff/:path*", "/app-panel/:path*"],
+  matcher: ["/staff/:path*", "/api/staff/:path*", "/app-panel/:path*", "/api/gmail-oauth/:path*"],
 };
 
 function b64url(bytes: Uint8Array): string {
