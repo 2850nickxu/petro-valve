@@ -9,6 +9,13 @@ Standalone Next.js (App Router) app, session-less and server-to-server. Designed
 whole decision architecture is **buildable and unit-testable offline**, with live
 BigCommerce / Gmail / AI-provider credentials needed only at clearly-labeled steps.
 
+## Deployment
+
+- **Live:** https://offline-po-app.vercel.app (admin at `/staff`, public demo at `/demo`)
+- Hosted on Vercel (project `offline-po-app`), connected to this repo — **pushes to `main`
+  auto-deploy to production**; pull requests get preview URLs.
+- Configuration is self-service in the app (**Settings**); secrets are encrypted at rest.
+
 ## Status
 
 Under active construction — phased build (see the plan). The first runnable milestone is a
