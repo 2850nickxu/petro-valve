@@ -7,6 +7,7 @@ const LINKS: Array<[string, string]> = [
   ["/staff", "Dashboard"],
   ["/staff/po-inbox", "Inbox"],
   ["/staff/sessions", "Sessions"],
+  ["/staff/usage", "Usage"],
   ["/staff/simulator", "Simulator"],
   ["/staff/settings", "Settings"],
 ];

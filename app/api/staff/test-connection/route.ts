@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { generateText } from "ai";
+import { getRedis } from "@/lib/redis";
+import { createPoStore } from "@/lib/po-agent/store";
+import { currentYyyymm } from "@/lib/po-agent/metrics";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
 import { verifiedStoreHash, resolveStoreContextForHash } from "@/lib/bc-app/resolve-context";
 import { bcFetch } from "@/lib/bc/bc-client";
@@ -34,6 +37,14 @@ export async function POST(req: Request) {
         const model = env.PO_AGENT_MODEL;
         if (!model) return done(false, "Set a model (provider:model-id).");
         const result = await generateText({ model: poModel(model, env), prompt: "Reply with the single word: ok", maxOutputTokens: 8 });
+        try {
+          const redis = getRedis();
+          if (redis && result.usage) {
+            await createPoStore(redis).recordTokens(currentYyyymm(new Date().toISOString()), model, result.usage.inputTokens ?? 0, result.usage.outputTokens ?? 0);
+          }
+        } catch {
+          /* usage tracking best-effort */
+        }
         return done(true, `Model responded: “${result.text.trim().slice(0, 40)}”.`);
       }
       case "slack": {

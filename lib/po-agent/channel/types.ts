@@ -53,8 +53,15 @@ export interface EmailChannel {
   isLoopMessage(msg: InboundMessage): boolean;
 }
 
+export interface ExtractionUsage {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
 /** Pluggable extraction: real LLM (ai/extract) or the zero-cred heuristic. */
 export type Extractor = (
   msg: InboundMessage,
   prior?: { priorExtraction?: ExtractedPo; buyerReply?: string },
-) => Promise<{ extracted: ExtractedPo; notes: string[] }>;
+) => Promise<{ extracted: ExtractedPo; notes: string[]; usage?: ExtractionUsage }>;

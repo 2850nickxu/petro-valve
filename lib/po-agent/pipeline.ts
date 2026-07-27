@@ -137,12 +137,16 @@ export async function processInbound(
     session.channelId = channel.channelId;
 
     const prior = session.extracted;
-    const { extracted } = await deps.extract(message, {
+    const extraction = await deps.extract(message, {
       priorExtraction: prior,
       buyerReply: prior ? message.bodyText : undefined,
     });
+    const extracted = extraction.extracted;
     session.extracted = extracted;
     audit("extracted", { lines: extracted.lines.length, confidence: extracted.confidence, paymentIntent: extracted.paymentIntent });
+    if (!opts.dryRun && deps.store && extraction.usage) {
+      await deps.store.recordTokens(ym(now()), extraction.usage.model, extraction.usage.inputTokens, extraction.usage.outputTokens);
+    }
 
     // Unknown sender ⇒ polite rejection.
     if (!idres.buyer) {

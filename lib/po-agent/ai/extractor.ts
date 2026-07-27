@@ -10,8 +10,9 @@ import { getPoModel, hasConfiguredModel } from "./registry";
 export function resolveExtractor(env: Record<string, string | undefined> = process.env): Extractor {
   if (hasConfiguredModel(env)) {
     const model = getPoModel(env);
-    return async (msg, prior) =>
-      extractPo({
+    const modelId = env.PO_AGENT_MODEL ?? "unknown";
+    return async (msg, prior) => {
+      const r = await extractPo({
         model,
         subject: msg.subject,
         bodyText: msg.bodyText,
@@ -19,6 +20,12 @@ export function resolveExtractor(env: Record<string, string | undefined> = proce
         priorExtraction: prior?.priorExtraction,
         buyerReply: prior?.buyerReply,
       });
+      return {
+        extracted: r.extracted,
+        notes: r.notes,
+        usage: r.usage ? { model: modelId, ...r.usage } : undefined,
+      };
+    };
   }
 
   return async (msg, prior) => {

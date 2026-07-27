@@ -21,6 +21,7 @@ export const keys = {
   queueRecent: "poa:queue:recent",
   queueAwaiting: "poa:queue:awaiting",
   counters: (yyyymm: string) => `poa:counters:${yyyymm}`,
+  tokens: (yyyymm: string) => `poa:tokens:${yyyymm}`,
   caps: (yyyymmdd: string) => `poa:caps:${yyyymmdd}`,
   trusted: (email: string) => `poa:trusted:${email.toLowerCase()}`,
 } as const;
@@ -51,6 +52,8 @@ export interface PoStore {
   bumpDailyCap(yyyymmdd: string, field: string, by?: number): Promise<number>;
   getCounters(yyyymm: string): Promise<Record<string, number>>;
   loadSessions(ids: string[]): Promise<PoSession[]>;
+  recordTokens(yyyymm: string, model: string, input: number, output: number): Promise<void>;
+  getTokenUsage(yyyymm: string): Promise<Record<string, number>>;
 }
 
 function queueKey(queue: "escalated" | "recent" | "awaiting"): string {
@@ -158,6 +161,21 @@ export function createPoStore(redis: Redis): PoStore {
         if (s) sessions.push(s);
       }
       return sessions;
+    },
+
+    async recordTokens(yyyymm, model, input, output) {
+      await redis.pipeline([
+        ["HINCRBY", keys.tokens(yyyymm), `${model}|in`, String(Math.max(0, Math.round(input)))],
+        ["HINCRBY", keys.tokens(yyyymm), `${model}|out`, String(Math.max(0, Math.round(output)))],
+        ["HINCRBY", keys.tokens(yyyymm), `${model}|calls`, "1"],
+      ]);
+    },
+
+    async getTokenUsage(yyyymm) {
+      const flat = await redis.cmd<string[]>(["HGETALL", keys.tokens(yyyymm)]);
+      const out: Record<string, number> = {};
+      for (let i = 0; i + 1 < flat.length; i += 2) out[flat[i]] = Number(flat[i + 1]) || 0;
+      return out;
     },
   };
 }

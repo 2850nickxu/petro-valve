@@ -20,7 +20,7 @@ const validPo: ExtractedPo = {
 
 describe("extractPo via generateObject (schema-validated)", () => {
   it("returns the schema-valid object and attachment notes", async () => {
-    const { extracted, notes } = await extractPo({
+    const { extracted, notes, usage } = await extractPo({
       model: fixtureModel(validPo),
       subject: "PO",
       bodyText: "please ship",
@@ -29,6 +29,10 @@ describe("extractPo via generateObject (schema-validated)", () => {
     expect(extracted.poNumber).toBe("PO-5567");
     expect(extracted.lines[0].sku).toBe("WIDGET-100");
     expect(notes[0]).toMatch(/spreadsheet/i);
+    // extractPo surfaces a usage object (the SDK mock doesn't propagate counts; the real
+    // provider returns them — token math is covered in token-usage.test.ts).
+    expect(usage).toBeDefined();
+    expect(typeof usage?.totalTokens).toBe("number");
     // sanity: the fixture itself satisfies the schema
     expect(ExtractedPoSchema.safeParse(extracted).success).toBe(true);
   });

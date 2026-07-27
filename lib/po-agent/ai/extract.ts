@@ -53,9 +53,15 @@ export interface ExtractInput {
   buyerReply?: string;
 }
 
+export interface RawUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
 export async function extractPo(
   input: ExtractInput,
-): Promise<{ extracted: ExtractedPo; notes: string[] }> {
+): Promise<{ extracted: ExtractedPo; notes: string[]; usage?: RawUsage }> {
   const { parts, notes } = buildAttachmentParts(input.attachments ?? []);
 
   const content: ModelContentPart[] = [];
@@ -80,12 +86,16 @@ export async function extractPo(
   // content is valid UserContent (text + file parts); the SDK's message union is broader.
   const messages = [{ role: "user", content }] as unknown as ModelMessage[];
 
-  const { object } = await generateObject({
+  const { object, usage } = await generateObject({
     model: input.model,
     schema: ExtractedPoSchema,
     system: EXTRACTION_SYSTEM,
     messages,
   });
 
-  return { extracted: object as ExtractedPo, notes };
+  const raw: RawUsage | undefined = usage
+    ? { inputTokens: usage.inputTokens ?? 0, outputTokens: usage.outputTokens ?? 0, totalTokens: usage.totalTokens ?? 0 }
+    : undefined;
+
+  return { extracted: object as ExtractedPo, notes, usage: raw };
 }
