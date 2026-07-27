@@ -2,6 +2,13 @@ import Link from "next/link";
 
 export default function Home() {
   return (
+    <>
+    <div className="public-bar" />
+    <div className="public-brand">
+      <img src="/silk-logo-color.svg" alt="Silk Commerce" />
+      <span className="app-divider" />
+      <span className="app-title">PO Agent</span>
+    </div>
     <div className="container">
       <div className="page-head">
         <div>
@@ -26,5 +33,6 @@ export default function Home() {
         </div>
       </div>
     </div>
+    </>
   );
 }

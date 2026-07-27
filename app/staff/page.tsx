@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { computeMetrics, currentYyyymm } from "@/lib/po-agent/metrics";
-import { adminStatus, isOperational } from "@/lib/po-agent/admin-status";
+import { adminStatus } from "@/lib/po-agent/admin-status";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
 import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
 import { activeStoreSource } from "@/lib/bc-app/request-context";
@@ -40,12 +40,6 @@ export default async function Dashboard() {
         <div>
           <h1>Dashboard</h1>
           <p className="muted">Email → purchase-order agent for BigCommerce B2B Edition.</p>
-        </div>
-        <div className="toolbar">
-          <Badge kind={isOperational(status) ? "order" : "muted"}>
-            {isOperational(status) ? "Operational" : status.enabled ? "Incomplete setup" : "Disabled"}
-          </Badge>
-          <span className="tag">mode: {status.mode}</span>
         </div>
       </div>
 
