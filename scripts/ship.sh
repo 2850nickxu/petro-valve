@@ -96,16 +96,27 @@ fi
 if [ "$AUTOMERGE" != "1" ]; then
   rm -f "$FAIL"
   log "SHIP_AUTOMERGE=0 → PR #$PR is green; leaving it for a manual merge. Done."
-  log "   Merge with: gh pr merge $PR --squash --delete-branch"
+  log "   Merge with: gh pr merge $PR --squash"
   exit 0
 fi
 
+OWNER_REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 log "Merging PR #$PR (squash) → main → production deploy…"
-gh pr merge "$PR" --squash --delete-branch >>"$LOG" 2>&1 \
-  || die "Merge failed (conflict with main?). Resolve on the PR, then re-run."
+# No --delete-branch: its local 'git checkout <base>' fails inside a worktree
+# where main is checked out elsewhere. Merge via the API, treat an already-MERGED
+# PR as success, then delete the REMOTE branch with a ref API call (which never
+# touches the local checkout).
+if ! gh pr merge "$PR" --squash >>"$LOG" 2>&1; then
+  if [ "$(gh pr view "$PR" --json state -q .state 2>/dev/null || echo '')" != "MERGED" ]; then
+    die "Merge failed (conflict with main?). Resolve on the PR, then re-run."
+  fi
+  log "gh reported non-zero on local cleanup, but the PR is MERGED — continuing."
+fi
+if gh api -X DELETE "repos/$OWNER_REPO/git/refs/heads/$BRANCH" >>"$LOG" 2>&1; then
+  log "Deleted remote branch '$BRANCH'."
+fi
 
 # --- 5. watch the production (Vercel) deploy on main ------------------------
-OWNER_REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 MAIN_SHA="$(gh api "repos/$OWNER_REPO/commits/main" -q .sha)"
 log "Merged. Watching production deploy for main@${MAIN_SHA:0:7}…"
 
