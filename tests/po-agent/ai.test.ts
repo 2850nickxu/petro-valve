@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { z } from "zod";
 import { extractPo, ExtractedPoSchema } from "@/lib/po-agent/ai/extract";
 import { buildAttachmentParts } from "@/lib/po-agent/ai/attachments";
 import { heuristicExtract } from "@/lib/po-agent/ai/mock-provider";
@@ -35,6 +36,16 @@ describe("extractPo via generateObject (schema-validated)", () => {
     expect(typeof usage?.totalTokens).toBe("number");
     // sanity: the fixture itself satisfies the schema
     expect(ExtractedPoSchema.safeParse(extracted).success).toBe(true);
+  });
+
+  it("stays within the strict structured-output union budget (Anthropic caps at 16)", () => {
+    // Strict compilers reject schemas with too many nullable/union params. Count the null
+    // branches in the emitted JSON Schema; keep well under 16 so real providers don't 400.
+    const json = JSON.stringify(z.toJSONSchema(ExtractedPoSchema));
+    const nullableParams = (json.match(/"type":"null"/g) ?? []).length;
+    expect(nullableParams).toBeLessThanOrEqual(16);
+    // Address fields must NOT be nullable (they're the ones that blew the budget: 2×11).
+    expect(ExtractedPoSchema.safeParse({ ...validPo, shipTo: { firstName: null } }).success).toBe(false);
   });
 });
 

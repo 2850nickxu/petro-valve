@@ -4,18 +4,23 @@ import { EXTRACTION_SYSTEM } from "./prompts";
 import { buildAttachmentParts, type Attachment, type ModelContentPart } from "./attachments";
 import type { ExtractedPo } from "../types";
 
+// Address fields are required strings (empty "" = absent) rather than 11 nullable unions
+// each. Strict structured-output compilers cap union/nullable params (Anthropic: 16), and
+// two nullable Address objects × 11 nullable fields alone would blow that budget. Absence
+// of a whole address is still expressed by shipTo/billTo being null; a missing field within
+// a present address is "" (normalized away by addressToCheckout's `|| undefined`).
 const AddressSchema = z.object({
-  firstName: z.string().nullable(),
-  lastName: z.string().nullable(),
-  company: z.string().nullable(),
-  line1: z.string().nullable(),
-  line2: z.string().nullable(),
-  city: z.string().nullable(),
-  state: z.string().nullable(),
-  zip: z.string().nullable(),
-  country: z.string().nullable(),
-  phone: z.string().nullable(),
-  email: z.string().nullable(),
+  firstName: z.string(),
+  lastName: z.string(),
+  company: z.string(),
+  line1: z.string(),
+  line2: z.string(),
+  city: z.string(),
+  state: z.string(),
+  zip: z.string(),
+  country: z.string(),
+  phone: z.string(),
+  email: z.string(),
 });
 
 export const ExtractedPoSchema = z.object({

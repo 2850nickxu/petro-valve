@@ -6,18 +6,20 @@ import { submittableLines } from "./resolve";
 import type { Address, Buyer, ResolvedLine, ExtractedPo } from "../types";
 
 function addressToCheckout(a: Address): BcCheckoutAddress {
+  // `|| undefined` (not `??`) so an absent field — now "" from the extractor rather than
+  // null — is omitted from the checkout payload instead of sent as an empty string.
   return {
-    first_name: a.firstName ?? undefined,
-    last_name: a.lastName ?? undefined,
-    company: a.company ?? undefined,
-    address1: a.line1 ?? undefined,
-    address2: a.line2 ?? undefined,
-    city: a.city ?? undefined,
-    state_or_province: a.state ?? undefined,
-    postal_code: a.zip ?? undefined,
-    country_code: a.country ?? undefined,
-    phone: a.phone ?? undefined,
-    email: a.email ?? undefined,
+    first_name: a.firstName || undefined,
+    last_name: a.lastName || undefined,
+    company: a.company || undefined,
+    address1: a.line1 || undefined,
+    address2: a.line2 || undefined,
+    city: a.city || undefined,
+    state_or_province: a.state || undefined,
+    postal_code: a.zip || undefined,
+    country_code: a.country || undefined,
+    phone: a.phone || undefined,
+    email: a.email || undefined,
   };
 }
 
