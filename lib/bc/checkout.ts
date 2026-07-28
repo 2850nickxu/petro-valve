@@ -61,6 +61,8 @@ export interface TermsOrderParams {
   poNumber?: string;
   /** Credit guard inputs; null/undefined ⇒ no cap enforced. */
   credit?: { limitPurchases: boolean; availableCredit: number } | null;
+  /** Appended to staff_notes (e.g. a sandbox marker for identification/cleanup). */
+  noteSuffix?: string;
 }
 
 export type TermsOrderResult =
@@ -171,7 +173,7 @@ export async function placeTermsOrder(
     body: JSON.stringify({
       status_id: 11,
       payment_method: "Pay on Account",
-      staff_notes: `PO agent${params.poNumber ? ` — PO: ${params.poNumber}` : ""}`,
+      staff_notes: `PO agent${params.poNumber ? ` — PO: ${params.poNumber}` : ""}${params.noteSuffix ?? ""}`,
     }),
   });
 

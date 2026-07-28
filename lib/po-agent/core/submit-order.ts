@@ -30,7 +30,12 @@ export interface SubmitOrderParams {
   extracted: ExtractedPo;
   poNumber?: string;
   credit?: { limitPurchases: boolean; availableCredit: number } | null;
+  /** Sandbox run: tag the order's staff_notes so it's identifiable/cleanable. */
+  sandbox?: boolean;
 }
+
+/** Marker appended to sandbox order/quote notes so test artifacts are easy to find. */
+export const SANDBOX_NOTE = " [PO agent sandbox]";
 
 export type SubmitOrderResult =
   | { ok: true; orderId: number; totals: TermsOrderTotals; invoice: FinalizeTermsResult }
@@ -70,6 +75,7 @@ export async function submitOrder(ctx: StoreContext, params: SubmitOrderParams):
     shipping,
     poNumber: params.poNumber,
     credit: params.credit,
+    noteSuffix: params.sandbox ? SANDBOX_NOTE : undefined,
   });
   if (!placed.ok) return { ok: false, reason: placed.reason };
 

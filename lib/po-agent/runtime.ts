@@ -18,7 +18,7 @@ type Env = Record<string, string | undefined>;
 
 export type RuntimeResult = { ok: true; deps: PipelineDeps; channel: EmailChannel } | { ok: false; error: string };
 
-function resolveChannelAdapter(env: Env): { channel: EmailChannel; mailbox: string } | { error: string } {
+export function resolveChannelAdapter(env: Env): { channel: EmailChannel; mailbox: string } | { error: string } {
   if (env.PO_AGENT_CHANNEL === "microsoft") {
     const creds = msCredsFromEnv(env);
     if (!creds) return { error: "Microsoft Graph credentials not configured (MS_PO_*)" };

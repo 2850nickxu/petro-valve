@@ -20,6 +20,7 @@ import { decide, assessPayOnAccount, buyerCanPlaceOrders } from "./core/decide";
 import { submitOrder } from "./core/submit-order";
 import { submitQuote } from "./core/submit-quote";
 import { fanOutEscalation, type MailSender } from "./escalate";
+import { forwardBelowContractPo } from "./escalate/forward";
 import {
   draftRejection,
   draftClarification,
@@ -42,6 +43,8 @@ export interface PipelineDeps {
   sendMail?: MailSender;
   /** Monitored mailbox (for the MSF channel map). */
   mailbox?: string;
+  /** Sandbox run (simulator submitting for real): tag created order/quote artifacts. */
+  sandbox?: boolean;
   /** Injectable clock (ISO string) for deterministic tests. */
   now?: () => string;
 }
@@ -305,7 +308,13 @@ async function actOnDecision(
   if (decision.kind === "escalate") {
     await deps.channel.sendReply(thread, { subject: thread.subject!, text: draftEscalationNotice() });
     const notified = await fanOutEscalation({ config: deps.config, store, sendMail: deps.sendMail, now }, session, decision.reasons);
-    session.escalation = { reasons: decision.reasons, at: ctx.ts, notified };
+    const forwarded = await forwardBelowContractPo(
+      { ctx: deps.ctx, config: deps.config, sendEmail: (to, s, t) => deps.channel.sendEmail(to, s, t) },
+      session,
+      message,
+    );
+    if (forwarded.length) session.audit.push({ at: now(), event: "forwarded_below_contract", detail: { to: forwarded.length } });
+    session.escalation = { reasons: decision.reasons, at: ctx.ts, notified, ...(forwarded.length ? { forwarded } : {}) };
     session.state = "escalated";
     return;
   }
@@ -352,6 +361,7 @@ async function actOnDecision(
         extracted: ctx.extracted,
         poNumber: ctx.extracted.poNumber ?? undefined,
         credit: ctx.credit ? { limitPurchases: ctx.credit.limitPurchases, availableCredit: ctx.credit.availableCredit } : null,
+        sandbox: deps.sandbox,
       });
       if (!res.ok) {
         session.escalation = { reasons: [`submit_failed:${res.reason}`], at: ctx.ts, notified: await fanOutEscalation({ config: deps.config, store, sendMail: deps.sendMail, now }, session, [`submit_failed:${res.reason}`]) };
@@ -377,6 +387,7 @@ async function actOnDecision(
         resolvedLines: ctx.resolved,
         poNumber: ctx.extracted.poNumber ?? undefined,
         expiryDays: getQuoteExpiryDays(ctx.quoteConfig),
+        sandbox: deps.sandbox,
       });
       if (!res.ok) {
         session.escalation = { reasons: [`submit_failed:${res.reason}`], at: ctx.ts, notified: await fanOutEscalation({ config: deps.config, store, sendMail: deps.sendMail, now }, session, [`submit_failed:${res.reason}`]) };

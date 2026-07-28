@@ -13,17 +13,22 @@ type SimResult = {
   modelConfigured?: boolean;
   note?: string;
   extracted?: unknown;
+  sandbox?: boolean;
+  sandboxBlocked?: boolean;
+  emailsSent?: boolean;
+  captured?: Array<{ to?: string; subject?: string; text?: string }>;
   session?: {
     state: string;
     decision?: { kind: string; reasons: string[] };
     buyer?: { companyName?: string; email?: string };
     validation?: Array<{ kind: string; message: string; lineRef?: string }>;
     resolution?: Array<{ matchedSku?: string; productId?: number; calculatedUnitPrice?: number; issues: string[]; line: { rawText: string; quantity: number | null } }>;
+    result?: { orderId?: number; quoteId?: number; quoteNumber?: string; checkoutUrl?: string; quoteUrl?: string };
     audit?: Array<{ at: string; event: string; detail?: unknown }>;
   };
 };
 
-export function Simulator({ defaultFrom = "buyer@acme.com" }: { defaultFrom?: string }) {
+export function Simulator({ defaultFrom = "buyer@acme.com", sandbox = false, sandboxEmails = false }: { defaultFrom?: string; sandbox?: boolean; sandboxEmails?: boolean }) {
   const [from, setFrom] = useState(defaultFrom);
   const [subject, setSubject] = useState("New purchase order");
   const [bodyText, setBodyText] = useState(SAMPLE);
@@ -56,6 +61,11 @@ export function Simulator({ defaultFrom = "buyer@acme.com" }: { defaultFrom?: st
     <div className="grid cols-2">
       <div className="card">
         <h3>Purchase order</h3>
+        {sandbox && (
+          <p className="pill" style={{ background: "var(--warn-bg)", color: "var(--warn)", display: "inline-block", marginBottom: 12 }}>
+            SANDBOX — real submissions ON{sandboxEmails ? " · emails will send" : " · emails suppressed"}
+          </p>
+        )}
         <div className="field">
           <label>Sender email</label>
           <input value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -72,7 +82,11 @@ export function Simulator({ defaultFrom = "buyer@acme.com" }: { defaultFrom?: st
           {loading ? "Running…" : "Run pipeline"}
         </button>
         {error && <p style={{ color: "var(--bad)" }}>{error}</p>}
-        <p className="muted" style={{ marginTop: 12 }}>Dry run — never submits an order/quote and never sends email.</p>
+        <p className="muted" style={{ marginTop: 12 }}>
+          {sandbox
+            ? "Sandbox mode — submits a REAL order/quote to the connected store (tagged “[PO agent sandbox]”)."
+            : "Dry run — never submits an order/quote and never sends email."}
+        </p>
       </div>
 
       <div>
@@ -88,6 +102,11 @@ export function Simulator({ defaultFrom = "buyer@acme.com" }: { defaultFrom?: st
 
         {s && (
           <>
+            {result?.sandboxBlocked && (
+              <div className="card" style={{ borderColor: "var(--warn)" }}>
+                <p className="muted" style={{ margin: 0 }}>Sandbox mode is on but this ran as a dry run (Redis or a store token is missing). No order/quote was placed.</p>
+              </div>
+            )}
             <div className="card">
               <h3>Decision</h3>
               <p style={{ fontSize: 16 }}>
@@ -96,6 +115,32 @@ export function Simulator({ defaultFrom = "buyer@acme.com" }: { defaultFrom?: st
               </p>
               <p className="muted">{s.buyer?.companyName ?? "—"} · {s.buyer?.email ?? "unknown"}</p>
             </div>
+
+            {result?.sandbox && s.result && (s.result.orderId || s.result.quoteId) && (
+              <div className="card">
+                <h3>Submitted {result.emailsSent ? "· emails sent" : "· emails captured"}</h3>
+                {s.result.orderId && <p>Order <strong className="mono">#{s.result.orderId}</strong> placed in the store.</p>}
+                {s.result.quoteId && (
+                  <p>
+                    Quote <strong className="mono">{s.result.quoteNumber ?? s.result.quoteId}</strong> created.
+                    {s.result.checkoutUrl && <> <a href={s.result.checkoutUrl} target="_blank" rel="noreferrer">Checkout link →</a></>}
+                  </p>
+                )}
+                <p className="muted" style={{ fontSize: 12 }}>Tagged “[PO agent sandbox]” — safe to delete in the store.</p>
+              </div>
+            )}
+
+            {result?.sandbox && !result.emailsSent && result.captured && result.captured.length > 0 && (
+              <div className="card">
+                <h3>Captured emails ({result.captured.length})</h3>
+                {result.captured.map((c, i) => (
+                  <div key={i} style={{ marginBottom: 8 }}>
+                    <div className="muted" style={{ fontSize: 12 }}>{c.to ? `to ${c.to} · ` : ""}{c.subject}</div>
+                    <pre className="block" style={{ marginTop: 4 }}>{c.text}</pre>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="card">
               <h3>Lines</h3>

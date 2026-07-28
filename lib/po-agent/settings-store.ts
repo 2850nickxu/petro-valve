@@ -25,6 +25,7 @@ export const SETTINGS_FIELDS: FieldDef[] = [
   // Escalation
   { key: "PO_AGENT_ESCALATION_EMAIL", label: "Rep escalation email", group: "Escalation", placeholder: "reps@company.com" },
   { key: "PO_AGENT_SLACK_WEBHOOK_URL", label: "Slack webhook URL", group: "Escalation", secret: true },
+  { key: "PO_AGENT_FORWARD_PRICE_MISMATCH", label: "Forward below-contract POs to sales rep + admin", group: "Escalation", type: "bool" },
   // Email channel
   { key: "PO_AGENT_CHANNEL", label: "Channel", group: "Email channel", type: "select", options: ["google", "microsoft"] },
   { key: "PO_AGENT_MAILBOX", label: "Monitored mailbox", group: "Email channel", placeholder: "po@company.com" },
@@ -49,6 +50,8 @@ export const SETTINGS_FIELDS: FieldDef[] = [
   { key: "PO_AGENT_MAX_CLARIFICATIONS", label: "Max clarifications", group: "Workflow", type: "number" },
   { key: "PO_AGENT_FIRST_ORDER_CONFIRM", label: "First-order confirm", group: "Workflow", type: "bool" },
   { key: "PO_AGENT_DAILY_SUBMIT_CAP", label: "Daily submit cap", group: "Workflow", type: "number" },
+  { key: "PO_AGENT_SIMULATOR_SEND", label: "Sandbox mode (simulator submits real orders/quotes)", group: "Workflow", type: "bool" },
+  { key: "PO_AGENT_SIMULATOR_SEND_EMAILS", label: "Sandbox: also send emails", group: "Workflow", type: "bool" },
 ];
 
 export const SECRET_KEYS = new Set(SETTINGS_FIELDS.filter((f) => f.secret).map((f) => f.key));

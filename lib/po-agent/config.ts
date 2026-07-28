@@ -55,6 +55,10 @@ export interface PoAgentConfig {
   sessionTokenBudget?: number;
   dailySubmitCap?: number;
   simulatorSend: boolean;
+  /** When sandbox mode submits, also send buyer emails (else suppress + capture). */
+  simulatorSendEmails: boolean;
+  /** Forward below-contract POs to the company's sales rep + admin on escalation. */
+  forwardPriceMismatch: boolean;
   escalationEmail?: string;
   slackWebhookUrl?: string;
   /** MSF mailbox → channelId map. Empty ⇒ resolve via user channelList then fallback. */
@@ -85,6 +89,8 @@ export function getPoAgentConfig(env: Env = process.env): PoAgentConfig {
     sessionTokenBudget: optNum(env.PO_AGENT_SESSION_TOKEN_BUDGET),
     dailySubmitCap: optNum(env.PO_AGENT_DAILY_SUBMIT_CAP),
     simulatorSend: bool(env.PO_AGENT_SIMULATOR_SEND, false),
+    simulatorSendEmails: bool(env.PO_AGENT_SIMULATOR_SEND_EMAILS, false),
+    forwardPriceMismatch: bool(env.PO_AGENT_FORWARD_PRICE_MISMATCH, false),
     escalationEmail: env.PO_AGENT_ESCALATION_EMAIL || undefined,
     slackWebhookUrl: env.PO_AGENT_SLACK_WEBHOOK_URL || undefined,
     channelMap: jsonObj<Record<string, number>>(env.PO_AGENT_CHANNEL_MAP, {}),

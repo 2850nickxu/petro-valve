@@ -1,6 +1,7 @@
 import type { StoreContext } from "@/lib/bc/store-context";
 import { createQuote, acceptQuote, computeExpiryDate, type QuoteItemInput } from "@/lib/bc/quotes";
 import { submittableLines } from "./resolve";
+import { SANDBOX_NOTE } from "./submit-order";
 import type { Buyer, ResolvedLine } from "../types";
 
 export interface SubmitQuoteParams {
@@ -10,6 +11,8 @@ export interface SubmitQuoteParams {
   poNumber?: string;
   expiryDays: number;
   notes?: string;
+  /** Sandbox run: tag the quote notes so it's identifiable/cleanable. */
+  sandbox?: boolean;
   now?: Date;
 }
 
@@ -42,7 +45,7 @@ export async function submitQuote(ctx: StoreContext, params: SubmitQuoteParams):
     quoteTitle: params.poNumber
       ? `PO ${params.poNumber} — ${params.buyer.companyName}`
       : `Quote — ${params.buyer.companyName}`,
-    notes: params.notes,
+    notes: `${params.notes ?? ""}${params.sandbox ? SANDBOX_NOTE : ""}`.trim() || undefined,
     expiredAt: computeExpiryDate(params.expiryDays, params.now),
   });
 

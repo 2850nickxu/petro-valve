@@ -141,6 +141,8 @@ export interface Escalation {
   reasons: string[];
   at: string;
   notified: Array<"email" | "slack" | "queue">;
+  /** Emails the original PO was forwarded to (below-contract price forwarding). */
+  forwarded?: string[];
 }
 
 export interface AuditEntry {
