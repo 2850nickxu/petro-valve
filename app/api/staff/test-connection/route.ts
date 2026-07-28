@@ -23,7 +23,11 @@ const done = (ok: boolean, detail: string) => NextResponse.json({ ok, detail });
 export async function POST(req: Request) {
   const { target, values } = (await req.json().catch(() => ({}))) as { target?: string; values?: Record<string, string> };
   const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
-  const env = { ...(await effectiveEnv(hash ?? undefined)), ...(values ?? {}) };
+  // Only overlay non-empty form values: a blank field (e.g. an unchanged secret shown as
+  // "configured — leave blank to keep") must fall back to the saved/effective env, not
+  // clobber it with "" — which would strip the key and 401 the provider.
+  const overrides = Object.fromEntries(Object.entries(values ?? {}).filter(([, v]) => (v ?? "").trim() !== ""));
+  const env = { ...(await effectiveEnv(hash ?? undefined)), ...overrides };
 
   try {
     switch (target) {
