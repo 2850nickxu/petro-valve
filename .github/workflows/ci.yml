@@ -1,0 +1,41 @@
+name: CI
+
+# The gate for every PR into main. main itself deploys to Vercel production, so
+# this also runs on push to main as a post-merge safety net. Mirrors the
+# offline-first invariant: all four checks must pass with NO live credentials.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Only the newest commit on a ref matters — cancel superseded runs so PR checks
+# stay authoritative and the pipeline never merges on a stale green.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  verify:
+    name: type-check · lint · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type-check
+        run: npm run type-check
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm test
+      - name: Build (offline — no live credentials)
+        run: npm run build

@@ -30,3 +30,6 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+# devops pipeline — transient ship logs / locks / failure reports
+/.devops/

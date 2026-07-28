@@ -47,13 +47,35 @@ Every phase must be buildable and unit-testable with **no** live credentials:
 - AI layer → the AI SDK mock model / `tests/helpers/mock-ai`.
 Live BigCommerce/Gmail/AI verification lives in explicitly-labeled, skippable steps.
 
-## Git workflow
+## Git workflow — isolated branches, auto-ship to production
 
-- Base branch: `main`. Work on feature branches (`feat/…`, `fix/…`, `chore/…`).
-- One clean, logically-scoped commit per phase; end messages with the standard
-  `Co-Authored-By` trailer.
-- Local commits only — do not push or open PRs unless asked (this repo has no remote yet).
-- CI gate (when wired): `type-check` + `lint` + `test` + `build` must be green.
+`origin` is on GitHub and Vercel is wired to it: pushing any branch makes a
+**preview** deploy; merging to `main` deploys **production**
+(`https://offline-po-app.vercel.app`). CI (`type-check · lint · test · build`)
+gates every PR. Full runbook: `docs/DEVOPS.md`.
+
+- **Isolation — never clobber another agent.** Each agent works in its OWN git
+  worktree on its OWN branch, so parallel agents can't touch the same
+  files/index. Spin one up with `scripts/new-agent-worktree.sh <slug>` (→ branch
+  `agent/<slug>`), or use the Agent tool's `isolation: "worktree"`. Never work
+  on `main`, and never commit onto a branch another agent is using. Branch off
+  `origin/main` (`feat/…`, `fix/…`, `chore/…`, `agent/…`).
+- **Commit + hand off.** One clean, logically-scoped commit (end messages with
+  the standard `Co-Authored-By` trailer). On commit, `.githooks/post-commit`
+  auto-launches `scripts/ship.sh` in the **background**: it pushes, opens/refreshes
+  a PR, waits for CI + the Vercel preview to go green, **auto-merges to `main`
+  (→ production)**, and watches the deploy — while your terminal moves to the
+  next task. Enable the hook once per clone with `git config core.hooksPath
+  .githooks` (the `prepare` npm script does this on `npm install`).
+- **Escape hatches:** `[skip ship]` in a commit message, or `DEVOPS_AUTOSHIP=0`,
+  commits without shipping; `SHIP_AUTOMERGE=0` stops at a green PR. On a red
+  check the pipeline does NOT merge — hand the branch to the `devops` subagent
+  (`.claude/agents/devops.md`) to triage, or read `.devops/FAILED-*.md`.
+- The gate is enforced by the script + the `devops` agent (this private repo on
+  a free plan can't use GitHub branch protection — see `docs/DEVOPS.md`).
+- **The model never holds write authority:** the pipeline only moves code that
+  was already committed; order/quote creation and state transitions stay
+  code-driven.
 
 ## Commands
 

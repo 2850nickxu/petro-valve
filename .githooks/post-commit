@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# .githooks/post-commit — automatic hand-off to the DevOps pipeline.
+#
+# Fires after EVERY commit (any agent, any tool, or manual git). On a feature
+# branch it launches scripts/ship.sh detached, so the committing agent's
+# terminal is freed immediately to move on to the next task. No-ops on main and
+# during a ship run (re-entrancy guard).
+#
+# Enable once per clone:   git config core.hooksPath .githooks
+# (the package.json "prepare" script does this automatically on `npm install`.)
+#
+# Escape hatches:
+#   * commit message contains [skip ship]   → this hook does nothing
+#   * export DEVOPS_AUTOSHIP=0               → this hook is disabled
+set -euo pipefail
+
+# Don't re-fire while a ship run is doing its own git work.
+[ "${DEVOPS_SHIP_RUNNING:-}" = "1" ] && exit 0
+# Global off-switch.
+[ "${DEVOPS_AUTOSHIP:-1}" = "0" ] && exit 0
+
+ROOT="$(git rev-parse --show-toplevel)"
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+
+# Never auto-ship the deploy target or a detached HEAD.
+case "$BRANCH" in main|master|HEAD) exit 0 ;; esac
+
+# Respect an explicit skip in the just-created commit.
+if git log -1 --pretty=%B | grep -qiE '\[skip[ -]?ship\]'; then
+  echo "↳ [skip ship] present — DevOps pipeline not triggered for '$BRANCH'."
+  exit 0
+fi
+
+SLUG="${BRANCH//\//-}"
+mkdir -p "$ROOT/.devops"
+LOG="$ROOT/.devops/ship-$SLUG.log"
+
+echo "🚀 DevOps: handing '$BRANCH' to the pipeline in the background → .devops/ship-$SLUG.log"
+# Fully detach so the commit returns instantly and the pipeline outlives the shell.
+nohup bash "$ROOT/scripts/ship.sh" >>"$LOG" 2>&1 &
+disown 2>/dev/null || true
+exit 0
