@@ -10,8 +10,8 @@ import type { PoAgentConfig } from "./config";
 import type { PoStore } from "./store";
 import { sessionId as makeSessionId } from "./store";
 import type { EmailChannel, InboundMessage, Extractor, ThreadRef } from "./channel/types";
-import type { Buyer, PoSession, PoSessionState, ResolvedLine, ExtractedPo, Decision } from "./types";
-import { identify } from "./core/identify";
+import type { Buyer, PoSession, PoSessionState, ResolvedLine, ExtractedPo, Decision, ValidationIssue } from "./types";
+import { identify, type IdentifyResult } from "./core/identify";
 import { resolveChannel } from "./core/channel";
 import { resolveLines, submittableLines } from "./core/resolve";
 import { priceLines, estimatedSubtotal } from "./core/price";
@@ -95,6 +95,100 @@ interface ActContext {
   ts: string;
 }
 
+export interface EvaluateDeps {
+  ctx: StoreContext;
+  config: PoAgentConfig;
+}
+
+export interface EvaluateInput {
+  idres: IdentifyResult;
+  channelId: number;
+  channelAmbiguous: boolean;
+  channelAccessDenied: boolean;
+  extracted: ExtractedPo;
+  clarificationRounds: number;
+}
+
+export interface EvaluateResult {
+  resolved: ResolvedLine[];
+  issues: ValidationIssue[];
+  decision: Decision;
+  credit: B2BCreditConfig | null;
+  quoteConfig: QuoteConfig;
+}
+
+/**
+ * The deterministic middle of the pipeline (§7.2–7.4): resolve → price → validate → decide,
+ * from an already-identified buyer and an already-extracted PO. No email, no submit, no
+ * persistence — pure evaluation over live store data. Shared by `processInbound` and the
+ * staff reprocess endpoint so re-evaluation matches production exactly.
+ */
+export async function evaluate(deps: EvaluateDeps, input: EvaluateInput): Promise<EvaluateResult> {
+  const buyer = input.idres.buyer;
+  if (!buyer) throw new Error("evaluate requires an identified buyer");
+  const { extracted } = input;
+
+  const entitlements = resolveEntitlements(input.idres.company);
+  const [addrs, methods, credit, quoteConfig] = await Promise.all([
+    getCompanyAddresses(deps.ctx, buyer.companyId),
+    getCompanyPaymentMethods(deps.ctx, buyer.companyId),
+    getCompanyCreditConfig(deps.ctx, buyer.companyId),
+    getQuoteConfigs(deps.ctx),
+  ]);
+
+  let resolved = await resolveLines(deps.ctx, extracted.lines, {
+    entitlements,
+    codeResolver: entitlements.mode === "assortments" ? metafieldCodeResolver(deps.ctx) : undefined,
+  });
+  resolved = await priceLines(deps.ctx, resolved, {
+    customerId: buyer.customerId,
+    customerGroupId: buyer.customerGroupId,
+    channelId: input.channelId,
+    tolerancePct: deps.config.priceTolerancePct,
+    currencyCode: extracted.currency ?? undefined,
+  });
+
+  const estTotal = estimatedSubtotal(resolved);
+  const methodAvailable = hasEnabledPaymentCode(methods, deps.config.poPaymentCodes);
+  const payAssess = assessPayOnAccount({
+    methodAvailable,
+    creditEnabled: credit?.creditEnabled ?? false,
+    creditHold: credit?.creditHold ?? false,
+    limitPurchases: credit?.limitPurchases ?? false,
+    estimatedTotal: estTotal,
+    availableCredit: credit?.availableCredit ?? 0,
+  });
+  const canOrder = buyerCanPlaceOrders(buyer.role);
+  const quoteEnabled = isQuoteAllowed(quoteConfig, "company");
+  const hasShipTo = Boolean(extracted.shipTo?.line1) || Boolean(defaultShipping(addrs));
+  const multiCurrency = Boolean(extracted.currency) && extracted.currency!.toUpperCase() !== "USD";
+  const orderPathViable = payAssess.valid && canOrder && extracted.paymentIntent !== "credit_card";
+
+  const issues = validate({
+    buyer,
+    companyApproved: input.idres.companyApproved,
+    channelAmbiguous: input.channelAmbiguous,
+    channelAccessDenied: input.channelAccessDenied,
+    resolvedLines: resolved,
+    hasShipTo,
+    multiCurrency,
+    poNumberPresent: Boolean(extracted.poNumber),
+    orderPathViable,
+    payOnAccountReasons: payAssess.reasons,
+  });
+
+  const decision = decide({
+    paymentIntent: extracted.paymentIntent,
+    payOnAccountValid: payAssess.valid,
+    buyerCanPlaceOrders: canOrder,
+    quoteEnabled,
+    issues,
+    clarificationRoundsExhausted: input.clarificationRounds >= deps.config.maxClarifications,
+  });
+
+  return { resolved, issues, decision, credit, quoteConfig };
+}
+
 export async function processInbound(
   deps: PipelineDeps,
   message: InboundMessage,
@@ -115,6 +209,16 @@ export async function processInbound(
   const session = loaded ?? createSession(id, deps.channel.id, message.threadId, now());
   const priorState = session.state;
   if (!session.messageIds.includes(message.messageId)) session.messageIds.push(message.messageId);
+  // Retain the original inbound once (bounded) — powers the "original email" view and
+  // future full re-runs. Later messages on the thread don't overwrite it.
+  if (!session.inbound) {
+    session.inbound = {
+      from: message.from,
+      subject: message.subject,
+      bodyText: message.bodyText.length > 32_000 ? `${message.bodyText.slice(0, 32_000)}…` : message.bodyText,
+      receivedAt: message.receivedAt,
+    };
+  }
 
   const audit = (event: string, detail?: unknown) => session.audit.push({ at: now(), event, detail });
   const persist = async () => {
@@ -176,68 +280,21 @@ export async function processInbound(
     }
 
     const buyer = idres.buyer;
-    const companyId = buyer.companyId;
 
-    const entitlements = resolveEntitlements(idres.company);
-    const [addrs, methods, credit, quoteConfig] = await Promise.all([
-      getCompanyAddresses(deps.ctx, companyId),
-      getCompanyPaymentMethods(deps.ctx, companyId),
-      getCompanyCreditConfig(deps.ctx, companyId),
-      getQuoteConfigs(deps.ctx),
-    ]);
-
-    let resolved = await resolveLines(deps.ctx, extracted.lines, {
-      entitlements,
-      codeResolver: entitlements.mode === "assortments" ? metafieldCodeResolver(deps.ctx) : undefined,
-    });
-    resolved = await priceLines(deps.ctx, resolved, {
-      customerId: buyer.customerId,
-      customerGroupId: buyer.customerGroupId,
-      channelId: channel.channelId,
-      tolerancePct: deps.config.priceTolerancePct,
-      currencyCode: extracted.currency ?? undefined,
-    });
+    const { resolved, issues, decision, credit, quoteConfig } = await evaluate(
+      { ctx: deps.ctx, config: deps.config },
+      {
+        idres,
+        channelId: channel.channelId,
+        channelAmbiguous: channel.ambiguous,
+        channelAccessDenied: channel.accessDenied,
+        extracted,
+        clarificationRounds: session.clarificationRounds,
+      },
+    );
     session.resolution = resolved;
     audit("resolved", { submittable: submittableLines(resolved).length, total: resolved.length });
-
-    const estTotal = estimatedSubtotal(resolved);
-    const methodAvailable = hasEnabledPaymentCode(methods, deps.config.poPaymentCodes);
-    const payAssess = assessPayOnAccount({
-      methodAvailable,
-      creditEnabled: credit?.creditEnabled ?? false,
-      creditHold: credit?.creditHold ?? false,
-      limitPurchases: credit?.limitPurchases ?? false,
-      estimatedTotal: estTotal,
-      availableCredit: credit?.availableCredit ?? 0,
-    });
-    const canOrder = buyerCanPlaceOrders(buyer.role);
-    const quoteEnabled = isQuoteAllowed(quoteConfig, "company");
-    const hasShipTo = Boolean(extracted.shipTo?.line1) || Boolean(defaultShipping(addrs));
-    const multiCurrency = Boolean(extracted.currency) && extracted.currency!.toUpperCase() !== "USD";
-    const orderPathViable = payAssess.valid && canOrder && extracted.paymentIntent !== "credit_card";
-
-    const issues = validate({
-      buyer,
-      companyApproved: idres.companyApproved,
-      channelAmbiguous: channel.ambiguous,
-      channelAccessDenied: channel.accessDenied,
-      resolvedLines: resolved,
-      hasShipTo,
-      multiCurrency,
-      poNumberPresent: Boolean(extracted.poNumber),
-      orderPathViable,
-      payOnAccountReasons: payAssess.reasons,
-    });
     session.validation = issues;
-
-    const decision = decide({
-      paymentIntent: extracted.paymentIntent,
-      payOnAccountValid: payAssess.valid,
-      buyerCanPlaceOrders: canOrder,
-      quoteEnabled,
-      issues,
-      clarificationRoundsExhausted: session.clarificationRounds >= deps.config.maxClarifications,
-    });
     session.decision = decision;
     audit("decided", { kind: decision.kind, reasons: decision.reasons });
 

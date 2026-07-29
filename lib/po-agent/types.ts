@@ -149,6 +149,30 @@ export interface AuditEntry {
   at: string;
   event: string;
   detail?: unknown;
+  /** Free-text note attached by a staff operator (force/dismiss/add-note). */
+  note?: string;
+  /** Who took the action — staff identity when known, else "staff". */
+  actor?: string;
+}
+
+/** Raw inbound email retained on the session so operators can read the original PO and
+ * (for text-body POs) future sessions can be fully re-run. Populated once, on first sight. */
+export interface InboundSnapshot {
+  from: string;
+  subject: string;
+  bodyText: string;
+  receivedAt?: string;
+}
+
+export interface SessionSummary {
+  id: string;
+  company: string;
+  email: string;
+  poNumber: string;
+  state: PoSessionState;
+  decision?: DecisionKind;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PoSession {
@@ -162,6 +186,8 @@ export interface PoSession {
   /** One nudge per session (§7.7). */
   remindedAt?: string;
   clarificationRounds: number;
+  /** The original inbound email (first message on the thread). */
+  inbound?: InboundSnapshot;
   buyer?: Buyer;
   extracted?: ExtractedPo;
   resolution?: ResolvedLine[];

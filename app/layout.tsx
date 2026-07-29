@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Oswald, Raleway } from "next/font/google";
 import "./globals.css";
+import { UiProviders } from "@/components/ui/providers";
 
 // Silk Commerce brand type: Oswald (display/headings) + Raleway (body).
 const oswald = Oswald({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"], variable: "--font-display", display: "swap" });
@@ -14,7 +15,7 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${oswald.variable} ${raleway.variable}`}>
-      <body>{children}</body>
+      <body><UiProviders>{children}</UiProviders></body>
     </html>
   );
 }

@@ -8,9 +8,14 @@ import { effectiveEnv } from "@/lib/po-agent/effective-env";
 import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
 import { activeStoreSource } from "@/lib/bc-app/request-context";
 import { Stat, Badge, HealthRow } from "./ui";
+import { Banner } from "@/components/ui/states";
+import { Timestamp } from "@/components/ui/timestamp";
+import { AutoRefresh } from "@/components/ui/auto-refresh";
 import type { PoSession } from "@/lib/po-agent/types";
 
 export const dynamic = "force-dynamic";
+
+const SETTINGS = "/staff/settings";
 
 export default async function Dashboard() {
   const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
@@ -20,6 +25,7 @@ export default async function Dashboard() {
 
   let metrics = computeMetrics({});
   let recent: PoSession[] = [];
+  let escalated: PoSession[] = [];
   let escalatedCount = 0;
   if (redis) {
     const store = createPoStore(redis);
@@ -32,7 +38,21 @@ export default async function Dashboard() {
     metrics = computeMetrics(counters);
     recent = await store.loadSessions(recentIds);
     escalatedCount = escalatedIds.length;
+    escalated = await store.loadSessions(escalatedIds.slice(0, 5));
   }
+
+  const hasChannel = status.channelCreds.google || status.channelCreds.microsoft;
+  const hasEscalation = status.escalation.email || status.escalation.slack;
+  const health = [
+    { ok: status.enabled, warn: !status.enabled, name: "PO agent enabled", detail: status.enabled ? "on" : "off", action: { label: "Enable →", href: SETTINGS } },
+    { ok: active.source !== "none", name: "BigCommerce store", detail: active.storeHash ? `${active.storeHash} · token: ${active.source}` : "not configured", action: { label: "Connect →", href: SETTINGS } },
+    { ok: status.redis, name: "Redis (state)", detail: status.redis ? "connected" : "not configured", action: { label: "Set up →", href: SETTINGS } },
+    { ok: status.ai.configured, warn: !status.ai.configured, name: "AI model", detail: status.ai.model ?? "heuristic fallback", action: { label: "Add model →", href: SETTINGS } },
+    { ok: hasChannel, warn: !hasChannel, name: "Email channel", detail: status.channelCreds.google ? "gmail" : status.channelCreds.microsoft ? "microsoft" : "none", action: { label: "Connect →", href: SETTINGS } },
+    { ok: hasEscalation, warn: !hasEscalation, name: "Escalation targets", detail: [status.escalation.email && "email", status.escalation.slack && "slack"].filter(Boolean).join(", ") || "queue only", action: { label: "Set up →", href: SETTINGS } },
+  ];
+  const okCount = health.filter((h) => h.ok).length;
+  const firstRun = okCount <= 2;
 
   return (
     <>
@@ -41,47 +61,79 @@ export default async function Dashboard() {
           <h1>Dashboard</h1>
           <p className="muted">Email → purchase-order agent for BigCommerce B2B Edition.</p>
         </div>
+        <AutoRefresh />
       </div>
 
-      <div className="stat-grid" style={{ marginBottom: 16 }}>
-        <Stat label="Received (mo)" value={metrics.received} />
-        <Stat label="Orders" value={metrics.orders} />
-        <Stat label="Quotes" value={metrics.quotes} />
-        <Stat label="Escalations" value={metrics.escalations} />
-        <Stat label="Touchless" value={`${Math.round(metrics.touchlessRate * 100)}%`} />
-        <Stat label="Value" value={`$${metrics.valueProcessed.toFixed(0)}`} />
+      {!redis && (
+        <Banner kind="warn" title="Redis not connected">
+          Session tracking, the review queue, and metrics are offline. Add <code>UPSTASH_REDIS_REST_URL</code> / <code>_TOKEN</code> in{" "}
+          <Link href={SETTINGS}>Settings</Link> — the counters below read 0 until then.
+        </Banner>
+      )}
+
+      {firstRun && (
+        <Banner kind="info" title="Get started">
+          <p className="mb-1">Finish setup to start processing POs:</p>
+          <ol style={{ margin: "0 0 8px", paddingLeft: 18 }}>
+            <li>Connect your <strong>BigCommerce store</strong> and <strong>Redis</strong> in Settings.</li>
+            <li>Add an <strong>AI model</strong> (optional — a heuristic extractor works without one).</li>
+            <li>Connect your <strong>email channel</strong> (Gmail or Microsoft).</li>
+            <li><strong>Enable</strong> the agent.</li>
+          </ol>
+          <div className="wrap">
+            <Link className="btn primary" href={SETTINGS}>Open Settings</Link>
+            <Link className="btn" href="/staff/simulator">Try the simulator</Link>
+          </div>
+        </Banner>
+      )}
+
+      <div className="stat-grid mt-3 mb-3">
+        <Stat label="Received (mo)" value={metrics.received} hint="POs received this calendar month" />
+        <Stat label="Orders" value={metrics.orders} hint="Orders placed this month" />
+        <Stat label="Quotes" value={metrics.quotes} hint="Quotes created this month" />
+        <Stat label="Escalations" value={metrics.escalations} hint="Sessions sent to human review this month" />
+        <Stat label="Touchless" value={`${Math.round(metrics.touchlessRate * 100)}%`} hint="Share completed without human review" />
+        <Stat label="Value" value={`$${metrics.valueProcessed.toFixed(0)}`} hint="Total order value placed this month (USD)" />
       </div>
 
       <div className="grid cols-2">
         <div className="card">
-          <h3>System health</h3>
+          <h3>Setup &amp; health</h3>
           <div className="health">
-            <HealthRow ok={status.enabled} name="PO agent enabled" detail={status.enabled ? "on" : "PO_AGENT_ENABLED"} warn={!status.enabled} />
-            <HealthRow ok={active.source !== "none"} name="BigCommerce store" detail={active.storeHash ? `${active.storeHash} · token: ${active.source}` : "not configured"} />
-            <HealthRow ok={status.redis} name="Redis (state)" detail={status.redis ? "connected" : "not configured"} />
-            <HealthRow ok={status.ai.configured} name="AI model" detail={status.ai.model ?? "heuristic fallback"} warn={!status.ai.configured} />
-            <HealthRow ok={status.channelCreds.google || status.channelCreds.microsoft} name="Email channel" detail={status.channelCreds.google ? "gmail" : status.channelCreds.microsoft ? "microsoft" : "none"} warn={!status.channelCreds.google && !status.channelCreds.microsoft} />
-            <HealthRow ok={status.escalation.email || status.escalation.slack} name="Escalation targets" detail={[status.escalation.email && "email", status.escalation.slack && "slack"].filter(Boolean).join(", ") || "queue only"} warn={!status.escalation.email && !status.escalation.slack} />
+            {health.map((h) => (
+              <HealthRow key={h.name} ok={h.ok} warn={h.warn} name={h.name} detail={h.detail} action={h.action} />
+            ))}
           </div>
         </div>
 
         <div className="card">
           <h3>Needs review</h3>
-          {escalatedCount > 0 ? (
-            <p>
-              <span className="badge escalate">{escalatedCount}</span> escalated session{escalatedCount === 1 ? "" : "s"} waiting.{" "}
-              <Link href="/staff/po-inbox">Open inbox →</Link>
-            </p>
+          {!redis ? (
+            <p className="muted">Connect Redis to track the review queue.</p>
+          ) : escalatedCount > 0 ? (
+            <>
+              <p>
+                <span className="badge escalate">{escalatedCount}</span> escalated session{escalatedCount === 1 ? "" : "s"} waiting.{" "}
+                <Link href="/staff/po-inbox">Open inbox →</Link>
+              </p>
+              <table className="table mt-2">
+                <tbody>
+                  {escalated.map((s) => (
+                    <tr key={s.id}>
+                      <td><Link href={`/staff/po-inbox/${encodeURIComponent(s.id)}`}>{s.buyer?.companyName || "—"}</Link></td>
+                      <td className="muted">{s.escalation?.reasons.join(", ") || s.decision?.reasons.join(", ") || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           ) : (
-            <p className="muted">No escalations. {redis ? "Queue is clear." : "Connect Redis to track sessions."}</p>
+            <p className="muted">No escalations. Queue is clear.</p>
           )}
-          <h3 style={{ marginTop: 18 }}>Try it</h3>
-          <p className="muted">Paste a PO and watch the pipeline run (dry run, no submit).</p>
-          <Link className="btn primary" href="/staff/simulator">Open simulator</Link>
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 16 }}>
+      <div className="card mt-3">
         <h3>Recent sessions</h3>
         {recent.length ? (
           <table className="table">
@@ -91,11 +143,11 @@ export default async function Dashboard() {
             <tbody>
               {recent.map((s) => (
                 <tr key={s.id}>
-                  <td><Link href={`/staff/po-inbox/${encodeURIComponent(s.id)}`}>{s.buyer?.companyName ?? "—"}</Link></td>
+                  <td><Link href={`/staff/po-inbox/${encodeURIComponent(s.id)}`}>{s.buyer?.companyName || "—"}</Link></td>
                   <td className="muted">{s.buyer?.email ?? "—"}</td>
                   <td><Badge kind={s.state}>{s.state}</Badge></td>
                   <td>{s.decision?.kind ?? "—"}</td>
-                  <td className="muted mono">{s.updatedAt.slice(0, 16).replace("T", " ")}</td>
+                  <td><Timestamp iso={s.updatedAt} /></td>
                 </tr>
               ))}
             </tbody>

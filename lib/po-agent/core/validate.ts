@@ -4,7 +4,7 @@ import { ISSUE_CATEGORY } from "./decide";
 // The required-fields gauntlet (§7.3): assembles a ValidationIssue[] from already-gathered
 // context. Pure — no I/O — so it is fully unit-testable as a decision table.
 
-const MESSAGES: Record<ValidationIssueKind, string> = {
+export const MESSAGES: Record<ValidationIssueKind, string> = {
   unknown_sender: "We couldn't match your email to a company account. Please contact your sales rep.",
   company_not_approved: "Your company account isn't active yet, so we can't process this order automatically.",
   channel_ambiguous: "Which storefront is this order for? Your account is linked to more than one.",
@@ -26,6 +26,11 @@ const MESSAGES: Record<ValidationIssueKind, string> = {
   daily_cap: "We've reached today's automated processing limit; a team member will follow up.",
   internal_error: "Something went wrong on our side; a team member will follow up.",
 };
+
+/** Human-readable, buyer-safe description of a validation issue kind. */
+export function describeIssue(kind: ValidationIssueKind): string {
+  return MESSAGES[kind] ?? kind;
+}
 
 function issue(kind: ValidationIssueKind, lineRef?: string, data?: Record<string, unknown>): ValidationIssue {
   return {

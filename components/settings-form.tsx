@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/ui/toast";
 
 export interface FieldDef {
   key: string;
@@ -11,23 +12,46 @@ export interface FieldDef {
   type?: "text" | "number" | "select" | "bool";
   options?: string[];
   placeholder?: string;
+  help?: string;
 }
 
 type View = Record<string, { value: string; set: boolean; secret: boolean }>;
 
 export function SettingsForm({ fields, view }: { fields: FieldDef[]; view: View }) {
   const router = useRouter();
+  const toast = useToast();
+
   const initial = useMemo(() => {
     const v: Record<string, string> = {};
-    for (const f of fields) v[f.key] = f.secret ? "" : view[f.key]?.value ?? "";
+    for (const f of fields) v[f.key] = f.secret ? "" : (view[f.key]?.value ?? "");
     return v;
   }, [fields, view]);
 
   const [values, setValues] = useState<Record<string, string>>(initial);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
   const [testMsg, setTestMsg] = useState<Record<string, { ok: boolean; detail: string }>>({});
+
+  // Track whether initial has been applied once (avoids marking dirty on first render)
+  const initialRef = useRef(initial);
+
+  // Recompute dirty whenever values change
+  useEffect(() => {
+    const isDirty = Object.keys(initialRef.current).some((k) => values[k] !== initialRef.current[k]);
+    setDirty(isDirty);
+  }, [values]);
+
+  // Warn before leaving with unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!dirty) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
 
   const GROUP_TARGET: Record<string, string | ((v: Record<string, string>) => string)> = {
     AI: "ai",
@@ -48,7 +72,9 @@ export function SettingsForm({ fields, view }: { fields: FieldDef[]; view: View 
         body: JSON.stringify({ target, values }),
       });
       const json = await res.json();
-      setTestMsg((m) => ({ ...m, [group]: { ok: Boolean(json.ok), detail: json.detail ?? (res.ok ? "ok" : "failed") } }));
+      const ok = Boolean(json.ok);
+      const detail = json.detail ?? (res.ok ? "ok" : "failed");
+      setTestMsg((m) => ({ ...m, [group]: { ok, detail } }));
     } catch (e) {
       setTestMsg((m) => ({ ...m, [group]: { ok: false, detail: e instanceof Error ? e.message : "failed" } }));
     } finally {
@@ -68,7 +94,6 @@ export function SettingsForm({ fields, view }: { fields: FieldDef[]; view: View 
 
   async function save() {
     setSaving(true);
-    setMsg(null);
     try {
       const res = await fetch("/api/staff/settings", {
         method: "POST",
@@ -76,10 +101,17 @@ export function SettingsForm({ fields, view }: { fields: FieldDef[]; view: View 
         body: JSON.stringify(values),
       });
       const json = await res.json();
-      setMsg(res.ok ? `Saved (${json.scope}).` : `Error: ${json.error ?? res.status}`);
-      if (res.ok) router.refresh();
+      if (res.ok) {
+        toast.success(`Settings saved (${json.scope}).`);
+        // Reset initial baseline so dirty resets to false
+        initialRef.current = { ...values };
+        setDirty(false);
+        router.refresh();
+      } else {
+        toast.error(`Save failed: ${json.error ?? res.status}`);
+      }
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Save failed");
+      toast.error(e instanceof Error ? e.message : "Save failed");
     } finally {
       setSaving(false);
     }
@@ -89,25 +121,45 @@ export function SettingsForm({ fields, view }: { fields: FieldDef[]; view: View 
     <div>
       {Object.entries(groups).map(([group, list]) => (
         <div className="card" key={group} style={{ marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div className="row-between" style={{ marginBottom: 14 }}>
             <h3 style={{ marginBottom: 0 }}>{group}</h3>
             {GROUP_TARGET[group] && (
               <div className="toolbar">
                 {testMsg[group] && (
-                  <span style={{ color: testMsg[group].ok ? "var(--success)" : "var(--danger)", fontSize: 13 }}>
-                    {testMsg[group].ok ? "✓ " : "✗ "}{testMsg[group].detail}
+                  <span
+                    style={{
+                      color: testMsg[group].ok ? "var(--ok)" : "var(--bad)",
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {testMsg[group].ok ? "✓ " : "✗ "}
+                    {testMsg[group].detail}
                   </span>
                 )}
-                <button className="btn" style={{ padding: "5px 12px", fontSize: 13 }} onClick={() => test(group)} disabled={testing != null}>
+                <button
+                  className="btn sm"
+                  onClick={() => test(group)}
+                  disabled={testing != null}
+                >
                   {testing === group ? "Testing…" : "Test connection"}
                 </button>
               </div>
             )}
           </div>
-          <div className="settings-grid" style={{ marginTop: 14 }}>
+
+          <div className="settings-grid">
             {list.map((f) => (
               <div className="field" key={f.key}>
-                <label>{f.label}{f.secret && <span className="lock" title="Encrypted at rest"> 🔒</span>}</label>
+                <label>
+                  {f.label}
+                  {f.secret && (
+                    <span className="lock" title="Encrypted at rest">
+                      {" "}
+                      🔒
+                    </span>
+                  )}
+                </label>
                 {f.type === "bool" ? (
                   <select value={values[f.key]} onChange={(e) => set(f.key, e.target.value)}>
                     <option value="">(default)</option>
@@ -117,16 +169,32 @@ export function SettingsForm({ fields, view }: { fields: FieldDef[]; view: View 
                 ) : f.type === "select" ? (
                   <select value={values[f.key]} onChange={(e) => set(f.key, e.target.value)}>
                     <option value="">(default)</option>
-                    {f.options?.map((o) => <option key={o} value={o}>{o}</option>)}
+                    {f.options?.map((o) => (
+                      <option key={o} value={o}>
+                        {o}
+                      </option>
+                    ))}
                   </select>
                 ) : (
                   <input
                     type={f.secret ? "password" : f.type === "number" ? "number" : "text"}
                     value={values[f.key]}
-                    placeholder={f.secret && view[f.key]?.set ? "•••••••• configured (leave blank to keep)" : f.placeholder ?? ""}
+                    placeholder={
+                      f.secret && view[f.key]?.set
+                        ? "•••••••• configured (leave blank to keep)"
+                        : (f.placeholder ?? "")
+                    }
                     onChange={(e) => set(f.key, e.target.value)}
                     autoComplete="off"
                   />
+                )}
+                {f.help && (
+                  <span
+                    className="muted"
+                    style={{ display: "block", fontSize: 11.5, marginTop: 4, lineHeight: 1.45 }}
+                  >
+                    {f.help}
+                  </span>
                 )}
               </div>
             ))}
@@ -134,9 +202,39 @@ export function SettingsForm({ fields, view }: { fields: FieldDef[]; view: View 
         </div>
       ))}
 
-      <div className="toolbar" style={{ position: "sticky", bottom: 0, padding: "12px 0", background: "var(--bg)" }}>
-        <button className="btn primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save settings"}</button>
-        {msg && <span className="muted">{msg}</span>}
+      <div
+        className="toolbar"
+        style={{
+          position: "sticky",
+          bottom: 0,
+          padding: "10px 14px",
+          background: "var(--panel)",
+          border: "1px solid var(--line)",
+          borderRadius: "var(--radius)",
+          boxShadow: "0 -2px 8px rgba(4,39,45,.06)",
+        }}
+      >
+        <button className="btn primary" onClick={save} disabled={saving}>
+          {saving ? "Saving…" : "Save settings"}
+        </button>
+        {dirty && !saving && (
+          <span
+            className="muted"
+            style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 5 }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: "var(--warn)",
+                display: "inline-block",
+                flexShrink: 0,
+              }}
+            />
+            Unsaved changes
+          </span>
+        )}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
 import { listStoreInstalls } from "@/lib/bc-app/store-tokens";
 import { SettingsForm } from "@/components/settings-form";
 import { GmailConnect } from "@/components/gmail-connect";
+import { Banner } from "@/components/ui/states";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,12 @@ export default async function SettingsPage() {
           </p>
         </div>
       </div>
+
+      <Banner kind="info" title="Setup order">
+        1. Fill in <strong>BigCommerce</strong> and <strong>Redis</strong> (env or via your hosting dashboard) first — the agent cannot start without them.{" "}
+        2. Add your <strong>AI</strong> provider key and model.{" "}
+        3. Configure your <strong>Email channel</strong> (Gmail or Microsoft), then connect the mailbox and register the push watch.
+      </Banner>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <h3>Gmail connection</h3>
