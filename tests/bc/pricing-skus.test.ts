@@ -35,7 +35,16 @@ describe("getProductPrices", () => {
     expect(sent.channel_id).toBe(1);
     expect(sent.customer_group_id).toBe(7);
     expect(sent.customer_id).toBe(42);
+    expect(sent.currency_code).toBe("USD");
     expect(sent.items).toEqual([{ product_id: 80, variant_id: 64 }, { product_id: 81 }]);
+  });
+
+  it("falls back to USD when currencyCode is an empty/blank string (BC 422 guard)", async () => {
+    const mock = installMockFetch([
+      { method: "POST", url: "/v3/pricing/products", body: { data: [] } },
+    ]);
+    await getProductPrices(TEST_CTX, { items: [{ productId: 81 }], currencyCode: "  " });
+    expect((mock.calls[0].body as Record<string, unknown>).currency_code).toBe("USD");
   });
 });
 

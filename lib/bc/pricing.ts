@@ -46,7 +46,9 @@ export async function getProductPrices(
 
   const body = {
     channel_id: params.channelId ?? ctx.channelId,
-    currency_code: params.currencyCode ?? "USD",
+    // BC requires a non-empty currency_code; extraction emits "" for an unstated
+    // currency, so `||` (not `??`) is deliberate here to fall back on empty strings.
+    currency_code: params.currencyCode?.trim() || "USD",
     customer_group_id: params.customerGroupId ?? 0,
     customer_id: params.customerId ?? 0,
     items: params.items.map((i) => ({
