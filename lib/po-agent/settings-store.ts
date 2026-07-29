@@ -14,44 +14,45 @@ export interface FieldDef {
   type?: "text" | "number" | "select" | "bool";
   options?: string[];
   placeholder?: string;
+  help?: string;
 }
 
 export const SETTINGS_FIELDS: FieldDef[] = [
   // AI (BYO provider)
-  { key: "PO_AGENT_MODEL", label: "Model", group: "AI", placeholder: "anthropic:claude-sonnet-4-6" },
-  { key: "ANTHROPIC_API_KEY", label: "Anthropic API key", group: "AI", secret: true },
-  { key: "OPENAI_API_KEY", label: "OpenAI API key", group: "AI", secret: true },
-  { key: "GOOGLE_GENERATIVE_AI_API_KEY", label: "Google AI API key", group: "AI", secret: true },
+  { key: "PO_AGENT_MODEL", label: "Model", group: "AI", placeholder: "anthropic:claude-sonnet-4-6", help: "provider:model-id, e.g. anthropic:claude-sonnet-4-6 or openai:gpt-4o" },
+  { key: "ANTHROPIC_API_KEY", label: "Anthropic API key", group: "AI", secret: true, help: "Required when using any anthropic:* model" },
+  { key: "OPENAI_API_KEY", label: "OpenAI API key", group: "AI", secret: true, help: "Required when using any openai:* model" },
+  { key: "GOOGLE_GENERATIVE_AI_API_KEY", label: "Google AI API key", group: "AI", secret: true, help: "Required when using any google:* model" },
   // Escalation
-  { key: "PO_AGENT_ESCALATION_EMAIL", label: "Rep escalation email", group: "Escalation", placeholder: "reps@company.com" },
-  { key: "PO_AGENT_SLACK_WEBHOOK_URL", label: "Slack webhook URL", group: "Escalation", secret: true },
-  { key: "PO_AGENT_FORWARD_PRICE_MISMATCH", label: "Forward below-contract POs to sales rep + admin", group: "Escalation", type: "bool" },
+  { key: "PO_AGENT_ESCALATION_EMAIL", label: "Rep escalation email", group: "Escalation", placeholder: "reps@company.com", help: "Email address where escalated or flagged POs are forwarded" },
+  { key: "PO_AGENT_SLACK_WEBHOOK_URL", label: "Slack webhook URL", group: "Escalation", secret: true, help: "Incoming Webhook URL for the Slack channel that receives escalation alerts" },
+  { key: "PO_AGENT_FORWARD_PRICE_MISMATCH", label: "Forward below-contract POs to sales rep + admin", group: "Escalation", type: "bool", help: "When true, POs priced below the buyer's contract rate are forwarded to the escalation email instead of auto-accepted" },
   // Email channel
-  { key: "PO_AGENT_CHANNEL", label: "Channel", group: "Email channel", type: "select", options: ["google", "microsoft"] },
-  { key: "PO_AGENT_MAILBOX", label: "Monitored mailbox", group: "Email channel", placeholder: "po@company.com" },
-  { key: "PO_AGENT_INBOUND_SECRET", label: "Inbound webhook secret", group: "Email channel", secret: true },
-  { key: "GOOGLE_PO_CLIENT_ID", label: "Gmail OAuth client id", group: "Email channel" },
-  { key: "GOOGLE_PO_CLIENT_SECRET", label: "Gmail OAuth client secret", group: "Email channel", secret: true },
-  { key: "GOOGLE_PO_REFRESH_TOKEN", label: "Gmail refresh token", group: "Email channel", secret: true },
-  { key: "GOOGLE_PO_PUBSUB_TOPIC", label: "Gmail Pub/Sub topic", group: "Email channel" },
-  { key: "MS_PO_TENANT_ID", label: "Microsoft tenant id", group: "Email channel" },
-  { key: "MS_PO_CLIENT_ID", label: "Microsoft client id", group: "Email channel" },
-  { key: "MS_PO_CLIENT_SECRET", label: "Microsoft client secret", group: "Email channel", secret: true },
-  { key: "MS_PO_MAILBOX", label: "Microsoft mailbox (UPN)", group: "Email channel" },
+  { key: "PO_AGENT_CHANNEL", label: "Channel", group: "Email channel", type: "select", options: ["google", "microsoft"], help: "Choose the email provider that delivers inbound POs" },
+  { key: "PO_AGENT_MAILBOX", label: "Monitored mailbox", group: "Email channel", placeholder: "po@company.com", help: "The email address buyers send purchase orders to" },
+  { key: "PO_AGENT_INBOUND_SECRET", label: "Inbound webhook secret", group: "Email channel", secret: true, help: "Token appended as ?token= to the inbound webhook URL to authenticate push deliveries" },
+  { key: "GOOGLE_PO_CLIENT_ID", label: "Gmail OAuth client id", group: "Email channel", help: "OAuth 2.0 client ID from Google Cloud Console (Web application type)" },
+  { key: "GOOGLE_PO_CLIENT_SECRET", label: "Gmail OAuth client secret", group: "Email channel", secret: true, help: "OAuth 2.0 client secret paired with the client ID above" },
+  { key: "GOOGLE_PO_REFRESH_TOKEN", label: "Gmail refresh token", group: "Email channel", secret: true, help: "Populated automatically after you click Connect Gmail and complete the OAuth flow" },
+  { key: "GOOGLE_PO_PUBSUB_TOPIC", label: "Gmail Pub/Sub topic", group: "Email channel", help: "Full topic resource name, e.g. projects/my-project/topics/gmail-po-push" },
+  { key: "MS_PO_TENANT_ID", label: "Microsoft tenant id", group: "Email channel", help: "Azure AD tenant (directory) ID for your Microsoft 365 organisation" },
+  { key: "MS_PO_CLIENT_ID", label: "Microsoft client id", group: "Email channel", help: "App registration client ID in Azure AD" },
+  { key: "MS_PO_CLIENT_SECRET", label: "Microsoft client secret", group: "Email channel", secret: true, help: "Client secret value from the Azure AD app registration" },
+  { key: "MS_PO_MAILBOX", label: "Microsoft mailbox (UPN)", group: "Email channel", help: "User Principal Name of the monitored mailbox, e.g. po@company.com" },
   // BigCommerce (manual override; the installed app supplies an OAuth token automatically)
-  { key: "BIGCOMMERCE_STORE_HASH", label: "Store hash", group: "BigCommerce" },
-  { key: "BIGCOMMERCE_ACCESS_TOKEN", label: "Store access token", group: "BigCommerce", secret: true },
-  { key: "BIGCOMMERCE_CHANNEL_ID", label: "Channel id", group: "BigCommerce", type: "number" },
+  { key: "BIGCOMMERCE_STORE_HASH", label: "Store hash", group: "BigCommerce", help: "Short alphanumeric identifier in your store URL, e.g. abc123" },
+  { key: "BIGCOMMERCE_ACCESS_TOKEN", label: "Store access token", group: "BigCommerce", secret: true, help: "Store API token with B2B Edition scope = modify (skip if using the installed app — it provides its own token)" },
+  { key: "BIGCOMMERCE_CHANNEL_ID", label: "Channel id", group: "BigCommerce", type: "number", help: "Storefront channel to associate orders/quotes with (default 1 for the main channel)" },
   // Workflow
   { key: "PO_AGENT_ENABLED", label: "Enabled", group: "Workflow", type: "bool" },
-  { key: "PO_AGENT_MODE", label: "Mode", group: "Workflow", type: "select", options: ["auto", "review"] },
-  { key: "PO_AGENT_PO_PAYMENT_CODES", label: "Pay-on-account codes", group: "Workflow", placeholder: "cheque,purchase_order" },
-  { key: "PO_AGENT_PRICE_TOLERANCE_PCT", label: "Price tolerance %", group: "Workflow", type: "number" },
-  { key: "PO_AGENT_MAX_CLARIFICATIONS", label: "Max clarifications", group: "Workflow", type: "number" },
-  { key: "PO_AGENT_FIRST_ORDER_CONFIRM", label: "First-order confirm", group: "Workflow", type: "bool" },
-  { key: "PO_AGENT_DAILY_SUBMIT_CAP", label: "Daily submit cap", group: "Workflow", type: "number" },
-  { key: "PO_AGENT_SIMULATOR_SEND", label: "Sandbox mode (simulator submits real orders/quotes)", group: "Workflow", type: "bool" },
-  { key: "PO_AGENT_SIMULATOR_SEND_EMAILS", label: "Sandbox: also send emails", group: "Workflow", type: "bool" },
+  { key: "PO_AGENT_MODE", label: "Mode", group: "Workflow", type: "select", options: ["auto", "review"], help: "auto: submit orders without human approval; review: hold every PO in a queue for staff sign-off" },
+  { key: "PO_AGENT_PO_PAYMENT_CODES", label: "Pay-on-account codes", group: "Workflow", placeholder: "cheque,purchase_order", help: "Comma-separated BigCommerce payment method codes accepted as pay-on-account" },
+  { key: "PO_AGENT_PRICE_TOLERANCE_PCT", label: "Price tolerance %", group: "Workflow", type: "number", help: "Percentage below catalog price still accepted without escalation (e.g. 2 allows up to 2% under)" },
+  { key: "PO_AGENT_MAX_CLARIFICATIONS", label: "Max clarifications", group: "Workflow", type: "number", help: "How many clarification reply rounds the agent attempts before escalating" },
+  { key: "PO_AGENT_FIRST_ORDER_CONFIRM", label: "First-order confirm", group: "Workflow", type: "bool", help: "When true, the agent sends a confirmation email before submitting the very first order from a new buyer" },
+  { key: "PO_AGENT_DAILY_SUBMIT_CAP", label: "Daily submit cap", group: "Workflow", type: "number", help: "Maximum orders/quotes submitted per calendar day (0 = unlimited)" },
+  { key: "PO_AGENT_SIMULATOR_SEND", label: "Sandbox mode (simulator submits real orders/quotes)", group: "Workflow", type: "bool", help: "When true, simulator sessions submit to BigCommerce and trigger real downstream effects — use with care" },
+  { key: "PO_AGENT_SIMULATOR_SEND_EMAILS", label: "Sandbox: also send emails", group: "Workflow", type: "bool", help: "When true, simulator sessions also dispatch outbound reply emails" },
 ];
 
 export const SECRET_KEYS = new Set(SETTINGS_FIELDS.filter((f) => f.secret).map((f) => f.key));

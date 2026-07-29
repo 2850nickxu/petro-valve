@@ -6,7 +6,7 @@
 // closed (requireRedis throws) when Redis is unconfigured but the feature is enabled.
 
 import { getRedis, type Redis } from "@/lib/redis";
-import type { PoSession } from "./types";
+import type { PoSession, PoSessionState, SessionSummary } from "./types";
 
 const SESSION_TTL_SEC = 60 * 60 * 24 * 30; // 30 days
 const MSG_TTL_SEC = 60 * 60 * 24 * 14; // 14 days
@@ -20,6 +20,7 @@ export const keys = {
   queueEscalated: "poa:queue:escalated",
   queueRecent: "poa:queue:recent",
   queueAwaiting: "poa:queue:awaiting",
+  indexSearch: "poa:index:search",
   counters: (yyyymm: string) => `poa:counters:${yyyymm}`,
   tokens: (yyyymm: string) => `poa:tokens:${yyyymm}`,
   caps: (yyyymmdd: string) => `poa:caps:${yyyymmdd}`,
@@ -29,6 +30,28 @@ export const keys = {
 /** Compose a session id from channel + thread id. */
 export function sessionId(channel: string, threadId: string): string {
   return `${channel}:${threadId}`;
+}
+
+export interface SessionSearchQuery {
+  text?: string;
+  state?: PoSessionState;
+  from?: number;
+  to?: number;
+  offset?: number;
+  limit?: number;
+}
+
+function summaryOf(s: PoSession): SessionSummary {
+  return {
+    id: s.id,
+    company: s.buyer?.companyName ?? "",
+    email: s.buyer?.email ?? "",
+    poNumber: s.extracted?.poNumber ?? "",
+    state: s.state,
+    decision: s.decision?.kind,
+    createdAt: s.createdAt,
+    updatedAt: s.updatedAt,
+  };
 }
 
 export interface PoStore {
@@ -54,6 +77,7 @@ export interface PoStore {
   loadSessions(ids: string[]): Promise<PoSession[]>;
   recordTokens(yyyymm: string, model: string, input: number, output: number): Promise<void>;
   getTokenUsage(yyyymm: string): Promise<Record<string, number>>;
+  searchSessions(query: SessionSearchQuery): Promise<{ total: number; items: SessionSummary[] }>;
 }
 
 function queueKey(queue: "escalated" | "recent" | "awaiting"): string {
@@ -99,6 +123,7 @@ export function createPoStore(redis: Redis): PoStore {
       await redis.pipeline([
         ["SET", keys.session(session.id), JSON.stringify(session), "EX", String(SESSION_TTL_SEC)],
         ["ZADD", keys.queueRecent, String(recentScore), session.id],
+        ["HSET", keys.indexSearch, session.id, JSON.stringify(summaryOf(session))],
       ]);
     },
 
@@ -176,6 +201,58 @@ export function createPoStore(redis: Redis): PoStore {
       const out: Record<string, number> = {};
       for (let i = 0; i + 1 < flat.length; i += 2) out[flat[i]] = Number(flat[i + 1]) || 0;
       return out;
+    },
+
+    async searchSessions(query) {
+      const flat = await redis.cmd<string[]>(["HGETALL", keys.indexSearch]);
+      const cutoff = Date.now() - SESSION_TTL_SEC * 1000;
+
+      const summaries: SessionSummary[] = [];
+      const stale: string[] = [];
+
+      for (let i = 0; i + 1 < flat.length; i += 2) {
+        const id = flat[i];
+        const raw = flat[i + 1];
+        let summary: SessionSummary;
+        try {
+          summary = JSON.parse(raw) as SessionSummary;
+        } catch {
+          continue;
+        }
+        const updatedMs = Date.parse(summary.updatedAt);
+        if (!Number.isFinite(updatedMs) || updatedMs < cutoff) {
+          stale.push(id);
+          continue;
+        }
+        summaries.push(summary);
+      }
+
+      // Best-effort pruning of stale entries.
+      if (stale.length > 0) {
+        redis.cmd(["HDEL", keys.indexSearch, ...stale]).catch(() => {});
+        redis.cmd(["ZREM", keys.queueRecent, ...stale]).catch(() => {});
+      }
+
+      // Apply filters.
+      const text = query.text?.toLowerCase();
+      const filtered = summaries.filter((s) => {
+        if (query.state && s.state !== query.state) return false;
+        if (text) {
+          const haystack = `${s.company} ${s.email} ${s.poNumber}`.toLowerCase();
+          if (!haystack.includes(text)) return false;
+        }
+        const updatedMs = Date.parse(s.updatedAt);
+        if (query.from !== undefined && updatedMs < query.from) return false;
+        if (query.to !== undefined && updatedMs > query.to) return false;
+        return true;
+      });
+
+      // Sort by updatedAt descending.
+      filtered.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+
+      const offset = query.offset ?? 0;
+      const limit = query.limit ?? 25;
+      return { total: filtered.length, items: filtered.slice(offset, offset + limit) };
     },
   };
 }

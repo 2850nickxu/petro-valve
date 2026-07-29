@@ -20,12 +20,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
   const session = await store.loadSession(id);
   if (!session) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const { action } = (await req.json().catch(() => ({}))) as { action?: string };
+  const { action, note, actor } = (await req.json().catch(() => ({}))) as { action?: string; note?: string; actor?: string };
   const now = () => new Date().toISOString();
+  const by = actor?.trim() || "staff";
+  const trimmedNote = note?.trim() || undefined;
+
+  // Append-only note — no state change, stays in the queue.
+  if (action === "add_note") {
+    if (!trimmedNote) return NextResponse.json({ error: "note is required" }, { status: 400 });
+    session.audit.push({ at: now(), event: "note", note: trimmedNote, actor: by });
+    await store.saveSession(session);
+    return NextResponse.json({ ok: true, state: session.state });
+  }
 
   if (action === "dismiss") {
     session.state = "rejected";
-    session.audit.push({ at: now(), event: "dismissed" });
+    session.audit.push({ at: now(), event: "dismissed", note: trimmedNote, actor: by });
     await store.dequeue("escalated", id);
     await store.saveSession(session);
     return NextResponse.json({ ok: true, state: session.state });
@@ -65,7 +75,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
       session.result = { quoteId: res.quoteId, quoteNumber: res.quoteNumber, checkoutUrl: res.checkoutUrl, quoteUrl: res.quoteUrl };
     }
 
-    session.audit.push({ at: now(), event: `forced_${action}` });
+    session.audit.push({ at: now(), event: `forced_${action}`, note: trimmedNote, actor: by });
     await store.dequeue("escalated", id);
     await store.saveSession(session);
     return NextResponse.json({ ok: true, state: session.state, result: session.result });

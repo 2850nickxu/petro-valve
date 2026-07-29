@@ -177,3 +177,85 @@ pre.block { background: #04272d; color: #dbe7ea; padding: 13px; border-radius: v
 .kv { display: grid; grid-template-columns: 200px 1fr; gap: 8px 16px; font-size: 12.5px; }
 .kv .k { color: var(--muted); }
 .tag { display: inline-block; background: var(--table-head); border: 1px solid var(--line); border-radius: 3px; padding: 2px 8px; font-size: 11.5px; color: var(--muted); font-weight: 600; }
+
+/* ============================================================
+   Interaction primitives (Phase 0) — toasts, dialogs, banners,
+   empty/error states, disclosures, focus rings, spacing utils.
+   ============================================================ */
+
+/* ── Focus-visible rings (a11y) ───────────────────────────── */
+.btn:focus-visible, .icon-btn:focus-visible, .tag:focus-visible,
+.nav-item:focus-visible, .disclosure-head:focus-visible,
+.field input:focus-visible, .field textarea:focus-visible, .field select:focus-visible,
+a:focus-visible { outline: 2px solid var(--silk-sky); outline-offset: 2px; }
+.table tbody tr a:focus-visible { outline-offset: 3px; border-radius: 2px; }
+
+/* ── Buttons: secondary variant + sizes + icon ────────────── */
+.btn.secondary { background: var(--sky-bg); border-color: transparent; color: var(--silk-sky-deep); }
+.btn.secondary:hover { background: rgba(56, 140, 180, 0.18); border-color: transparent; }
+.btn.sm { padding: 5px 11px; font-size: 12.5px; }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid #c9cfd4; border-radius: var(--radius); background: var(--panel); color: var(--heading); cursor: pointer; }
+.icon-btn:hover { border-color: var(--silk-sky); }
+
+/* ── Banners (backend-down vs empty) ──────────────────────── */
+.banner { display: flex; gap: 10px; align-items: flex-start; padding: 11px 14px; border-radius: var(--radius); border: 1px solid var(--line); font-size: 13px; }
+.banner .banner-title { font-weight: 700; }
+.banner.info { background: var(--sky-bg); border-color: #bcdcea; color: var(--heading); }
+.banner.warn { background: var(--warn-bg); border-color: #e6cf93; color: var(--warn); }
+.banner.error { background: var(--bad-bg); border-color: #e3b7b1; color: var(--bad); }
+.banner.ok { background: var(--ok-bg); border-color: #9fcbb6; color: var(--ok); }
+.banner + .banner, .banner + .card, .card + .banner { margin-top: 14px; }
+
+/* ── Empty / error states ─────────────────────────────────── */
+.emptystate { text-align: center; padding: 26px 18px; color: var(--muted); }
+.emptystate .es-icon { font-size: 20px; opacity: .55; }
+.emptystate .es-icon.bad { color: var(--bad); opacity: .8; font-weight: 700; }
+.emptystate .es-title { font-family: var(--font-display); font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--heading); margin-top: 8px; }
+.emptystate .es-body { margin-top: 4px; font-size: 12.5px; }
+
+/* ── Disclosure (collapsible) ─────────────────────────────── */
+.disclosure-head { display: inline-flex; align-items: center; gap: 8px; background: none; border: none; padding: 0; cursor: pointer; font-family: var(--font-display); font-size: 12.5px; font-weight: 600; letter-spacing: var(--tracking); text-transform: uppercase; color: var(--heading); }
+.disclosure-caret { transition: transform .12s; color: var(--muted-2); font-size: 10px; }
+.disclosure-caret.open { transform: rotate(90deg); }
+
+/* ── Toasts ───────────────────────────────────────────────── */
+.toast-host { position: fixed; right: 18px; bottom: 18px; z-index: 60; display: flex; flex-direction: column; gap: 8px; max-width: 380px; }
+.toast { display: flex; gap: 10px; align-items: flex-start; padding: 11px 13px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); box-shadow: 0 6px 20px rgba(4, 39, 45, .14); font-size: 13px; animation: pop-in .14s ease-out; }
+.toast .toast-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex: none; }
+.toast.ok .toast-dot { background: var(--ok-dot); }
+.toast.error .toast-dot { background: var(--bad-strong); }
+.toast.info .toast-dot { background: var(--silk-sky); }
+.toast .toast-close { margin-left: auto; background: none; border: none; color: var(--muted-2); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; }
+
+/* ── Modal / confirm dialog ───────────────────────────────── */
+.modal-backdrop { position: fixed; inset: 0; z-index: 70; background: rgba(4, 39, 45, .4); display: flex; align-items: center; justify-content: center; padding: 20px; animation: pop-in .12s ease-out; }
+.modal { background: var(--panel); border-radius: var(--radius); box-shadow: 0 12px 40px rgba(4, 39, 45, .28); width: 100%; max-width: 440px; padding: 20px 22px; }
+.modal h3 { border: none; padding: 0; margin: 0 0 8px; }
+.modal .modal-body { font-size: 13px; color: var(--ink); }
+.modal .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+@keyframes pop-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ── Spacing / layout utilities (retire scattered inline styles) ── */
+.mt-1 { margin-top: 6px; } .mt-2 { margin-top: 10px; } .mt-3 { margin-top: 14px; } .mt-4 { margin-top: 18px; } .mt-5 { margin-top: 24px; }
+.mb-0 { margin-bottom: 0; } .mb-1 { margin-bottom: 6px; } .mb-2 { margin-bottom: 10px; } .mb-3 { margin-bottom: 14px; } .mb-4 { margin-bottom: 18px; }
+.stack > * + * { margin-top: 14px; }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.wrap { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.link-muted { background: none; border: none; padding: 0; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; }
+.link-muted:hover { color: var(--heading); text-decoration: underline; }
+
+/* ── Delta chips (stated vs calculated price) ─────────────── */
+.delta { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 3px; }
+.delta.up { color: var(--bad); background: var(--bad-bg); }
+.delta.down { color: var(--ok); background: var(--ok-bg); }
+
+/* ── Responsive sidebar (mobile nav toggle) ───────────────── */
+.nav-mobile-bar { display: none; }
+@media (max-width: 760px) {
+  .app-body { flex-direction: column; }
+  .app-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--line); padding: 6px 0; }
+  .app-main { padding: 18px 16px 40px; }
+  .nav-mobile-bar { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: none; padding: 8px 16px; font-family: var(--font-display); font-size: 12px; font-weight: 600; letter-spacing: var(--tracking); text-transform: uppercase; color: var(--heading); cursor: pointer; }
+  .nav-groups { display: none; }
+  .nav-groups.open { display: block; }
+}

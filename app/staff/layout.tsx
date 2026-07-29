@@ -39,6 +39,7 @@ export default async function StaffLayout({ children }: { children: ReactNode })
           </span>
           <span className="muted" style={{ fontSize: 12 }}>mode: {status.mode} · {status.channel}</span>
           <Link className="btn primary" href="/staff/simulator">Open simulator</Link>
+          <a className="link-muted" href="/api/staff/signout">Sign out</a>
         </div>
       </header>
       <div className="app-body">

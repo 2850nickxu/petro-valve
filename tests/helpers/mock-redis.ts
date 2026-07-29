@@ -111,6 +111,28 @@ export function createMockRedis(): MockRedis {
         e.v.set(field, String(next));
         return next;
       }
+      case "HSET": {
+        const key = args[0];
+        let e = store.get(key);
+        if (!e || e.type !== "hash") {
+          e = { type: "hash", v: new Map() };
+          store.set(key, e);
+        }
+        let added = 0;
+        for (let i = 1; i + 1 < args.length; i += 2) {
+          if (!e.v.has(args[i])) added++;
+          e.v.set(args[i], args[i + 1]);
+        }
+        return added;
+      }
+      case "HDEL": {
+        const key = args[0];
+        const e = store.get(key);
+        if (!e || e.type !== "hash") return 0;
+        let n = 0;
+        for (const f of args.slice(1)) if (e.v.delete(f)) n++;
+        return n;
+      }
       case "HGETALL": {
         const e = store.get(args[0]);
         if (!e || e.type !== "hash") return [];
