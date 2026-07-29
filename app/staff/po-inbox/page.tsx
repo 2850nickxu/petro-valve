@@ -1,76 +1,100 @@
 import Link from "next/link";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
-import { Badge } from "../ui";
+import { PageHead, CardHead, SessionRow, Chip, stateLabel } from "../ui";
 import { Banner, EmptyState } from "@/components/ui/states";
-import { Timestamp } from "@/components/ui/timestamp";
 import { AutoRefresh } from "@/components/ui/auto-refresh";
 import type { PoSession } from "@/lib/po-agent/types";
 
 export const dynamic = "force-dynamic";
+
+function poOf(s: PoSession): string {
+  return s.extracted?.poNumber || "no PO number";
+}
+
+function shortWhen(iso: string, nowMs: number): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "—";
+  const sameDay = new Date(t).toDateString() === new Date(nowMs).toDateString();
+  if (sameDay) return iso.slice(11, 16);
+  return new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+/** The reason codes an operator needs to see at a glance. */
+function reasonOf(s: PoSession): string {
+  return s.escalation?.reasons.join(", ") || s.decision?.reasons.join(", ") || s.decision?.kind || "—";
+}
 
 export default async function PoInboxPage() {
   const redis = getRedis();
   if (!redis) {
     return (
       <>
-        <div className="page-head"><div><h1>Inbox</h1></div></div>
+        <PageHead title="Inbox" sub="Escalated sessions need a human decision — everything else ran touchless" />
         <Banner kind="error" title="Redis is not configured">
-          The review queue is unavailable. Set <code>UPSTASH_REDIS_REST_URL</code> and <code>UPSTASH_REDIS_REST_TOKEN</code> in
-          {" "}<Link href="/staff/settings">Settings</Link> to track and review PO sessions.
+          The review queue is unavailable. Set <code>UPSTASH_REDIS_REST_URL</code> and{" "}
+          <code>UPSTASH_REDIS_REST_TOKEN</code> in <Link href="/staff/settings">Settings</Link> to track and review PO
+          sessions.
         </Banner>
       </>
     );
   }
+
   const store = createPoStore(redis);
-  const [escalatedIds, recentIds] = await Promise.all([store.listQueue("escalated", 50), store.listQueue("recent", 25)]);
+  const [escalatedIds, recentIds] = await Promise.all([
+    store.listQueue("escalated", 50),
+    store.listQueue("recent", 25),
+  ]);
   const escalated = await store.loadSessions(escalatedIds);
   const recent = await store.loadSessions(recentIds);
+  const nowMs = Date.now();
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Inbox</h1>
-          <p className="muted">Escalated sessions need a human; recent shows the latest activity.</p>
-        </div>
+      <PageHead title="Inbox" sub="Escalated sessions need a human decision — everything else ran touchless">
         <AutoRefresh />
+      </PageHead>
+
+      <div className="card mb-4">
+        <CardHead title={<span style={{ color: "var(--bad-fg)" }}>Escalated</span>}>
+          <Chip kind="bad" size="sm">
+            <span className="num">{escalated.length}</span>
+          </Chip>
+        </CardHead>
+        {escalated.length ? (
+          escalated.map((s) => (
+            <SessionRow
+              key={s.id}
+              href={`/staff/po-inbox/${encodeURIComponent(s.id)}`}
+              company={s.buyer?.companyName || "(unknown sender)"}
+              sub={`${s.buyer?.email ?? "unknown"} · ${shortWhen(s.updatedAt, nowMs)}`}
+              meta={<span style={{ color: "var(--bad-fg)" }}>{reasonOf(s)}</span>}
+              state="escalated"
+              stateLabel="escalated"
+            />
+          ))
+        ) : (
+          <EmptyState icon="✓" title="Queue is clear">No sessions are waiting for review.</EmptyState>
+        )}
       </div>
 
       <div className="card">
-        <h3>Escalated ({escalated.length})</h3>
-        {escalated.length
-          ? <SessionTable sessions={escalated} showReason />
-          : <EmptyState icon="✓" title="Queue is clear">No sessions are waiting for review.</EmptyState>}
-      </div>
-
-      <div className="card mt-3">
-        <h3>Recent ({recent.length})</h3>
-        {recent.length
-          ? <SessionTable sessions={recent} showReason />
-          : <EmptyState title="No sessions yet">Processed POs will appear here as they arrive.</EmptyState>}
+        <CardHead title="Recent" />
+        {recent.length ? (
+          recent.map((s) => (
+            <SessionRow
+              key={s.id}
+              href={`/staff/po-inbox/${encodeURIComponent(s.id)}`}
+              company={s.buyer?.companyName || "(unknown sender)"}
+              sub={`${s.buyer?.email ?? "unknown"} · ${poOf(s)} · ${shortWhen(s.updatedAt, nowMs)}`}
+              state={s.state}
+              stateLabel={stateLabel(s.state)}
+            />
+          ))
+        ) : (
+          <EmptyState title="No sessions yet">Processed POs will appear here as they arrive.</EmptyState>
+        )}
       </div>
     </>
-  );
-}
-
-function SessionTable({ sessions, showReason }: { sessions: PoSession[]; showReason?: boolean }) {
-  return (
-    <table className="table">
-      <thead>
-        <tr><th>Company</th><th>Buyer</th><th>State</th>{showReason && <th>Reason / decision</th>}<th>Updated</th></tr>
-      </thead>
-      <tbody>
-        {sessions.map((s) => (
-          <tr key={s.id}>
-            <td><Link href={`/staff/po-inbox/${encodeURIComponent(s.id)}`}>{s.buyer?.companyName || "—"}</Link></td>
-            <td className="muted">{s.buyer?.email ?? "—"}</td>
-            <td><Badge kind={s.state}>{s.state}</Badge></td>
-            {showReason && <td className="muted">{s.escalation?.reasons.join(", ") || s.decision?.reasons.join(", ") || s.decision?.kind || "—"}</td>}
-            <td><Timestamp iso={s.updatedAt} /></td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }

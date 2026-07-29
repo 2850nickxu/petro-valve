@@ -52,13 +52,21 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
       {opts && (
         <div className="modal-backdrop" onClick={() => close(false)}>
           <div className="modal" role="dialog" aria-modal="true" aria-label={opts.title} onClick={(e) => e.stopPropagation()}>
-            <h3>{opts.title}</h3>
-            {opts.body && <div className="modal-body">{opts.body}</div>}
-            <div className="modal-actions">
-              <button className="btn" onClick={() => close(false)}>{opts.cancelLabel ?? "Cancel"}</button>
-              <button className={`btn ${opts.danger ? "danger" : "primary"}`} autoFocus onClick={() => close(true)}>
-                {opts.confirmLabel ?? "Confirm"}
-              </button>
+            {/* Coloured top rule signals the weight of the action before you read it. */}
+            <div className={`modal-rule ${opts.danger ? "danger" : ""}`} />
+            <div className="modal-inner">
+              <div className="modal-title">{opts.title}</div>
+              {opts.body && <div className="modal-body">{opts.body}</div>}
+              <div className="modal-actions">
+                <button className="btn" onClick={() => close(false)}>{opts.cancelLabel ?? "Cancel"}</button>
+                <button
+                  className={`btn ${opts.danger ? "danger" : "primary"}`}
+                  autoFocus
+                  onClick={() => close(true)}
+                >
+                  {opts.confirmLabel ?? "Confirm"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

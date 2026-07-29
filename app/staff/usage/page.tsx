@@ -1,16 +1,24 @@
+import Link from "next/link";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { currentYyyymm } from "@/lib/po-agent/metrics";
 import { parseTokenUsage, usageTotals, type ModelUsage } from "@/lib/po-agent/token-usage";
-import { Stat } from "../ui";
+import { PageHead, Stat } from "../ui";
+import { Banner } from "@/components/ui/states";
 
 export const dynamic = "force-dynamic";
 
-const fmt = (n: number) => n.toLocaleString();
 const money = (n: number) => `$${n.toFixed(n < 1 ? 4 : 2)}`;
 
+/** Compact token count — 9.61M / 1.14M / 88k — matching the design's stat tiles. */
+function compact(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
+  return n.toLocaleString();
+}
+
 /** Return the last `count` YYYYMM strings (most recent first). */
-function recentMonths(count = 6): string[] {
+function recentMonths(count = 4): string[] {
   const now = new Date();
   const results: string[] = [];
   for (let i = 0; i < count; i++) {
@@ -22,24 +30,20 @@ function recentMonths(count = 6): string[] {
   return results;
 }
 
-/** Format YYYYMM as "Jan 2026". */
+/** Format YYYYMM as "Jul 2026". */
 function formatYm(ym: string): string {
   const year = parseInt(ym.slice(0, 4), 10);
   const month = parseInt(ym.slice(4, 6), 10) - 1;
   return new Date(year, month, 1).toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
-export default async function UsagePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ month?: string }>;
-}) {
+export default async function UsagePage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const sp = await searchParams;
   const now = new Date().toISOString();
   const thisMonth = currentYyyymm(now);
-  const months = recentMonths(6);
+  const months = recentMonths(4);
 
-  // Validate the requested month — must be in our list or fall back to current
+  // Validate the requested month — must be in our list, else fall back to the current one.
   const requested = sp.month ?? thisMonth;
   const ym = months.includes(requested) ? requested : thisMonth;
 
@@ -49,74 +53,64 @@ export default async function UsagePage({
   const totals = usageTotals(rows);
 
   return (
-    <>
-      <div className="page-head">
-        <div>
-          <h1>Token usage</h1>
-          <p className="muted">AI model consumption for {formatYm(ym)}. Costs are estimates.</p>
-        </div>
-      </div>
+    <div className="narrow">
+      <PageHead
+        title="Token usage"
+        sub={`AI model consumption for ${formatYm(ym)} · costs are estimates from list prices`}
+      />
 
-      {/* Month selector */}
-      <div className="toolbar mb-2" style={{ marginBottom: 16 }}>
+      {!redis && (
+        <div className="mb-3">
+          <Banner kind="warn" title="Redis not configured">
+            Token usage is recorded in Redis — the figures below read 0 until it&apos;s connected.
+          </Banner>
+        </div>
+      )}
+
+      <div className="pa-wrap mb-4">
         {months.map((m) => (
-          <a
-            key={m}
-            href={`/staff/usage?month=${m}`}
-            className={`btn sm${m === ym ? " primary" : " secondary"}`}
-            style={{ marginRight: 4 }}
-          >
+          <Link key={m} href={`/staff/usage?month=${m}`} className={`chip-btn${m === ym ? " on" : ""}`}>
             {formatYm(m)}
-          </a>
+          </Link>
         ))}
       </div>
 
-      <div className="stat-grid" style={{ marginBottom: 16 }}>
-        <Stat label="Calls" value={fmt(totals.calls)} />
-        <Stat label="Input tokens" value={fmt(totals.input)} />
-        <Stat label="Output tokens" value={fmt(totals.output)} />
-        <Stat label="Total tokens" value={fmt(totals.total)} />
-        <Stat label="Est. cost" value={`${totals.costKnown ? "" : "~"}${money(totals.costUsd)}`} />
+      <div className="pa-stats mb-4">
+        <Stat label="Calls" value={totals.calls.toLocaleString()} compact />
+        <Stat label="Input tokens" value={compact(totals.input)} compact hint={`${totals.input.toLocaleString()} tokens`} />
+        <Stat label="Output tokens" value={compact(totals.output)} compact hint={`${totals.output.toLocaleString()} tokens`} />
+        <Stat label="Total tokens" value={compact(totals.total)} compact hint={`${totals.total.toLocaleString()} tokens`} />
+        <Stat label="Est. cost" value={`${totals.costKnown ? "" : "~"}${money(totals.costUsd)}`} compact />
       </div>
 
       <div className="card">
-        <h3>By model</h3>
         {rows.length ? (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Model</th>
-                <th>Calls</th>
-                <th>Input tokens</th>
-                <th>Output tokens</th>
-                <th>Total</th>
-                <th>Est. cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.model}>
-                  <td className="mono">{r.model}</td>
-                  <td>{fmt(r.calls)}</td>
-                  <td>{fmt(r.input)}</td>
-                  <td>{fmt(r.output)}</td>
-                  <td>{fmt(r.total)}</td>
-                  <td>{r.costUsd != null ? money(r.costUsd) : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          rows.map((r) => (
+            <div className="pa-row" key={r.model}>
+              <div className="pa-grow">
+                <div className="num" style={{ fontSize: 13, fontWeight: 600, color: "var(--head)" }}>{r.model}</div>
+                <div className="r-sub num">
+                  {r.calls.toLocaleString()} calls · {compact(r.input)} in · {compact(r.output)} out
+                </div>
+              </div>
+              <div className="num" style={{ fontSize: 13.5, fontWeight: 700, flex: "none" }}>
+                {r.costUsd != null ? money(r.costUsd) : "—"}
+              </div>
+            </div>
+          ))
         ) : (
-          <p className="muted">
-            No AI usage recorded for {formatYm(ym)}. The heuristic extractor uses no tokens — set a model + API key in{" "}
-            <a href="/staff/settings">Settings → AI</a> to use an LLM.
-          </p>
+          <div className="pa-row">
+            <span className="muted">
+              No AI usage recorded for {formatYm(ym)}. Set a model + API key in{" "}
+              <Link href="/staff/settings">Settings → AI model</Link> to use an LLM.
+            </span>
+          </div>
         )}
+        <div className="card-foot">
+          The heuristic extractor uses no tokens — an LLM is optional but much better on messy PDFs. Cost estimates use a
+          built-in per-model price table (USD per 1M tokens); verify against your provider&apos;s billing.
+        </div>
       </div>
-
-      <p className="muted" style={{ marginTop: 12 }}>
-        Cost estimates use a built-in per-model price table (USD per 1M tokens) and are approximate — verify against your provider&apos;s billing.
-      </p>
-    </>
+    </div>
   );
 }

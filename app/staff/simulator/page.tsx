@@ -3,6 +3,7 @@ import { getPoAgentConfig } from "@/lib/po-agent/config";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
 import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
 import { Simulator } from "@/components/simulator";
+import { PageHead } from "../ui";
 
 export const dynamic = "force-dynamic";
 
@@ -12,13 +13,19 @@ export default async function SimulatorPage() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Simulator</h1>
-          <p className="muted">Inject a PO and watch identify → extract → resolve → price → validate → decide.</p>
-        </div>
-      </div>
-      <Simulator defaultFrom="t.nguyen@pacific-elec.com" sandbox={config.simulatorSend} sandboxEmails={config.simulatorSendEmails} />
+      <PageHead
+        title="Simulator"
+        sub={
+          config.simulatorSend
+            ? "Paste a PO and watch the pipeline decide. Sandbox mode is ON — runs submit for real."
+            : "Paste a PO and watch the pipeline decide. Dry run — no email sent, nothing submitted."
+        }
+      />
+      <Simulator
+        defaultFrom="t.nguyen@pacific-elec.com"
+        sandbox={config.simulatorSend}
+        sandboxEmails={config.simulatorSendEmails}
+      />
     </>
   );
 }

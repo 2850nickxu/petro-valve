@@ -1,5 +1,6 @@
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
+import { stateLabel } from "@/app/staff/ui";
 import type { PoSession } from "@/lib/po-agent/types";
 
 export const dynamic = "force-dynamic";
@@ -25,9 +26,10 @@ export default async function CustomerPanel({ params }: { params: Promise<{ id: 
         <>
           <p className="muted">{matches.length} PO session{matches.length === 1 ? "" : "s"} from this customer.</p>
           {matches.slice(0, 15).map((s) => (
-            <div key={s.id} className="card" style={{ marginBottom: 8 }}>
+            <div key={s.id} className="card pad mb-2">
               <p style={{ margin: 0 }}>
-                <span className={`badge ${s.state}`}>{s.state}</span> · PO {s.extracted?.poNumber ?? "—"}
+                <span className={`chip ${s.state}`}>{stateLabel(s.state)}</span> · PO{" "}
+                <span className="num">{s.extracted?.poNumber ?? "—"}</span>
                 {s.result?.orderId ? ` · order ${s.result.orderId}` : s.result?.quoteId ? ` · quote ${s.result.quoteNumber ?? s.result.quoteId}` : ""}
               </p>
               <p style={{ margin: "4px 0 0" }}>

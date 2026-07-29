@@ -2,65 +2,71 @@ import { cookies, headers } from "next/headers";
 import { SETTINGS_FIELDS, settingsView, type SettingsScope } from "@/lib/po-agent/settings-store";
 import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
 import { listStoreInstalls } from "@/lib/bc-app/store-tokens";
-import { SettingsForm } from "@/components/settings-form";
-import { GmailConnect } from "@/components/gmail-connect";
-import { Banner } from "@/components/ui/states";
+import { effectiveEnv } from "@/lib/po-agent/effective-env";
+import { getPoAgentConfig } from "@/lib/po-agent/config";
+import { adminStatus } from "@/lib/po-agent/admin-status";
+import { activeStoreSource } from "@/lib/bc-app/request-context";
+import { SettingsForm, type SettingsDefaults, type SettingsHealth } from "@/components/settings-form";
+import { PageHead } from "../ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
   const scope: SettingsScope = hash ? `store:${hash}` : "global";
-  const [view, installs] = await Promise.all([settingsView(scope), listStoreInstalls()]);
+  const env = await effectiveEnv(hash ?? undefined);
+  const config = getPoAgentConfig(env);
+  const status = adminStatus(env);
+
+  const [view, installs, active] = await Promise.all([
+    settingsView(scope),
+    listStoreInstalls(),
+    activeStoreSource(),
+  ]);
   const host = (await headers()).get("host") ?? "localhost:3000";
   const origin = `https://${host}`;
 
+  // Controls display the effective value (env + saved settings) until explicitly changed.
+  const defaults: SettingsDefaults = {
+    enabled: config.enabled,
+    firstOrderConfirm: config.firstOrderConfirm,
+    forwardPriceMismatch: config.forwardPriceMismatch,
+    simulatorSend: config.simulatorSend,
+    simulatorSendEmails: config.simulatorSendEmails,
+    priceTolerancePct: config.priceTolerancePct,
+    maxClarifications: config.maxClarifications,
+    channel: config.channel === "microsoft" ? "microsoft" : "google",
+  };
+
+  const health: SettingsHealth = {
+    agent: status.enabled,
+    ai: status.ai.configured,
+    channel: status.channelCreds.google || status.channelCreds.microsoft,
+    escalation: status.escalation.email || status.escalation.slack,
+    store: active.source !== "none",
+  };
+
   return (
-    <>
-      <div className="page-head">
-        <div>
-          <h1>Settings</h1>
-          <p className="muted">
-            Configure the agent here — no env/CLI needed. Saved to{" "}
-            <span className="tag">{scope === "global" ? "this deployment" : `store ${hash}`}</span>. Secrets are encrypted at rest 🔒.
-          </p>
-        </div>
-      </div>
+    <div className="narrow">
+      <PageHead
+        title="Settings"
+        sub={
+          <>
+            Configure the agent here — no env or CLI needed. Saved to{" "}
+            <span className="tag">{scope === "global" ? "this deployment" : `store ${hash}`}</span>. Secrets are
+            encrypted at rest 🔒.
+          </>
+        }
+      />
 
-      <Banner kind="info" title="Setup order">
-        1. Fill in <strong>BigCommerce</strong> and <strong>Redis</strong> (env or via your hosting dashboard) first — the agent cannot start without them.{" "}
-        2. Add your <strong>AI</strong> provider key and model.{" "}
-        3. Configure your <strong>Email channel</strong> (Gmail or Microsoft), then connect the mailbox and register the push watch.
-      </Banner>
-
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h3>Gmail connection</h3>
-        <p className="muted" style={{ marginTop: -6 }}>Connect the monitored mailbox in-app (no local script). Save your Gmail OAuth client id/secret below first.</p>
-        <GmailConnect origin={origin} />
-      </div>
-
-      <SettingsForm fields={SETTINGS_FIELDS} view={view} />
-
-      <div className="card" style={{ marginTop: 8 }}>
-        <h3>Installed stores (app)</h3>
-        {installs.length ? (
-          <table className="table">
-            <thead><tr><th>Store hash</th><th>Owner</th><th>Installed</th><th>Token</th></tr></thead>
-            <tbody>
-              {installs.map((i) => (
-                <tr key={i.storeHash}>
-                  <td className="mono">{i.storeHash}</td>
-                  <td className="muted">{i.ownerEmail ?? "—"}</td>
-                  <td className="muted mono">{i.installedAt.slice(0, 16).replace("T", " ")}</td>
-                  <td><span className="tag">OAuth (per-store)</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="muted">No app installs yet — the agent uses the deployment (env/global) settings.</p>
-        )}
-      </div>
-    </>
+      <SettingsForm
+        fields={SETTINGS_FIELDS}
+        view={view}
+        defaults={defaults}
+        health={health}
+        origin={origin}
+        installs={installs}
+      />
+    </div>
   );
 }

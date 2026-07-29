@@ -2,41 +2,65 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 
-const GROUPS: Array<{ label: string; items: Array<[string, string]> }> = [
-  { label: "Operations", items: [["/staff", "Dashboard"], ["/staff/po-inbox", "Inbox"], ["/staff/sessions", "Sessions"]] },
-  { label: "Tools", items: [["/staff/simulator", "Simulator"], ["/staff/usage", "Token usage"]] },
-  { label: "Configuration", items: [["/staff/settings", "Settings"]] },
+// Sidebar nav. Grouped Overview / Work / Admin per the design. Rendered inside the
+// off-canvas panel on small screens, so every item closes the drawer on navigate.
+
+const GROUPS: Array<{ label: string; items: Array<{ href: string; label: string; badge?: "escalated" }> }> = [
+  { label: "Overview", items: [{ href: "/staff", label: "Dashboard" }] },
+  {
+    label: "Work",
+    items: [
+      { href: "/staff/po-inbox", label: "Inbox", badge: "escalated" },
+      { href: "/staff/sessions", label: "Sessions" },
+      { href: "/staff/simulator", label: "Simulator" },
+    ],
+  },
+  {
+    label: "Admin",
+    items: [
+      { href: "/staff/settings", label: "Settings" },
+      { href: "/staff/usage", label: "Token usage" },
+    ],
+  },
 ];
 
-export function AdminNav({ escalated = 0 }: { escalated?: number }) {
+export function AdminNav({ escalated = 0, onNavigate }: { escalated?: number; onNavigate?: () => void }) {
   const path = usePathname();
-  const [open, setOpen] = useState(false);
+
+  // /staff matches exactly (it's the index); everything else matches its subtree, so a
+  // session-detail page keeps Inbox highlighted.
   const isActive = (href: string) => (href === "/staff" ? path === "/staff" : path.startsWith(href));
 
-  // Collapse the mobile menu after navigating.
-  useEffect(() => { setOpen(false); }, [path]);
-
   return (
-    <nav className="app-nav">
-      <button type="button" className="nav-mobile-bar" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <span className={`disclosure-caret ${open ? "open" : ""}`}>▶</span>
-        <span>Menu</span>
-        {escalated > 0 ? <span className="nav-badge">{escalated}</span> : null}
-      </button>
-      <div className={`nav-groups ${open ? "open" : ""}`}>
-        {GROUPS.map((group) => (
-          <div className="nav-group" key={group.label}>
-            <div className="nav-group-label">{group.label}</div>
-            {group.items.map(([href, label]) => (
-              <Link key={href} href={href} className={`nav-item ${isActive(href) ? "active" : ""}`}>
-                <span>{label}</span>
-                {href === "/staff/po-inbox" && escalated > 0 ? <span className="nav-badge">{escalated}</span> : null}
+    <nav aria-label="Admin sections">
+      {GROUPS.map((group) => (
+        <div className="nav-group" key={group.label}>
+          <div className="nav-group-label">{group.label}</div>
+          {group.items.map((item) => {
+            const badge = item.badge === "escalated" && escalated > 0 ? escalated : null;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`nav-item ${isActive(item.href) ? "active" : ""}`}
+                aria-current={isActive(item.href) ? "page" : undefined}
+                onClick={onNavigate}
+              >
+                <span>{item.label}</span>
+                {badge != null ? <span className="nav-badge">{badge}</span> : null}
               </Link>
-            ))}
-          </div>
-        ))}
+            );
+          })}
+        </div>
+      ))}
+
+      {/* Sign-out lives at the foot of the nav rather than the header, which the design
+          keeps to status + theme + the simulator CTA. */}
+      <div className="nav-group">
+        <a className="nav-item" href="/api/staff/signout">
+          <span>Sign out</span>
+        </a>
       </div>
     </nav>
   );

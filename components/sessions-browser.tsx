@@ -1,20 +1,21 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Timestamp } from "@/components/ui/timestamp";
+import { stateLabel } from "@/app/staff/ui";
 import { EmptyState } from "@/components/ui/states";
 import type { SessionSummary, PoSessionState } from "@/lib/po-agent/types";
 
-const FILTER_STATES: Array<PoSessionState | "all"> = [
-  "all",
-  "completed_order",
-  "completed_quote",
-  "clarifying",
-  "awaiting_confirmation",
-  "escalated",
-  "rejected",
-  "expired",
+// Session search. The design collapses the raw state list into four intent-based filters;
+// each maps to the concrete states the store can return. "All" sends no state filter.
+
+type FilterId = "all" | "escalated" | "open" | "completed";
+
+const FILTERS: Array<{ id: FilterId; label: string; states: PoSessionState[] }> = [
+  { id: "all", label: "All", states: [] },
+  { id: "escalated", label: "Escalated", states: ["escalated"] },
+  { id: "open", label: "In progress", states: ["clarifying", "awaiting_confirmation"] },
+  { id: "completed", label: "Completed", states: ["completed_order", "completed_quote"] },
 ];
 
 interface SearchResult {
@@ -24,61 +25,66 @@ interface SearchResult {
   pageSize: number;
 }
 
-const ACTIVE_CHIP_STYLE: React.CSSProperties = {
-  background: "var(--silk-sky)",
-  color: "#fff",
-  borderColor: "var(--silk-sky)",
-};
-
 const PAGE_SIZE = 25;
 
 export function SessionsBrowser() {
   const [q, setQ] = useState("");
-  const [state, setState] = useState<PoSessionState | "all">("all");
+  const [filter, setFilter] = useState<FilterId>("all");
   const [page, setPage] = useState(0);
   const [data, setData] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Debounced search text
   const [debouncedQ, setDebouncedQ] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleQChange = (value: string) => {
+  function handleQChange(value: string) {
     setQ(value);
+    setPage(0);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => setDebouncedQ(value), 300);
-  };
+  }
 
-  // Reset page when search params change
-  const handleStateChange = (next: PoSessionState | "all") => {
-    setState(next);
+  function handleFilter(next: FilterId) {
+    setFilter(next);
     setPage(0);
-  };
-
-  const handleQReset = useCallback(() => {
-    setPage(0);
-  }, []);
-
-  useEffect(() => {
-    handleQReset();
-  }, [debouncedQ, handleQReset]);
+  }
 
   useEffect(() => {
     let cancelled = false;
-    const params = new URLSearchParams();
-    if (debouncedQ) params.set("q", debouncedQ);
-    if (state !== "all") params.set("state", state);
-    params.set("page", String(page));
-    params.set("pageSize", String(PAGE_SIZE));
+    const active = FILTERS.find((f) => f.id === filter)!;
+
+    // The search endpoint takes a single state. For multi-state filters we ask for each
+    // and merge, so "In progress" and "Completed" behave like the design's chips.
+    const queries = active.states.length ? active.states : [null];
+    const requests = queries.map((state) => {
+      const params = new URLSearchParams();
+      if (debouncedQ) params.set("q", debouncedQ);
+      if (state) params.set("state", state);
+      params.set("page", "0");
+      // Over-fetch when merging so client-side paging stays correct.
+      params.set("pageSize", String(active.states.length > 1 ? 200 : PAGE_SIZE));
+      if (active.states.length <= 1) params.set("page", String(page));
+      return fetch(`/api/staff/sessions/search?${params.toString()}`).then((r) => r.json() as Promise<SearchResult>);
+    });
 
     setLoading(true);
-    fetch(`/api/staff/sessions/search?${params.toString()}`)
-      .then((r) => r.json() as Promise<SearchResult>)
-      .then((d) => {
-        if (!cancelled) {
-          setData(d);
-          setLoading(false);
+    Promise.all(requests)
+      .then((results) => {
+        if (cancelled) return;
+        if (active.states.length > 1) {
+          const merged = results
+            .flatMap((r) => r.items)
+            .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+          setData({
+            total: merged.length,
+            items: merged.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+            page,
+            pageSize: PAGE_SIZE,
+          });
+        } else {
+          setData(results[0]);
         }
+        setLoading(false);
       })
       .catch(() => {
         if (!cancelled) setLoading(false);
@@ -87,7 +93,7 @@ export function SessionsBrowser() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedQ, state, page]);
+  }, [debouncedQ, filter, page]);
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
@@ -98,105 +104,78 @@ export function SessionsBrowser() {
 
   return (
     <div className="card">
-      {/* Search controls */}
-      <div style={{ marginBottom: 14 }}>
-        <div className="field" style={{ marginBottom: 10 }}>
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => handleQChange(e.target.value)}
-            placeholder="Search company, buyer email, or PO number…"
-          />
-        </div>
-
-        <div className="toolbar">
-          {FILTER_STATES.map((st) => (
-            <button
-              key={st}
-              type="button"
-              className="tag"
-              style={state === st ? ACTIVE_CHIP_STYLE : undefined}
-              onClick={() => handleStateChange(st)}
-            >
-              {st}
-            </button>
-          ))}
-        </div>
+      <div className="pa-wrap" style={{ padding: "12px 18px", borderBottom: "1px solid var(--border2)" }}>
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => handleQChange(e.target.value)}
+          placeholder="Search company, buyer, PO number"
+          aria-label="Search sessions"
+          style={{ flex: "1 1 200px", maxWidth: 300, fontSize: 13 }}
+        />
+        {FILTERS.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            className={`chip-btn round${filter === f.id ? " on" : ""}`}
+            aria-pressed={filter === f.id}
+            onClick={() => handleFilter(f.id)}
+          >
+            {f.label}
+          </button>
+        ))}
       </div>
 
-      {/* Results */}
       {loading ? (
-        <p className="muted" style={{ margin: "16px 0" }}>Searching…</p>
+        <div className="card-body">
+          {["62%", "100%", "84%", "73%"].map((w) => (
+            <div key={w} className="skeleton" style={{ width: w }} />
+          ))}
+        </div>
       ) : items.length === 0 ? (
-        <EmptyState
-          title="No matching sessions"
-        >
-          Try a different search or filter.
-        </EmptyState>
+        <EmptyState title="No matching sessions">Try a different search or filter.</EmptyState>
       ) : (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Company</th>
-              <th>Buyer</th>
-              <th>State</th>
-              <th>Decision</th>
-              <th>PO</th>
-              <th>Updated</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.id}>
-                <td>
-                  <Link href={`/staff/po-inbox/${encodeURIComponent(item.id)}`}>
-                    {item.company || "—"}
-                  </Link>
-                </td>
-                <td className="muted">{item.email || "—"}</td>
-                <td>
-                  <span className={`badge ${item.state}`}>{item.state}</span>
-                </td>
-                <td>{item.decision ?? "—"}</td>
-                <td className="mono">{item.poNumber || "—"}</td>
-                <td>
-                  <Timestamp iso={item.updatedAt} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        items.map((item) => (
+          <Link
+            key={item.id}
+            href={`/staff/po-inbox/${encodeURIComponent(item.id)}`}
+            className="pa-row link"
+          >
+            <div className="pa-grow">
+              <div className="r-title">{item.company || "(unknown sender)"}</div>
+              <div className="r-sub">
+                {item.email || "unknown"} · {item.poNumber || "no PO number"} ·{" "}
+                {item.updatedAt.slice(0, 16).replace("T", " ")}
+              </div>
+            </div>
+            <span className="r-meta num">{item.decision ?? "—"}</span>
+            <span className={`chip ${item.state}`}>{stateLabel(item.state)}</span>
+          </Link>
+        ))
       )}
 
-      {/* Pagination footer */}
-      {!loading && total > 0 && (
-        <div
-          className="toolbar"
-          style={{ marginTop: 14, justifyContent: "space-between" }}
-        >
-          <span className="muted" style={{ fontSize: 12 }}>
-            Showing {startItem}–{endItem} of {total}
-          </span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              className="btn sm"
-              disabled={!hasPrev}
-              onClick={() => setPage((p) => p - 1)}
-            >
+      <div className="card-foot row-between">
+        <span>
+          {total > 0 ? (
+            <>
+              Showing <span className="num">{startItem}</span>–<span className="num">{endItem}</span> of{" "}
+              <span className="num">{total}</span> session{total === 1 ? "" : "s"}
+            </>
+          ) : (
+            "No sessions"
+          )}
+        </span>
+        {total > PAGE_SIZE && (
+          <span className="pa-wrap" style={{ gap: 8 }}>
+            <button type="button" className="btn xs" disabled={!hasPrev} onClick={() => setPage((p) => p - 1)}>
               Prev
             </button>
-            <button
-              type="button"
-              className="btn sm"
-              disabled={!hasNext}
-              onClick={() => setPage((p) => p + 1)}
-            >
+            <button type="button" className="btn xs" disabled={!hasNext} onClick={() => setPage((p) => p + 1)}>
               Next
             </button>
-          </div>
-        </div>
-      )}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

@@ -8,6 +8,8 @@ export default tseslint.config(
     ignores: [
       "node_modules/**",
       ".next/**",
+      // Local `vercel build` output — generated bundles, not source.
+      ".vercel/**",
       "next-env.d.ts",
       "coverage/**",
     ],

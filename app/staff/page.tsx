@@ -7,21 +7,49 @@ import { adminStatus } from "@/lib/po-agent/admin-status";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
 import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
 import { activeStoreSource } from "@/lib/bc-app/request-context";
-import { Stat, Badge, HealthRow } from "./ui";
+import { PageHead, Stat, CardHead, HealthRow, SessionRow, stateLabel } from "./ui";
 import { Banner } from "@/components/ui/states";
-import { Timestamp } from "@/components/ui/timestamp";
 import { AutoRefresh } from "@/components/ui/auto-refresh";
 import type { PoSession } from "@/lib/po-agent/types";
 
 export const dynamic = "force-dynamic";
 
 const SETTINGS = "/staff/settings";
+const INBOX = "/staff/po-inbox";
+
+/** "4 hours" / "12 minutes" / "2 days" — for the escalation call-out. */
+function waitedFor(iso: string | undefined, nowMs: number): string | null {
+  if (!iso) return null;
+  const then = Date.parse(iso);
+  if (!Number.isFinite(then)) return null;
+  const mins = Math.max(0, Math.round((nowMs - then) / 60000));
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"}`;
+  const hours = Math.round(mins / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? "" : "s"}`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
+
+function poOf(s: PoSession): string {
+  return s.extracted?.poNumber || "no PO number";
+}
+
+/** "09:42" for today, else "25 Jul" — matches the design's compact row stamps. */
+function shortWhen(iso: string, nowMs: number): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "—";
+  const sameDay = new Date(t).toDateString() === new Date(nowMs).toDateString();
+  if (sameDay) return iso.slice(11, 16);
+  return new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
 
 export default async function Dashboard() {
   const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
   const status = adminStatus(await effectiveEnv(hash ?? undefined)); // reflects saved settings
   const active = await activeStoreSource();
   const redis = getRedis();
+  const nowIso = new Date().toISOString();
+  const nowMs = Date.parse(nowIso);
 
   let metrics = computeMetrics({});
   let recent: PoSession[] = [];
@@ -29,132 +57,146 @@ export default async function Dashboard() {
   let escalatedCount = 0;
   if (redis) {
     const store = createPoStore(redis);
-    const ym = currentYyyymm(new Date().toISOString());
+    const ym = currentYyyymm(nowIso);
     const [counters, recentIds, escalatedIds] = await Promise.all([
       store.getCounters(ym),
-      store.listQueue("recent", 8),
+      store.listQueue("recent", 6),
       store.listQueue("escalated", 100),
     ]);
     metrics = computeMetrics(counters);
     recent = await store.loadSessions(recentIds);
     escalatedCount = escalatedIds.length;
-    escalated = await store.loadSessions(escalatedIds.slice(0, 5));
+    escalated = await store.loadSessions(escalatedIds);
   }
 
   const hasChannel = status.channelCreds.google || status.channelCreds.microsoft;
   const hasEscalation = status.escalation.email || status.escalation.slack;
   const health = [
-    { ok: status.enabled, warn: !status.enabled, name: "PO agent enabled", detail: status.enabled ? "on" : "off", action: { label: "Enable →", href: SETTINGS } },
+    { ok: status.enabled, warn: !status.enabled, name: "PO agent", detail: status.enabled ? "enabled" : "disabled", action: { label: "Enable →", href: SETTINGS } },
     { ok: active.source !== "none", name: "BigCommerce store", detail: active.storeHash ? `${active.storeHash} · token: ${active.source}` : "not configured", action: { label: "Connect →", href: SETTINGS } },
     { ok: status.redis, name: "Redis (state)", detail: status.redis ? "connected" : "not configured", action: { label: "Set up →", href: SETTINGS } },
     { ok: status.ai.configured, warn: !status.ai.configured, name: "AI model", detail: status.ai.model ?? "heuristic fallback", action: { label: "Add model →", href: SETTINGS } },
     { ok: hasChannel, warn: !hasChannel, name: "Email channel", detail: status.channelCreds.google ? "gmail" : status.channelCreds.microsoft ? "microsoft" : "none", action: { label: "Connect →", href: SETTINGS } },
     { ok: hasEscalation, warn: !hasEscalation, name: "Escalation targets", detail: [status.escalation.email && "email", status.escalation.slack && "slack"].filter(Boolean).join(", ") || "queue only", action: { label: "Set up →", href: SETTINGS } },
   ];
-  const okCount = health.filter((h) => h.ok).length;
-  const firstRun = okCount <= 2;
+  const firstRun = health.filter((h) => h.ok).length <= 2;
+
+  // Oldest wait drives the call-out's urgency line.
+  const oldest = escalated
+    .map((s) => s.escalation?.at ?? s.updatedAt)
+    .sort((a, b) => Date.parse(a) - Date.parse(b))[0];
+  const waited = waitedFor(oldest, nowMs);
+
+  const monthLabel = new Date(nowMs).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Dashboard</h1>
-          <p className="muted">Email → purchase-order agent for BigCommerce B2B Edition.</p>
-        </div>
+      <PageHead
+        title="Dashboard"
+        sub={`Email → purchase-order agent for BigCommerce B2B Edition · ${monthLabel}`}
+      >
         <AutoRefresh />
-      </div>
+      </PageHead>
 
       {!redis && (
-        <Banner kind="warn" title="Redis not connected">
-          Session tracking, the review queue, and metrics are offline. Add <code>UPSTASH_REDIS_REST_URL</code> / <code>_TOKEN</code> in{" "}
-          <Link href={SETTINGS}>Settings</Link> — the counters below read 0 until then.
-        </Banner>
+        <div className="mb-3">
+          <Banner kind="warn" title="Redis not connected">
+            Session tracking, the review queue, and metrics are offline. Add <code>UPSTASH_REDIS_REST_URL</code> /{" "}
+            <code>UPSTASH_REDIS_REST_TOKEN</code> in <Link href={SETTINGS}>Settings</Link> — the counters below read 0 until then.
+          </Banner>
+        </div>
       )}
 
       {firstRun && (
-        <Banner kind="info" title="Get started">
-          <p className="mb-1">Finish setup to start processing POs:</p>
-          <ol style={{ margin: "0 0 8px", paddingLeft: 18 }}>
-            <li>Connect your <strong>BigCommerce store</strong> and <strong>Redis</strong> in Settings.</li>
-            <li>Add an <strong>AI model</strong> (optional — a heuristic extractor works without one).</li>
-            <li>Connect your <strong>email channel</strong> (Gmail or Microsoft).</li>
-            <li><strong>Enable</strong> the agent.</li>
-          </ol>
-          <div className="wrap">
-            <Link className="btn primary" href={SETTINGS}>Open Settings</Link>
-            <Link className="btn" href="/staff/simulator">Try the simulator</Link>
-          </div>
-        </Banner>
+        <div className="mb-3">
+          <Banner kind="info" title="Finish setup to start processing POs">
+            <ol className="mt-1" style={{ margin: "0 0 8px", paddingLeft: 18 }}>
+              <li>Connect your <strong>BigCommerce store</strong> and <strong>Redis</strong>.</li>
+              <li>Add an <strong>AI model</strong> — optional, a heuristic extractor works without one.</li>
+              <li>Connect your <strong>email channel</strong> (Gmail or Microsoft).</li>
+              <li><strong>Enable</strong> the agent.</li>
+            </ol>
+            <div className="pa-wrap">
+              <Link className="btn primary sm" href={SETTINGS}>Open Settings</Link>
+              <Link className="btn sm" href="/staff/simulator">Try the simulator</Link>
+            </div>
+          </Banner>
+        </div>
       )}
 
-      <div className="stat-grid mt-3 mb-3">
-        <Stat label="Received (mo)" value={metrics.received} hint="POs received this calendar month" />
-        <Stat label="Orders" value={metrics.orders} hint="Orders placed this month" />
-        <Stat label="Quotes" value={metrics.quotes} hint="Quotes created this month" />
-        <Stat label="Escalations" value={metrics.escalations} hint="Sessions sent to human review this month" />
-        <Stat label="Touchless" value={`${Math.round(metrics.touchlessRate * 100)}%`} hint="Share completed without human review" />
-        <Stat label="Value" value={`$${metrics.valueProcessed.toFixed(0)}`} hint="Total order value placed this month (USD)" />
+      {escalatedCount > 0 && (
+        <Link href={INBOX} className="pa-alert mb-5">
+          <div style={{ minWidth: 0 }}>
+            <div className="t">
+              {escalatedCount} escalated session{escalatedCount === 1 ? " is" : "s are"} waiting on a human
+            </div>
+            <div className="d">
+              Buyers have been told we&apos;re checking — nothing was submitted.
+              {waited ? ` Oldest has waited ${waited}.` : ""}
+            </div>
+          </div>
+          <div className="arrow" aria-hidden="true">→</div>
+        </Link>
+      )}
+
+      <div className="pa-stats mb-5">
+        <Stat label="Received" value={metrics.received} note="POs this month" hint="POs received this calendar month" />
+        <Stat label="Orders" value={metrics.orders} note="pay on account" hint="Orders placed this month" />
+        <Stat label="Quotes" value={metrics.quotes} note="checkout link sent" hint="Quotes created this month" />
+        <Stat
+          label="Escalations"
+          value={metrics.escalations}
+          note={`${escalatedCount} still open`}
+          tone="bad"
+          hint="Sessions sent to human review this month"
+        />
+        <Stat
+          label="Touchless"
+          value={`${Math.round(metrics.touchlessRate * 100)}%`}
+          note="no human needed"
+          tone="ok"
+          hint="Share completed without human review"
+        />
+        <Stat
+          label="Value"
+          value={`$${metrics.valueProcessed.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
+          note="orders placed"
+          hint="Total order value placed this month (USD)"
+        />
       </div>
 
-      <div className="grid cols-2">
+      <div className="pa-2col">
         <div className="card">
-          <h3>Setup &amp; health</h3>
-          <div className="health">
-            {health.map((h) => (
-              <HealthRow key={h.name} ok={h.ok} warn={h.warn} name={h.name} detail={h.detail} action={h.action} />
-            ))}
+          <CardHead title="Recent sessions" />
+          {recent.length ? (
+            recent.map((s) => (
+              <SessionRow
+                key={s.id}
+                href={`${INBOX}/${encodeURIComponent(s.id)}`}
+                company={s.buyer?.companyName || "(unknown sender)"}
+                sub={`${s.buyer?.email ?? "unknown"} · ${poOf(s)} · ${shortWhen(s.updatedAt, nowMs)}`}
+                state={s.state}
+                stateLabel={stateLabel(s.state)}
+              />
+            ))
+          ) : (
+            <div className="emptystate">
+              <div className="es-icon">○</div>
+              <div className="es-title">No sessions yet</div>
+              <div className="es-body">Processed POs appear here as they arrive.</div>
+            </div>
+          )}
+          <div className="card-foot">
+            <Link href="/staff/sessions" style={{ fontSize: 12.5, fontWeight: 600 }}>All sessions →</Link>
           </div>
         </div>
 
         <div className="card">
-          <h3>Needs review</h3>
-          {!redis ? (
-            <p className="muted">Connect Redis to track the review queue.</p>
-          ) : escalatedCount > 0 ? (
-            <>
-              <p>
-                <span className="badge escalate">{escalatedCount}</span> escalated session{escalatedCount === 1 ? "" : "s"} waiting.{" "}
-                <Link href="/staff/po-inbox">Open inbox →</Link>
-              </p>
-              <table className="table mt-2">
-                <tbody>
-                  {escalated.map((s) => (
-                    <tr key={s.id}>
-                      <td><Link href={`/staff/po-inbox/${encodeURIComponent(s.id)}`}>{s.buyer?.companyName || "—"}</Link></td>
-                      <td className="muted">{s.escalation?.reasons.join(", ") || s.decision?.reasons.join(", ") || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          ) : (
-            <p className="muted">No escalations. Queue is clear.</p>
-          )}
+          <CardHead title="Setup &amp; health" />
+          {health.map((h) => (
+            <HealthRow key={h.name} ok={h.ok} warn={h.warn} name={h.name} detail={h.detail} action={h.action} />
+          ))}
         </div>
-      </div>
-
-      <div className="card mt-3">
-        <h3>Recent sessions</h3>
-        {recent.length ? (
-          <table className="table">
-            <thead>
-              <tr><th>Company</th><th>Buyer</th><th>State</th><th>Decision</th><th>Updated</th></tr>
-            </thead>
-            <tbody>
-              {recent.map((s) => (
-                <tr key={s.id}>
-                  <td><Link href={`/staff/po-inbox/${encodeURIComponent(s.id)}`}>{s.buyer?.companyName || "—"}</Link></td>
-                  <td className="muted">{s.buyer?.email ?? "—"}</td>
-                  <td><Badge kind={s.state}>{s.state}</Badge></td>
-                  <td>{s.decision?.kind ?? "—"}</td>
-                  <td><Timestamp iso={s.updatedAt} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="muted">No sessions yet.</p>
-        )}
       </div>
     </>
   );

@@ -30,8 +30,8 @@ export function AutoRefresh({ intervalMs = 15_000, label = "Refresh" }: { interv
   const ago = lastAt != null && now != null ? Math.round((now - lastAt) / 1000) : null;
 
   return (
-    <div className="wrap">
-      <button className="btn sm secondary" onClick={manual} disabled={busy}>{busy ? "Refreshing…" : label}</button>
+    <div className="pa-wrap">
+      <button className="btn xs" onClick={manual} disabled={busy}>{busy ? "Refreshing…" : label}</button>
       {ago != null && <span className="muted" style={{ fontSize: 12 }}>updated {ago < 5 ? "just now" : `${ago}s ago`}</span>}
     </div>
   );

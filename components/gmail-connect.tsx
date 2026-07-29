@@ -33,7 +33,7 @@ export function GmailConnect({ origin }: { origin: string }) {
 
   return (
     <div>
-      <div className="toolbar" style={{ marginBottom: connectClicked ? 10 : 0 }}>
+      <div className="pa-wrap" style={{ marginBottom: connectClicked ? 10 : 0 }}>
         <button className="btn primary" onClick={handleConnect}>
           Connect Gmail
         </button>
