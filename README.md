@@ -15,6 +15,9 @@ BigCommerce / Gmail / AI-provider credentials needed only at clearly-labeled ste
 - Hosted on Vercel (project `offline-po-app`), connected to this repo — **pushes to `main`
   auto-deploy to production**; pull requests get preview URLs.
 - Configuration is self-service in the app (**Settings**); secrets are encrypted at rest.
+- **DevOps:** feature-branch commits auto-ship to production through a CI-gated PR pipeline —
+  runbook in [`docs/DEVOPS.md`](docs/DEVOPS.md). Environment & secrets layout:
+  [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
 
 ## Status
 

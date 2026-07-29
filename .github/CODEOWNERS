@@ -1,0 +1,8 @@
+# Code owners for offline-po-app.
+#
+# Auto-requests the owner's review on every PR. Note: on a private free GitHub
+# plan this is advisory only — it is enforced (review required before merge) just
+# if branch protection is enabled. See docs/DEVOPS.md §5. Update the handle if
+# ownership changes.
+
+*       @wayne-stratbucker-silk

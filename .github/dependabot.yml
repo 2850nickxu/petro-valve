@@ -1,0 +1,36 @@
+# Dependabot — keeps npm dependencies and CI actions patched.
+#
+# NOTE: Dependabot opens PRs on GitHub directly, so they do NOT flow through the
+# local post-commit auto-ship hook (that only fires on local commits). They wait
+# for manual review + merge — a dependency bump warrants a human look — and CI
+# gates them like any other PR.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Collapse low-risk bumps into one PR; majors still arrive individually.
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(ci)"
+    labels:
+      - dependencies

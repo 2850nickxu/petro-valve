@@ -112,4 +112,5 @@ Vercel is connected to the GitHub repo:
 
 The pipeline never calls `vercel deploy`; it just moves git refs and lets
 Vercel's Git integration build. Production env vars live in the Vercel project
-(`offline-po-app`), never in the repo.
+(`offline-po-app`), never in the repo. Full env/secrets layout (Preview vs
+Production, and the in-app encrypted Settings): `docs/ENVIRONMENT.md`.
