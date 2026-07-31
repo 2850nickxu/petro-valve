@@ -85,15 +85,56 @@ echoes the validation token on creation.
 
 ## 7. Live verification (sandbox) — the [L] steps
 
-- **[L1]** one `getUserByEmail` / `getCompany` / pricing round-trip; confirm a known
-  company returns contract (not base) pricing; pin the payment code + `channelList` shape.
+- **[L1] ✅ DONE** — see §7.1. Read-only: identify → company → pricing → decision.
 - **[L2]** one real quote → checkout link; one real terms order → status 11, "Pay on
-  Account", B2B poNumber + invoice.
-- **[L3]** one real extraction per provider on a PDF (BYO proof).
-- **[L6/L7/L9]** Slack/email escalation; Gmail Pub/Sub → threaded reply; Graph subscription.
+  Account", B2B poNumber + invoice. **Writes to the store — not yet run.**
+- **[L3]** one real extraction per provider on a PDF (BYO proof). Blocked: no provider key.
+- **[L6/L7/L9]** Slack/email escalation; Gmail Pub/Sub → threaded reply; Graph
+  subscription. Blocked: no Slack webhook / Gmail OAuth / Graph creds configured.
+
+```bash
+node scripts/po-agent-live-check.mjs          # quick read-only probe of the store
+set -a; . ./.env.local; set +a
+PO_AGENT_LIVE=1 npx vitest run tests/live     # the [L1] suite (12 assertions)
+```
 
 `node scripts/po-agent-smoke.mjs` runs fixture POs through `/api/po-agent/simulate`
 (dry run) against a running app.
+
+### 7.1 [L1] results — sandbox `ybhg7gjokp` ("Catalyst B2B demo")
+
+Verified by `tests/live/l1-sandbox.test.ts`, which exercises the **real** `lib/bc/*` and
+`lib/po-agent/core/*` code paths (not a parallel reimplementation) and is skipped unless
+`PO_AGENT_LIVE=1`, so `npm test` stays credential-free.
+
+Confirmed working: store token + B2B Edition scope, `getUserByEmail`, `getCompany`,
+company payments/credit, SKU resolution, `/v3/pricing/products`, and the full
+`identify → resolve → price → validate → decide` path for order / quote / clarify /
+reject / unapproved-company.
+
+Store facts that the agent's configuration depends on:
+
+| Fact | Value | Why it matters |
+|---|---|---|
+| Pay-on-account code | **`cheque`** | This store has **no** `purchase_order` method. `PO_AGENT_PO_PAYMENT_CODES=cheque` is required — the default list would match nothing and every PO would route to a quote as `no_terms`. |
+| Contract pricing source | **customer group**, not price list | Group 5 returns 71.52 vs 89.40 base on `LH-2X4-40LM-35K` (−20%). The store has 2 price lists (`Wholesale`, `Cost Plus POC`) but `priceListAssign` is `[]` on **all 16 companies**, so price-list pricing is currently unexercised. |
+| B2B credit | enabled on **7 of 16** companies | `assessPayOnAccount` requires `creditEnabled`; a company without it can never reach the order path. |
+| `channelList` | `[]` on every user | MSF channel resolution always falls back to `ctx.channelId`. The multi-channel branch is untested live. |
+| `inventory_tracking` | `none` across the catalog | `line_inventory_short` can't trigger here — that branch is offline-tested only. |
+
+Canonical fixtures (update these if the sandbox is reseeded):
+
+- **`t.nguyen@pacific-elec.com`** — Pacific Electrical Supply (`12688405`), group 5, credit
+  on, approved, role 0 → the happy path, decides **order**.
+- **`k.larson@pacific-elec.com`** — same company, role 2 → decides **quote**
+  (`buyer_role_requires_approval`).
+- **`j.okafor@bridgewater-elec.com`** — Bridgewater (`companyStatus=0`) → not approved.
+- **`LH-2X4-40LM-35K`** — visible, priced (89.40 base), untracked inventory.
+
+Two shapes worth knowing (both already handled correctly in `lib/bc/payments.ts`): the
+**store**-level `GET /payments` returns `{id, paymentCode, paymentTitle}`, while the
+**company**-level `GET /companies/{id}/payments` returns `{code, isEnabled}`. The agent
+reads the company-level one.
 
 ## 8. Demo script (sales)
 

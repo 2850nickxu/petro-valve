@@ -114,3 +114,27 @@ The pipeline never calls `vercel deploy`; it just moves git refs and lets
 Vercel's Git integration build. Production env vars live in the Vercel project
 (`offline-po-app`), never in the repo. Full env/secrets layout (Preview vs
 Production, and the in-app encrypted Settings): `docs/ENVIRONMENT.md`.
+
+### 6.1 Vercel team / local link
+
+The project lives in the **`silkcommerce`** Vercel team (it was moved there from
+`waynestratbucker-projects`; the project id was preserved, the org id was not).
+The GitHub↔Vercel integration and all environment variables survived the move —
+only *local* `.vercel/project.json` files went stale.
+
+If a `vercel` command fails with *"Your Project was either deleted, transferred
+to a new Team, or you don't have access to it anymore"*, your local link is
+pointing at the old team. Relink:
+
+```bash
+npx vercel link --yes --scope silkcommerce --project offline-po-app
+```
+
+`.vercel/` is git-ignored, so this is per-clone (and per-worktree) — each agent
+worktree needs it once. Note `vercel link` appends a `VERCEL_OIDC_TOKEN` to
+`.env.local`; it leaves existing values alone.
+
+Caveat: an integration authenticated only against `waynestratbucker-projects`
+(e.g. a Vercel MCP connection) returns **403** for this project. Use the CLI with
+`--scope silkcommerce` for deployment/log inspection until that connection is
+re-authorized for the new team.
