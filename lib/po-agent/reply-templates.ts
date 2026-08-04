@@ -15,6 +15,9 @@ export interface ReplyTemplate {
   text: string;
 }
 
+/** How many child variants a draft lists before summarising the rest. */
+const MAX_CHOICES = 8;
+
 function money(n: number | null | undefined, currency?: string | null): string {
   if (n == null || !Number.isFinite(n)) return "—";
   const code = currency && currency.trim() ? currency.trim().toUpperCase() : "USD";
@@ -55,7 +58,36 @@ export function replyTemplates(session: PoSession): ReplyTemplate[] {
     });
   }
 
-  // 2. Price mismatches → state both numbers and which one we'll honour.
+  // 2. Parent SKUs → name the versions (and their prices) and ask which one.
+  const parents = lines.filter((l) => l.issues.includes("line_parent_sku"));
+  if (parents.length) {
+    const blocks = parents.map((l) => {
+      const choices = l.variantChoices ?? [];
+      const shown = choices.slice(0, MAX_CHOICES);
+      const menu = shown
+        .map((c) => {
+          const label = c.optionLabel ? ` — ${c.optionLabel}` : "";
+          const price = c.unitPrice != null ? ` — ${money(c.unitPrice, currency)} ea` : "";
+          return `  · ${c.sku}${label}${price}`;
+        })
+        .join("\n");
+      const total = l.variantChoiceCount ?? choices.length;
+      const more = total > shown.length ? `\n  · …and ${total - shown.length} more.` : "";
+      const head =
+        `${ref(l)}${l.productName ? ` (${l.productName})` : ""} is a parent part number — ` +
+        `it comes in ${total} version${total === 1 ? "" : "s"}, so we need to know which one you want`;
+      return menu ? `${head}:\n${menu}${more}` : `${head}.`;
+    });
+    out.push({
+      id: "ask_variant",
+      label: parents.length > 1 ? "Ask which versions" : "Ask which version",
+      text:
+        `Thanks for the PO — one thing before we place it.\n\n${blocks.join("\n\n")}\n\n` +
+        `Reply with the part number${parents.length > 1 ? "s" : ""} you need and we'll get this moving.`,
+    });
+  }
+
+  // 3. Price mismatches → state both numbers, then offer the two real choices.
   const mismatched = lines.filter((l) => l.issues.includes("price_mismatch"));
   if (mismatched.length) {
     const detail = mismatched
@@ -68,11 +100,23 @@ export function replyTemplates(session: PoSession): ReplyTemplate[] {
     out.push({
       id: "flag_price",
       label: "Flag the price difference",
-      text: `Quick note before we place this: ${detail}. We'll use the contract price unless you tell us otherwise.`,
+      text:
+        `Quick note before we place this: ${detail}. ` +
+        `Reply CONFIRM and we'll place the order at the contract price, or reply QUOTE and ` +
+        `we'll send this to your sales team to review for specialty pricing first.`,
+    });
+    out.push({
+      id: "offer_price_review",
+      label: "Offer a sales-priced quote",
+      text:
+        `Thanks for the PO. ${detail}. ` +
+        `If you were expecting the price on your PO, we can send this to your sales team as a ` +
+        `quote so they can review it for specialty pricing — just reply QUOTE and we'll hold the ` +
+        `order until they've come back to you.`,
     });
   }
 
-  // 3. Short stock → offer partial shipment with the real on-hand figure.
+  // 4. Short stock → offer partial shipment with the real on-hand figure.
   const short = lines.filter((l) => l.issues.includes("line_inventory_short"));
   if (short.length) {
     const l = short[0];
@@ -88,7 +132,7 @@ export function replyTemplates(session: PoSession): ReplyTemplate[] {
     });
   }
 
-  // 4. Missing quantities → ask for them explicitly.
+  // 5. Missing quantities → ask for them explicitly.
   const noQty = lines.filter((l) => l.issues.includes("missing_quantity"));
   if (noQty.length) {
     out.push({

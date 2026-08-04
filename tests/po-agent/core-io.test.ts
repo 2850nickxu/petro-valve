@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { identify } from "@/lib/po-agent/core/identify";
-import { resolveLines } from "@/lib/po-agent/core/resolve";
+import { resolveLines, submittableLines } from "@/lib/po-agent/core/resolve";
 import { priceLines, estimatedSubtotal } from "@/lib/po-agent/core/price";
 import { createToolBelt } from "@/lib/po-agent/tools/belt";
 import { installMockFetch, TEST_CTX, type MockRoute } from "@/tests/helpers/mock-fetch";
@@ -70,6 +70,67 @@ describe("resolveLines", () => {
     expect(resolved[2].issues).toEqual(expect.arrayContaining(["line_unresolved", "missing_quantity"]));
   });
 
+  it("flags a parent SKU instead of silently picking a child variant", async () => {
+    installMockFetch([
+      { url: "/v3/catalog/variants?sku:in=", body: { data: [] } },
+      {
+        url: "/v3/catalog/products?sku:in=",
+        body: {
+          data: [
+            {
+              id: 90,
+              sku: "EA-EXEM-SR",
+              variants: [
+                { id: 901, product_id: 90, sku: "EA-EXEM-SR-2FT", option_values: [{ option_display_name: "Length", label: "2 ft" }] },
+                { id: 902, product_id: 90, sku: "EA-EXEM-SR-4FT", option_values: [{ option_display_name: "Length", label: "4 ft" }] },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        url: "/v3/catalog/products?id:in=",
+        body: { data: [{ id: 90, name: "Exempt Series Retrofit", sku: "EA-EXEM-SR", is_visible: true, availability: "available", inventory_tracking: "variant", inventory_level: 0, order_quantity_minimum: 0, order_quantity_maximum: 0 }] },
+      },
+    ]);
+    const resolved = await resolveLines(TEST_CTX, [line({ sku: "EA-EXEM-SR", quantity: 40 })]);
+    expect(resolved[0]).toMatchObject({ productId: 90, parentSku: true, variantChoiceCount: 2 });
+    expect(resolved[0].variantId).toBeUndefined();
+    expect(resolved[0].issues).toEqual(["line_parent_sku"]);
+    expect(resolved[0].variantChoices).toEqual([
+      { variantId: 901, sku: "EA-EXEM-SR-2FT", optionLabel: "Length: 2 ft" },
+      { variantId: 902, sku: "EA-EXEM-SR-4FT", optionLabel: "Length: 4 ft" },
+    ]);
+    // Stock lives on the child, so no phantom shortfall off the parent's level.
+    expect(resolved[0].issues).not.toContain("line_inventory_short");
+    expect(submittableLines(resolved)).toEqual([]);
+  });
+
+  it("treats a multi-variant product as a parent even without option_values", async () => {
+    installMockFetch([
+      { url: "/v3/catalog/variants?sku:in=", body: { data: [] } },
+      {
+        url: "/v3/catalog/products?sku:in=",
+        body: {
+          data: [
+            {
+              id: 91,
+              sku: "PARENT-2",
+              variants: [
+                { id: 911, product_id: 91, sku: "PARENT-2-A" },
+                { id: 912, product_id: 91, sku: "PARENT-2-B" },
+              ],
+            },
+          ],
+        },
+      },
+      { url: "/v3/catalog/products?id:in=", body: { data: [] } },
+    ]);
+    const resolved = await resolveLines(TEST_CTX, [line({ sku: "PARENT-2", quantity: 1 })]);
+    expect(resolved[0].parentSku).toBe(true);
+    expect(resolved[0].issues).toContain("line_parent_sku");
+  });
+
   it("flags inventory shortfall and quantity bounds", async () => {
     installMockFetch([
       { url: "/v3/catalog/variants?sku:in=", body: { data: [{ id: 64, product_id: 80, sku: "WIDGET-100" }] } },
@@ -107,6 +168,45 @@ describe("priceLines", () => {
     expect(priced[0].issues).not.toContain("price_mismatch");
     expect(priced[1].issues).toContain("price_mismatch");
     expect(estimatedSubtotal(priced)).toBeCloseTo(9.84 * 10 + 5 * 2, 5);
+  });
+
+  it("prices a parent line's children, not the parent itself", async () => {
+    const mock = installMockFetch([
+      {
+        method: "POST",
+        url: "/v3/pricing/products",
+        body: {
+          data: [
+            { product_id: 90, variant_id: 901, calculated_price: { as_entered: 18.4, tax_exclusive: 18.4, tax_inclusive: 19, entered_inclusive: false } },
+            { product_id: 90, variant_id: 902, calculated_price: { as_entered: 24.75, tax_exclusive: 24.75, tax_inclusive: 26, entered_inclusive: false } },
+          ],
+        },
+      },
+    ]);
+    const resolved: ResolvedLine[] = [
+      {
+        line: line({ sku: "EA-EXEM-SR", quantity: 40, statedUnitPrice: 9.84 }),
+        productId: 90,
+        parentSku: true,
+        variantChoices: [
+          { variantId: 901, sku: "EA-EXEM-SR-2FT" },
+          { variantId: 902, sku: "EA-EXEM-SR-4FT" },
+        ],
+        issues: ["line_parent_sku"],
+      },
+    ];
+    const priced = await priceLines(TEST_CTX, resolved, { customerId: 42, tolerancePct: 1 });
+
+    const sent = mock.callsTo("/v3/pricing/products")[0].body as { items: unknown[] };
+    expect(sent.items).toEqual([
+      { product_id: 90, variant_id: 901 },
+      { product_id: 90, variant_id: 902 },
+    ]);
+    expect(priced[0].variantChoices?.map((c) => c.unitPrice)).toEqual([18.4, 24.75]);
+    // No line price to compare against yet — so no invented total and no price_mismatch.
+    expect(priced[0].calculatedUnitPrice).toBeUndefined();
+    expect(priced[0].issues).not.toContain("price_mismatch");
+    expect(estimatedSubtotal(priced)).toBe(0);
   });
 });
 

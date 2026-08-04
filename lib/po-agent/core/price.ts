@@ -19,9 +19,16 @@ export async function priceLines(
   resolved: ResolvedLine[],
   opts: PriceOptions,
 ): Promise<ResolvedLine[]> {
-  const items = resolved
-    .filter((r) => r.productId != null)
-    .map((r) => ({ productId: r.productId!, variantId: r.variantId }));
+  // A parent-SKU line has no variant, so pricing it would return the product default —
+  // a number we'd have no right to quote. Price its children instead, so the
+  // clarification can show the buyer each option at its real contract price.
+  const items = resolved.flatMap((r) => {
+    if (r.productId == null) return [];
+    if (r.parentSku) {
+      return (r.variantChoices ?? []).map((c) => ({ productId: r.productId!, variantId: c.variantId }));
+    }
+    return [{ productId: r.productId, variantId: r.variantId }];
+  });
   if (!items.length) return resolved;
 
   const prices = await getProductPrices(ctx, {
@@ -34,6 +41,17 @@ export async function priceLines(
 
   return resolved.map((r) => {
     if (r.productId == null) return r;
+
+    if (r.parentSku) {
+      const choices = (r.variantChoices ?? []).map((c) => {
+        const p = prices.get(priceKey(r.productId!, c.variantId));
+        return p ? { ...c, unitPrice: p.unitPrice } : c;
+      });
+      // No calculatedUnitPrice and no price_mismatch: there is no line price to compare
+      // against until the buyer picks a child.
+      return { ...r, variantChoices: choices };
+    }
+
     const priced = prices.get(priceKey(r.productId, r.variantId));
     if (!priced) return r;
 

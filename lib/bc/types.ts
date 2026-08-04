@@ -79,9 +79,34 @@ export interface B2BCompanyAddress {
 
 // ── Core catalog / pricing ───────────────────────────────────────────────────
 
+/** One orderable child variant of an option-bearing ("parent") product. */
+export interface VariantChoice {
+  variantId: number;
+  sku: string;
+  /** "Color: Red · Length: 4in" — built from the variant's option_values. */
+  optionLabel?: string;
+  /** Customer-specific unit price, filled in later by the pricing pass. */
+  unitPrice?: number;
+}
+
+/** How many child variants we carry on a resolution (email/UI sanity bound). */
+export const MAX_VARIANT_CHOICES = 25;
+
 export interface SkuResolution {
   productId: number;
-  variantId: number;
+  /** Absent when the SKU matched a parent product — a child must be chosen first. */
+  variantId?: number;
+  /**
+   * The SKU is a product-level (parent) SKU on a product that has option-bearing child
+   * variants. BC rejects a cart line for such a product without a `variant_id` (422
+   * "This product has options; variant ID is required"), so these can never be ordered
+   * as-is — the buyer has to pick a child.
+   */
+  isParentSku?: boolean;
+  /** Child variants to choose between (capped at MAX_VARIANT_CHOICES). */
+  children?: VariantChoice[];
+  /** True number of children, before the cap. */
+  childCount?: number;
 }
 
 /** A single price object from POST /v3/pricing/products (a facet of an item). */

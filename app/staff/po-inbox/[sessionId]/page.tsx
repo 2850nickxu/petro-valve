@@ -32,7 +32,7 @@ const CALLOUT_TONE: Record<DecisionKind | "pending", "ok" | "warn" | "bad" | "in
 
 /** Row tint + issue colour follow the worst issue on the line. */
 function lineSeverity(l: ResolvedLine): { tint?: "bad" | "warn"; tone: string } {
-  const bad = ["line_unresolved", "line_blocked_by_assortment", "price_mismatch"];
+  const bad = ["line_unresolved", "line_parent_sku", "line_blocked_by_assortment", "price_mismatch"];
   const warn = ["line_inventory_short", "line_qty_bounds", "missing_quantity"];
   if (l.issues.some((i) => bad.includes(i))) return { tint: "bad", tone: "var(--bad-fg)" };
   if (l.issues.some((i) => warn.includes(i))) return { tint: "warn", tone: "var(--warn-fg)" };
@@ -55,6 +55,10 @@ function issueLabel(l: ResolvedLine): string {
       }
       if (kind === "line_inventory_short" && l.inventoryLevel != null) {
         return `inventory short (${l.inventoryLevel} on hand)`;
+      }
+      if (kind === "line_parent_sku") {
+        const n = l.variantChoiceCount ?? l.variantChoices?.length ?? 0;
+        return n ? `parent SKU (${n} versions)` : "parent SKU";
       }
       return kind;
     })
@@ -251,6 +255,14 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
                   </div>
                   <div className="r-sub num">read from: “{l.line.rawText.trim()}”</div>
                   {l.productName ? <div className="r-sub">{l.productName}</div> : null}
+                  {l.parentSku && l.variantChoices?.length ? (
+                    <div className="r-sub num">
+                      choose one: {l.variantChoices.slice(0, 4).map((c) => c.sku).join(", ")}
+                      {(l.variantChoiceCount ?? l.variantChoices.length) > 4
+                        ? ` +${(l.variantChoiceCount ?? l.variantChoices.length) - 4} more`
+                        : ""}
+                    </div>
+                  ) : null}
                 </div>
                 <span className="num" style={{ fontSize: 12.5, color: "var(--body2)", flex: "none" }}>
                   {l.line.quantity ?? "?"} × {unit != null ? formatMoney(unit, currency) : "?"}

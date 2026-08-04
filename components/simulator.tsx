@@ -81,6 +81,9 @@ type SimResult = {
       matchedSku?: string;
       productId?: number;
       calculatedUnitPrice?: number;
+      parentSku?: boolean;
+      variantChoices?: Array<{ variantId: number; sku: string; optionLabel?: string; unitPrice?: number }>;
+      variantChoiceCount?: number;
       issues: string[];
       line: { rawText: string; quantity: number | null };
     }>;
@@ -424,7 +427,9 @@ export function Simulator({
                   <span>Lines</span>
                 </div>
                 {s.resolution.map((r, i) => {
-                  const bad = r.issues.some((x) => x === "line_unresolved" || x === "price_mismatch");
+                  const bad = r.issues.some(
+                    (x) => x === "line_unresolved" || x === "line_parent_sku" || x === "price_mismatch",
+                  );
                   const warn = !bad && r.issues.length > 0;
                   return (
                     <div key={i} className={`pa-row${bad ? " tint-bad" : warn ? " tint-warn" : ""}`}>
@@ -433,6 +438,18 @@ export function Simulator({
                           {r.matchedSku ?? "— no match —"}
                         </div>
                         <div className="r-sub num">read from: “{r.line.rawText.trim()}”</div>
+                        {r.parentSku && r.variantChoices?.length ? (
+                          <div className="r-sub num">
+                            parent SKU — choose one:{" "}
+                            {r.variantChoices
+                              .slice(0, 4)
+                              .map((c) => (c.unitPrice != null ? `${c.sku} @ ${formatMoney(c.unitPrice, currency)}` : c.sku))
+                              .join(", ")}
+                            {(r.variantChoiceCount ?? r.variantChoices.length) > 4
+                              ? ` +${(r.variantChoiceCount ?? r.variantChoices.length) - 4} more`
+                              : ""}
+                          </div>
+                        ) : null}
                       </div>
                       <span className="num" style={{ fontSize: 12.5, color: "var(--body2)", flex: "none" }}>
                         {r.line.quantity ?? "?"} ×{" "}

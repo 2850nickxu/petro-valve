@@ -1,4 +1,4 @@
-import type { ResolvedLine, ValidationIssue } from "../types";
+import type { ResolvedLine, ValidationIssue, VariantChoice } from "../types";
 import { submittableLines } from "../core/resolve";
 
 // Deterministic email-body builders. Every number is interpolated from validated
@@ -32,12 +32,54 @@ export function draftTriage(): string {
   return "Hello,\n\nThis mailbox processes purchase orders. If you'd like to place an order, please reply with your PO (items, quantities, and your PO number). For anything else, please contact your sales representative.\n\nThank you.";
 }
 
+/** The child-variant menu under a parent-SKU bullet. Prices come from the pricing pass. */
+function variantMenu(issue: ValidationIssue): string {
+  const data = issue.data as { choices?: VariantChoice[]; choiceCount?: number } | undefined;
+  const choices = data?.choices ?? [];
+  if (!choices.length) return "";
+  const shown = choices.slice(0, MAX_CHOICES_IN_EMAIL);
+  const lines = shown.map((c) => {
+    const label = c.optionLabel ? ` — ${c.optionLabel}` : "";
+    const price = c.unitPrice != null ? ` — ${money(c.unitPrice)} ea` : "";
+    return `    · ${c.sku}${label}${price}`;
+  });
+  const total = data?.choiceCount ?? choices.length;
+  if (total > shown.length) lines.push(`    · …and ${total - shown.length} more — ask us for the full list.`);
+  return `\n  Available versions:\n${lines.join("\n")}\n  Reply with the part number you need (and the quantity for each, if you want more than one).`;
+}
+
+/** The price-difference paragraph: state both numbers, then offer the two real choices. */
+function priceOffer(issues: ValidationIssue[]): string {
+  const mismatches = issues.filter((i) => i.kind === "price_mismatch");
+  if (!mismatches.length) return "";
+  const detail = mismatches
+    .map((i) => {
+      const d = i.data as { stated?: number | null; calculated?: number | null } | undefined;
+      const ref = i.lineRef ? `${i.lineRef}: ` : "";
+      if (d?.stated == null || d?.calculated == null) return `${ref}the PO price differs from your contract price`;
+      return `${ref}your PO says ${money(d.stated)} ea, your contract price is ${money(d.calculated)} ea`;
+    })
+    .join("\n• ");
+  return (
+    `\n\nOn pricing:\n\n• ${detail}\n\n` +
+    `You have two options: reply CONFIRM and we'll place the order at the contract price, ` +
+    `or reply QUOTE and we'll send this to your sales team to review for specialty pricing ` +
+    `before anything is placed.`
+  );
+}
+
+const MAX_CHOICES_IN_EMAIL = 8;
+
 export function draftClarification(issues: ValidationIssue[]): string {
-  const bullets = issues
-    .filter((i) => i.blocking)
-    .map((i) => `• ${i.message}${i.lineRef ? ` (${i.lineRef})` : ""}`)
+  const blocking = issues.filter((i) => i.blocking);
+  const bullets = blocking
+    .filter((i) => i.kind !== "price_mismatch")
+    .map((i) => `• ${i.message}${i.lineRef ? ` (${i.lineRef})` : ""}${i.kind === "line_parent_sku" ? variantMenu(i) : ""}`)
     .join("\n");
-  return `Hello,\n\nBefore we can process your purchase order, we need a bit more information:\n\n${bullets}\n\nPlease reply with these details and we'll proceed right away.\n\nThank you.`;
+  const body = bullets
+    ? `Before we can process your purchase order, we need a bit more information:\n\n${bullets}`
+    : `Thanks for your purchase order — one thing to sort out before we place it.`;
+  return `Hello,\n\n${body}${priceOffer(blocking)}\n\nPlease reply with these details and we'll proceed right away.\n\nThank you.`;
 }
 
 export function draftFirstOrderConfirm(resolved: ResolvedLine[], grandTotalText: string): string {

@@ -4,6 +4,8 @@ import {
   assessPayOnAccount,
   buyerCanPlaceOrders,
   isBlocking,
+  requestsPriceReview,
+  acceptsContractPrice,
   type DecideInput,
 } from "@/lib/po-agent/core/decide";
 import type { ValidationIssue, ValidationIssueKind } from "@/lib/po-agent/types";
@@ -33,6 +35,43 @@ describe("decide matrix", () => {
     const esc = decide({ ...base, issues: [issue("line_unresolved")], clarificationRoundsExhausted: true });
     expect(esc.kind).toBe("escalate");
     expect(esc.reasons).toContain("clarification_exhausted");
+  });
+
+  it("clarifies a parent SKU rather than letting the line through", () => {
+    expect(decide({ ...base, issues: [issue("line_parent_sku")] }).kind).toBe("clarify");
+    expect(isBlocking("line_parent_sku")).toBe(true);
+  });
+
+  it("routes a buyer-requested price review to a quote, never an order", () => {
+    const d = decide({ ...base, issues: [issue("price_mismatch")], priceReviewRequested: true });
+    expect(d.kind).toBe("quote");
+    expect(d.reasons).toEqual(["price_review_requested"]);
+  });
+
+  it("keeps clarifying when a price review can't answer the other open questions", () => {
+    const d = decide({
+      ...base,
+      issues: [issue("price_mismatch"), issue("line_parent_sku")],
+      priceReviewRequested: true,
+    });
+    expect(d.kind).toBe("clarify");
+    expect(d.reasons).toEqual(["line_parent_sku"]);
+  });
+
+  it("escalates a price review when quotes are switched off", () => {
+    const d = decide({
+      ...base,
+      quoteEnabled: false,
+      issues: [issue("price_mismatch")],
+      priceReviewRequested: true,
+    });
+    expect(d.kind).toBe("escalate");
+    expect(d.reasons).toContain("quote_feature_disabled");
+  });
+
+  it("places the order at the contract price once the buyer accepts it", () => {
+    const d = decide({ ...base, issues: [issue("price_mismatch")], priceAccepted: true });
+    expect(d.kind).toBe("order");
   });
 
   it("places an order when terms valid, role ok, intent on_account/unspecified", () => {
@@ -96,5 +135,36 @@ describe("buyerCanPlaceOrders + isBlocking", () => {
     expect(isBlocking("company_not_approved")).toBe(true);
     expect(isBlocking("line_blocked_by_assortment")).toBe(false);
     expect(isBlocking("credit_exceeded")).toBe(false);
+  });
+});
+
+describe("price-answer detection", () => {
+  it("recognises a request for a sales-priced quote", () => {
+    for (const body of [
+      "QUOTE",
+      "Please send it as a quote",
+      "can your sales team review for specialty pricing?",
+      "quote it please",
+    ]) {
+      expect(requestsPriceReview(body)).toBe(true);
+      expect(acceptsContractPrice(body)).toBe(false);
+    }
+  });
+
+  it("recognises acceptance of the contract price", () => {
+    for (const body of ["CONFIRM", "confirmed, go ahead", "please proceed at the contract price"]) {
+      expect(acceptsContractPrice(body)).toBe(true);
+    }
+  });
+
+  it("prefers the quote route when a reply says both", () => {
+    const body = "Confirmed on the parts, but please quote it for the sales team to review.";
+    expect(requestsPriceReview(body)).toBe(true);
+    expect(acceptsContractPrice(body)).toBe(false);
+  });
+
+  it("ignores unrelated replies", () => {
+    expect(requestsPriceReview("Ship to the Denver dock.")).toBe(false);
+    expect(acceptsContractPrice("Ship to the Denver dock.")).toBe(false);
   });
 });

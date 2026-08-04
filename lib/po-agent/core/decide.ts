@@ -14,6 +14,7 @@ export const ISSUE_CATEGORY: Record<ValidationIssueKind, IssueCategory> = {
   internal_error: "escalate",
   channel_ambiguous: "clarify",
   line_unresolved: "clarify",
+  line_parent_sku: "clarify",
   line_qty_bounds: "clarify",
   line_inventory_short: "clarify",
   price_mismatch: "clarify",
@@ -69,6 +70,30 @@ function uniq<T>(xs: T[]): T[] {
   return [...new Set(xs)];
 }
 
+/**
+ * Did the buyer, replying to a price-difference clarification, ask us to route the PO to
+ * the sales team as a quote (for specialty pricing) rather than proceed at the contract
+ * price? Deliberately narrow: the pipeline only consults this on a reply to a thread that
+ * actually raised `price_mismatch`, so an original PO saying "please quote" can't trip it.
+ */
+const PRICE_REVIEW_RE =
+  /\b(quote(?:\s+it)?|as\s+a\s+quote|special(?:ty|\s+)?pricing|sales\s+(?:team|review|rep)|review\s+(?:the\s+)?pricing)\b/i;
+
+export function requestsPriceReview(body: string): boolean {
+  return PRICE_REVIEW_RE.test(body);
+}
+
+const PRICE_ACCEPT_RE = /\b(confirm(?:ed|s)?|proceed|go\s+ahead|approved?|contract\s+price)\b/i;
+
+/**
+ * The other half of the price-difference offer: the buyer accepts the contract price.
+ * A quote request wins if the reply somehow says both — routing to a human never places
+ * an order the buyer didn't want.
+ */
+export function acceptsContractPrice(body: string): boolean {
+  return !requestsPriceReview(body) && PRICE_ACCEPT_RE.test(body);
+}
+
 export interface DecideInput {
   paymentIntent: PaymentIntent;
   payOnAccountValid: boolean;
@@ -76,6 +101,10 @@ export interface DecideInput {
   quoteEnabled: boolean;
   issues: ValidationIssue[];
   clarificationRoundsExhausted: boolean;
+  /** Buyer replied to a price-difference clarification asking for a sales-reviewed quote. */
+  priceReviewRequested?: boolean;
+  /** Buyer replied to a price-difference clarification accepting the contract price. */
+  priceAccepted?: boolean;
 }
 
 export function decide(input: DecideInput): Decision {
@@ -89,13 +118,27 @@ export function decide(input: DecideInput): Decision {
   );
   if (escalate.length) return { kind: "escalate", reasons: uniq(escalate.map((i) => i.kind)) };
 
-  // Buyer-fixable issues → clarify (or escalate once rounds are exhausted).
-  const clarify = input.issues.filter((i) => ISSUE_CATEGORY[i.kind] === "clarify");
+  // Buyer-fixable issues → clarify (or escalate once rounds are exhausted). A buyer who
+  // has answered the price question — either way — has unblocked it: the quote (or their
+  // acceptance of the contract price) IS the resolution, so it stops asking.
+  const priceAnswered = Boolean(input.priceReviewRequested || input.priceAccepted);
+  const clarify = input.issues
+    .filter((i) => ISSUE_CATEGORY[i.kind] === "clarify")
+    .filter((i) => !(priceAnswered && i.kind === "price_mismatch"));
   if (clarify.length) {
     if (input.clarificationRoundsExhausted) {
       return { kind: "escalate", reasons: uniq(["clarification_exhausted", ...clarify.map((i) => i.kind)]) };
     }
     return { kind: "clarify", reasons: uniq(clarify.map((i) => i.kind)) };
+  }
+
+  // Everything else is clear and the buyer wants sales to price it → quote, never an
+  // order: placing one at the contract price would ignore what they just asked for.
+  if (input.priceReviewRequested) {
+    if (!input.quoteEnabled) {
+      return { kind: "escalate", reasons: uniq(["quote_feature_disabled", "price_review_requested"]) };
+    }
+    return { kind: "quote", reasons: ["price_review_requested"] };
   }
 
   // No blocking issues → order vs quote.

@@ -29,6 +29,46 @@ describe("reply drafting (numbers from data only)", () => {
     expect(text).not.toContain("on hold");
   });
 
+  it("lists the child variants under a parent-SKU bullet", () => {
+    const issues: ValidationIssue[] = [
+      {
+        kind: "line_parent_sku",
+        message: "This is a parent part number.",
+        lineRef: "EA-EXEM-SR",
+        blocking: true,
+        data: {
+          choices: [
+            { variantId: 901, sku: "EA-EXEM-SR-2FT", optionLabel: "Length: 2 ft", unitPrice: 18.4 },
+            { variantId: 902, sku: "EA-EXEM-SR-4FT", optionLabel: "Length: 4 ft", unitPrice: 24.75 },
+          ],
+          choiceCount: 2,
+        },
+      },
+    ];
+    const text = draftClarification(issues);
+    expect(text).toContain("(EA-EXEM-SR)");
+    expect(text).toContain("EA-EXEM-SR-2FT — Length: 2 ft — $18.40 ea");
+    expect(text).toContain("EA-EXEM-SR-4FT — Length: 4 ft — $24.75 ea");
+    expect(text).toContain("Reply with the part number you need");
+  });
+
+  it("offers CONFIRM-or-QUOTE on a price difference, with both numbers", () => {
+    const issues: ValidationIssue[] = [
+      {
+        kind: "price_mismatch",
+        message: "The price on your PO differs from your contract price.",
+        lineRef: "GE-T8-17W-41K",
+        blocking: true,
+        data: { stated: 9.84, calculated: 11.2, direction: "below" },
+      },
+    ];
+    const text = draftClarification(issues);
+    expect(text).toContain("GE-T8-17W-41K: your PO says $9.84 ea, your contract price is $11.20 ea");
+    expect(text).toContain("reply CONFIRM");
+    expect(text).toContain("reply QUOTE");
+    expect(text).toContain("specialty pricing");
+  });
+
   it("order confirmation includes id, PO, and totals", () => {
     const text = draftOrderConfirmation({ orderId: 9001, poNumber: "PO-5567", resolved, totals: { subtotal: 98.4, shippingTotal: 15, taxTotal: 1, grandTotal: 114.4 } });
     expect(text).toContain("Order #: 9001");

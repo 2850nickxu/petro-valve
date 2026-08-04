@@ -13,10 +13,17 @@ export interface ResolveOptions {
   codeResolver?: ProductCodeResolver;
 }
 
-/** Lines that can actually be ordered: resolved to a product, not blocked, not unresolved. */
+/**
+ * Lines that can actually be ordered: resolved to a product, not blocked, not unresolved,
+ * and not still sitting on a parent SKU (BC would 422 those for a missing variant id).
+ */
 export function submittableLines(lines: ResolvedLine[]): ResolvedLine[] {
   return lines.filter(
-    (l) => l.productId != null && !l.blockedByAssortment && !l.issues.includes("line_unresolved"),
+    (l) =>
+      l.productId != null &&
+      !l.blockedByAssortment &&
+      !l.issues.includes("line_unresolved") &&
+      !l.issues.includes("line_parent_sku"),
   );
 }
 
@@ -36,6 +43,9 @@ export async function resolveLines(
     let productId: number | undefined;
     let variantId: number | undefined;
     let matchedSku: string | undefined;
+    let parentSku = false;
+    let variantChoices: ResolvedLine["variantChoices"];
+    let variantChoiceCount: number | undefined;
 
     if (line.sku) {
       const hit = skuMap.get(line.sku) ?? skuMap.get(line.sku.trim());
@@ -43,6 +53,13 @@ export async function resolveLines(
         productId = hit.productId;
         variantId = hit.variantId;
         matchedSku = line.sku;
+        if (hit.isParentSku) {
+          // Matched a real product, but the buyer named the parent — which child?
+          parentSku = true;
+          variantChoices = hit.children;
+          variantChoiceCount = hit.childCount;
+          issues.push("line_parent_sku");
+        }
       } else {
         issues.push("line_unresolved");
       }
@@ -51,7 +68,14 @@ export async function resolveLines(
     }
     if (line.quantity == null) issues.push("missing_quantity");
 
-    return { line, productId, variantId, matchedSku, issues };
+    return {
+      line,
+      productId,
+      variantId,
+      matchedSku,
+      issues,
+      ...(parentSku ? { parentSku, variantChoices, variantChoiceCount } : {}),
+    };
   });
 
   const productIds = [...new Set(prelim.filter((p) => p.productId != null).map((p) => p.productId!))];
@@ -88,7 +112,10 @@ export async function resolveLines(
       const qty = p.line.quantity;
       if (qty != null) {
         if ((minQty && qty < minQty) || (maxQty && qty > maxQty)) issues.push("line_qty_bounds");
-        if (inventoryTracked && inventoryLevel != null && qty > inventoryLevel) issues.push("line_inventory_short");
+        // Stock lives on the child variant, so a parent-SKU line has nothing to check yet.
+        if (!p.parentSku && inventoryTracked && inventoryLevel != null && qty > inventoryLevel) {
+          issues.push("line_inventory_short");
+        }
       }
     }
 

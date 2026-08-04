@@ -1,5 +1,6 @@
 import type { Buyer, ResolvedLine, ValidationIssue, ValidationIssueKind } from "../types";
 import { ISSUE_CATEGORY } from "./decide";
+import { submittableLines } from "./resolve";
 
 // The required-fields gauntlet (§7.3): assembles a ValidationIssue[] from already-gathered
 // context. Pure — no I/O — so it is fully unit-testable as a decision table.
@@ -10,6 +11,8 @@ export const MESSAGES: Record<ValidationIssueKind, string> = {
   channel_ambiguous: "Which storefront is this order for? Your account is linked to more than one.",
   channel_access_denied: "This order is for a storefront your account isn't set up to purchase from.",
   line_unresolved: "We couldn't match this item to a product in your catalog.",
+  line_parent_sku:
+    "This is a parent part number — it comes in more than one version, so we need to know which one you want.",
   line_blocked_by_assortment: "This item isn't part of your company's assortment.",
   line_qty_bounds: "The quantity for this item is outside the allowed order limits.",
   line_inventory_short: "We don't currently have enough stock to fulfill this item.",
@@ -40,6 +43,35 @@ function issue(kind: ValidationIssueKind, lineRef?: string, data?: Record<string
     blocking: ISSUE_CATEGORY[kind] === "reject" || ISSUE_CATEGORY[kind] === "escalate" || ISSUE_CATEGORY[kind] === "clarify",
     data,
   };
+}
+
+/**
+ * Structured, buyer-safe detail attached to a line issue. Everything here is copied from
+ * the resolution — the reply drafters interpolate these numbers rather than restating
+ * anything a model produced.
+ */
+function lineIssueData(
+  kind: ValidationIssueKind,
+  line: ResolvedLine,
+): Record<string, unknown> | undefined {
+  if (kind === "price_mismatch") {
+    const stated = line.line.statedUnitPrice;
+    const calculated = line.calculatedUnitPrice;
+    return {
+      stated,
+      calculated,
+      // Below-contract is the case that wants a sales-priced quote, not a correction.
+      direction: stated != null && calculated != null ? (stated < calculated ? "below" : "above") : undefined,
+    };
+  }
+  if (kind === "line_parent_sku") {
+    return {
+      productName: line.productName,
+      choices: line.variantChoices ?? [],
+      choiceCount: line.variantChoiceCount ?? line.variantChoices?.length ?? 0,
+    };
+  }
+  return undefined;
 }
 
 export interface ValidateInput {
@@ -73,15 +105,15 @@ export function validate(input: ValidateInput): ValidationIssue[] {
   for (const line of input.resolvedLines) {
     const ref = line.matchedSku ?? line.line.sku ?? line.line.rawText.slice(0, 60);
     for (const kind of line.issues) {
-      issues.push(issue(kind, ref, kind === "price_mismatch" ? { stated: line.line.statedUnitPrice, calculated: line.calculatedUnitPrice } : undefined));
+      issues.push(issue(kind, ref, lineIssueData(kind, line)));
     }
   }
 
-  // Are there any lines we could actually submit?
-  const submittable = input.resolvedLines.filter(
-    (l) => l.productId != null && !l.blockedByAssortment && !l.issues.includes("line_unresolved"),
-  );
-  if (input.resolvedLines.length > 0 && submittable.length === 0 && !issues.some((i) => i.kind === "line_unresolved")) {
+  // Are there any lines we could actually submit? A blanket line_unresolved is only
+  // added when nothing else already explains why (e.g. every line is a parent SKU).
+  const submittable = submittableLines(input.resolvedLines);
+  const explained = issues.some((i) => i.kind === "line_unresolved" || i.kind === "line_parent_sku");
+  if (input.resolvedLines.length > 0 && submittable.length === 0 && !explained) {
     issues.push(issue("line_unresolved"));
   }
 

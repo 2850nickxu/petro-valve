@@ -16,7 +16,13 @@ import { resolveChannel } from "./core/channel";
 import { resolveLines, submittableLines } from "./core/resolve";
 import { priceLines, estimatedSubtotal } from "./core/price";
 import { validate } from "./core/validate";
-import { decide, assessPayOnAccount, buyerCanPlaceOrders } from "./core/decide";
+import {
+  decide,
+  assessPayOnAccount,
+  buyerCanPlaceOrders,
+  requestsPriceReview,
+  acceptsContractPrice,
+} from "./core/decide";
 import { submitOrder } from "./core/submit-order";
 import { submitQuote } from "./core/submit-quote";
 import { fanOutEscalation, type MailSender } from "./escalate";
@@ -107,6 +113,10 @@ export interface EvaluateInput {
   channelAccessDenied: boolean;
   extracted: ExtractedPo;
   clarificationRounds: number;
+  /** Buyer answered a price-difference clarification by asking for a sales-priced quote. */
+  priceReviewRequested?: boolean;
+  /** Buyer answered a price-difference clarification by accepting the contract price. */
+  priceAccepted?: boolean;
 }
 
 export interface EvaluateResult {
@@ -184,6 +194,8 @@ export async function evaluate(deps: EvaluateDeps, input: EvaluateInput): Promis
     quoteEnabled,
     issues,
     clarificationRoundsExhausted: input.clarificationRounds >= deps.config.maxClarifications,
+    priceReviewRequested: input.priceReviewRequested,
+    priceAccepted: input.priceAccepted,
   });
 
   return { resolved, issues, decision, credit, quoteConfig };
@@ -208,6 +220,8 @@ export async function processInbound(
   const loaded = !opts.dryRun && deps.store ? await deps.store.loadSession(id).catch(() => null) : null;
   const session = loaded ?? createSession(id, deps.channel.id, message.threadId, now());
   const priorState = session.state;
+  // Captured before this run overwrites them: what we last asked the buyer about.
+  const priorValidation = session.validation ?? [];
   if (!session.messageIds.includes(message.messageId)) session.messageIds.push(message.messageId);
   // Retain the original inbound once (bounded) — powers the "original email" view and
   // future full re-runs. Later messages on the thread don't overwrite it.
@@ -281,6 +295,15 @@ export async function processInbound(
 
     const buyer = idres.buyer;
 
+    // Only honour an answer to the price question on a thread where WE raised the price
+    // difference — so an original PO that merely says "please quote" can't trip it.
+    const answeringPrice =
+      priorState === "clarifying" && priorValidation.some((v) => v.kind === "price_mismatch");
+    const priceReviewRequested = answeringPrice && requestsPriceReview(message.bodyText);
+    const priceAccepted = answeringPrice && acceptsContractPrice(message.bodyText);
+    if (priceReviewRequested) audit("price_review_requested");
+    if (priceAccepted) audit("contract_price_accepted");
+
     const { resolved, issues, decision, credit, quoteConfig } = await evaluate(
       { ctx: deps.ctx, config: deps.config },
       {
@@ -290,6 +313,8 @@ export async function processInbound(
         channelAccessDenied: channel.accessDenied,
         extracted,
         clarificationRounds: session.clarificationRounds,
+        priceReviewRequested,
+        priceAccepted,
       },
     );
     session.resolution = resolved;

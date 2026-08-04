@@ -20,6 +20,27 @@ inbound email → dedupe → identify → AI extract → resolve SKUs + customer
 
 Everything is inert until `PO_AGENT_ENABLED=true`.
 
+### 1.1 Parent SKUs and price differences
+
+Two line-level cases never submit silently — both raise a **clarify** and both are
+answerable by the buyer in one reply:
+
+- **`line_parent_sku`** — the PO quoted a product-level (parent) SKU on a product that has
+  child variants. BC rejects such a cart line outright (422 "This product has options;
+  variant ID is required"), so the agent replies listing the child SKUs, their option
+  labels, and each one's contract price, and asks which is wanted. Child variants are
+  priced individually for that email; the parent line itself carries **no** price and is
+  excluded from `submittableLines`, so it can't reach an order or a quote.
+- **`price_mismatch`** — the PO's unit price differs from the customer's contract price by
+  more than `PO_AGENT_PRICE_TOLERANCE_PCT`. The reply states both numbers and offers two
+  routes: **CONFIRM** → place the order at the contract price, or **QUOTE** → submit it as
+  a quote for the sales team to review for specialty pricing. The keyword is only honoured
+  on a reply to a thread where the agent itself raised the price difference, so a PO that
+  merely says "please quote" can't trip it; if a reply says both, QUOTE wins.
+
+Operators get the same two moves as reply templates (`ask_variant`, `offer_price_review`)
+on the session-detail card.
+
 ## 2. Try it with no credentials (the demo)
 
 ```bash

@@ -2,6 +2,10 @@
 // schema whose inferred type is assignable to ExtractedPo here, so the pipeline stays
 // decoupled from the AI layer.
 
+import type { VariantChoice } from "@/lib/bc/types";
+
+export type { VariantChoice };
+
 export type Channel = "google" | "microsoft" | "simulator";
 
 export type PaymentIntent = "on_account" | "credit_card" | "unspecified";
@@ -50,6 +54,7 @@ export type ValidationIssueKind =
   | "channel_ambiguous"
   | "channel_access_denied"
   | "line_unresolved"
+  | "line_parent_sku"
   | "line_blocked_by_assortment"
   | "line_qty_bounds"
   | "line_inventory_short"
@@ -91,6 +96,12 @@ export interface ResolvedLine {
   minQty?: number;
   maxQty?: number;
   blockedByAssortment?: boolean;
+  /** The PO quoted a parent (product-level) SKU: a child variant must be chosen. */
+  parentSku?: boolean;
+  /** Child variants to choose between, with their contract prices once priced. */
+  variantChoices?: VariantChoice[];
+  /** True number of children, before the display cap. */
+  variantChoiceCount?: number;
   issues: ValidationIssueKind[];
   note?: string;
 }
