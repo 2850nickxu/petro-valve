@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { Panel } from "@bigcommerce/big-design";
+import { colors } from "@bigcommerce/big-design-theme";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
-import { PageHead, CardHead, SessionRow, Chip, stateLabel } from "../ui";
+import { PageHead, SessionRow, stateLabel } from "../ui";
 import { Banner, EmptyState } from "@/components/ui/states";
 import { AutoRefresh } from "@/components/ui/auto-refresh";
 import type { PoSession } from "@/lib/po-agent/types";
@@ -55,12 +57,7 @@ export default async function PoInboxPage() {
         <AutoRefresh />
       </PageHead>
 
-      <div className="card mb-4">
-        <CardHead title={<span style={{ color: "var(--bad-fg)" }}>Escalated</span>}>
-          <Chip kind="bad" size="sm">
-            <span className="num">{escalated.length}</span>
-          </Chip>
-        </CardHead>
+      <Panel header="Escalated" badge={{ label: String(escalated.length), variant: "danger" }} marginBottom="medium">
         {escalated.length ? (
           escalated.map((s) => (
             <SessionRow
@@ -68,7 +65,7 @@ export default async function PoInboxPage() {
               href={`/staff/po-inbox/${encodeURIComponent(s.id)}`}
               company={s.buyer?.companyName || "(unknown sender)"}
               sub={`${s.buyer?.email ?? "unknown"} · ${shortWhen(s.updatedAt, nowMs)}`}
-              meta={<span style={{ color: "var(--bad-fg)" }}>{reasonOf(s)}</span>}
+              meta={<span style={{ color: colors.danger }}>{reasonOf(s)}</span>}
               state="escalated"
               stateLabel="escalated"
             />
@@ -76,10 +73,9 @@ export default async function PoInboxPage() {
         ) : (
           <EmptyState icon="✓" title="Queue is clear">No sessions are waiting for review.</EmptyState>
         )}
-      </div>
+      </Panel>
 
-      <div className="card">
-        <CardHead title="Recent" />
+      <Panel header="Recent">
         {recent.length ? (
           recent.map((s) => (
             <SessionRow
@@ -94,7 +90,7 @@ export default async function PoInboxPage() {
         ) : (
           <EmptyState title="No sessions yet">Processed POs will appear here as they arrive.</EmptyState>
         )}
-      </div>
+      </Panel>
     </>
   );
 }

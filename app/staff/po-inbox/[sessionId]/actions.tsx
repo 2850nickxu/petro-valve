@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Box, Button, Flex, Textarea } from "@bigcommerce/big-design";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 
@@ -112,20 +113,26 @@ export function SessionActionButtons({ sessionId, summary }: { sessionId: string
   const disabled = busy != null;
 
   return (
-    <>
-      <button type="button" className="btn sm" onClick={reprocess} disabled={disabled}>
+    <Flex flexWrap="wrap" alignItems="center" style={{ gap: 8 }}>
+      <Button variant="secondary" onClick={reprocess} disabled={disabled} isLoading={busy === "reprocess"}>
         {busy === "reprocess" ? "Re-evaluating…" : "Reprocess"}
-      </button>
-      <button type="button" className="btn danger sm" onClick={() => runAction("dismiss")} disabled={disabled}>
+      </Button>
+      <Button
+        variant="secondary"
+        actionType="destructive"
+        onClick={() => runAction("dismiss")}
+        disabled={disabled}
+        isLoading={busy === "dismiss"}
+      >
         {busy === "dismiss" ? "Dismissing…" : "Dismiss"}
-      </button>
-      <button type="button" className="btn sm" onClick={() => runAction("force_quote")} disabled={disabled}>
+      </Button>
+      <Button variant="secondary" onClick={() => runAction("force_quote")} disabled={disabled} isLoading={busy === "force_quote"}>
         {busy === "force_quote" ? "Creating…" : "Force quote"}
-      </button>
-      <button type="button" className="btn primary sm" onClick={() => runAction("force_order")} disabled={disabled}>
+      </Button>
+      <Button variant="primary" onClick={() => runAction("force_order")} disabled={disabled} isLoading={busy === "force_order"}>
         {busy === "force_order" ? "Placing…" : "Force order"}
-      </button>
-    </>
+      </Button>
+    </Flex>
   );
 }
 
@@ -157,19 +164,20 @@ export function SessionNote({ sessionId }: { sessionId: string }) {
   }
 
   return (
-    <div className="card-body">
-      <textarea
+    <Box>
+      <Textarea
         value={note}
         onChange={(e) => setNote(e.target.value)}
         placeholder="Internal note — recorded in the audit trail. The buyer never sees this."
-        style={{ height: 62 }}
+        rows={3}
         aria-label="Internal note"
+        style={{ fontSize: 13 }}
       />
-      <div className="mt-2">
-        <button type="button" className="btn sm" onClick={addNote} disabled={busy}>
+      <Box marginTop="small">
+        <Button variant="secondary" onClick={addNote} disabled={busy} isLoading={busy}>
           {busy ? "Adding…" : "Add note"}
-        </button>
-      </div>
-    </div>
+        </Button>
+      </Box>
+    </Box>
   );
 }
