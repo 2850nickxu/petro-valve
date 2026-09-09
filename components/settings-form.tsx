@@ -2,6 +2,22 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import {
+  Badge,
+  Box,
+  Button,
+  Counter,
+  Flex,
+  Grid,
+  Input,
+  Panel,
+  Select,
+  Small,
+  Switch,
+  Tabs,
+  Text,
+} from "@bigcommerce/big-design";
+import { colors } from "@bigcommerce/big-design-theme";
 import { useToast } from "@/components/ui/toast";
 import { GmailConnect } from "@/components/gmail-connect";
 
@@ -67,54 +83,63 @@ function SettingField({
   wide?: boolean;
 }) {
   if (!def) return null;
-  const id = `f-${def.key}`;
-  return (
-    <div className="field" style={wide ? { gridColumn: "1 / -1" } : undefined}>
-      <label htmlFor={id}>
-        {def.label}
-        {def.secret ? <span title="Encrypted at rest"> 🔒</span> : null}
-      </label>
-      {def.type === "select" ? (
-        <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
-          <option value="">(default)</option>
-          {def.options?.map((o) => (
-            <option key={o} value={o}>{o}</option>
-          ))}
-        </select>
-      ) : (
-        <input
-          id={id}
-          type={def.secret ? "password" : def.type === "number" ? "number" : "text"}
+  const label: ReactNode = def.secret ? (
+    <>
+      {def.label}
+      <span title="Encrypted at rest"> 🔒</span>
+    </>
+  ) : (
+    def.label
+  );
+
+  if (def.type === "select") {
+    return (
+      <Box style={wide ? { gridColumn: "1 / -1" } : undefined}>
+        <Select
+          label={label}
+          description={def.help}
           value={value}
-          placeholder={def.secret && configured ? "•••• saved (enter to replace)" : (def.placeholder ?? "")}
-          onChange={(e) => onChange(e.target.value)}
-          autoComplete="off"
+          options={[
+            { value: "", content: "(default)" },
+            ...(def.options ?? []).map((o) => ({ value: o, content: o })),
+          ]}
+          onOptionChange={(v) => onChange(v ?? "")}
         />
-      )}
-      {def.help ? <span className="help">{def.help}</span> : null}
-    </div>
+      </Box>
+    );
+  }
+
+  return (
+    <Box style={wide ? { gridColumn: "1 / -1" } : undefined}>
+      <Input
+        label={label}
+        description={def.help}
+        type={def.secret ? "password" : def.type === "number" ? "number" : "text"}
+        value={value}
+        placeholder={def.secret && configured ? "•••• saved (enter to replace)" : (def.placeholder ?? "")}
+        onChange={(e) => onChange(e.target.value)}
+        autoComplete="off"
+      />
+    </Box>
   );
 }
 
 function SettingToggle({ def, on, onToggle }: { def?: FieldDef; on: boolean; onToggle: () => void }) {
   if (!def) return null;
   return (
-    <div className="toggle-row">
-      <div style={{ minWidth: 0 }}>
-        <div className="t">{def.label}</div>
-        {def.help ? <div className="n">{def.help}</div> : null}
-      </div>
-      <button
-        type="button"
-        className={`switch${on ? " on" : ""}`}
-        role="switch"
-        aria-checked={on}
-        aria-label={def.label}
-        onClick={onToggle}
-      >
-        <span className="knob" />
-      </button>
-    </div>
+    <Flex justifyContent="space-between" alignItems="center" paddingVertical="small" style={{ gap: 12 }}>
+      <Box style={{ minWidth: 0 }}>
+        <Text bold marginBottom="none">
+          {def.label}
+        </Text>
+        {def.help ? (
+          <Small color="secondary60" marginBottom="none">
+            {def.help}
+          </Small>
+        ) : null}
+      </Box>
+      <Switch checked={on} onChange={onToggle} aria-label={def.label} style={{ flex: "none" }} />
+    </Flex>
   );
 }
 
@@ -136,25 +161,16 @@ function SettingSlider({
   onChange: (v: string) => void;
 }) {
   if (!def) return null;
+  // Some field labels already carry the unit (e.g. "Price tolerance %"); avoid doubling it up.
+  const showSuffix = suffix && !def.label.trim().endsWith(suffix.trim());
   return (
-    <div>
-      <span className="label">{def.label}</span>
-      <div className="range-row">
-        <input
-          type="range"
-          min={min}
-          max={max}
-          value={value}
-          aria-label={def.label}
-          onChange={(e) => onChange(e.target.value)}
-        />
-        <span className="v">
-          {value}
-          {suffix ?? ""}
-        </span>
-      </div>
-      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>{note}</div>
-    </div>
+    <Counter
+      label={showSuffix ? `${def.label} (${suffix})` : def.label}
+      description={note}
+      value={value}
+      step={1}
+      onCountChange={(n) => onChange(String(Math.min(max, Math.max(min, n))))}
+    />
   );
 }
 
@@ -309,60 +325,56 @@ export function SettingsForm({
   const msg = testMsg[tab];
   const tolerance = numOf("PO_AGENT_PRICE_TOLERANCE_PCT", defaults.priceTolerancePct);
 
+  const healthBadge = (
+    <Box marginBottom="medium">
+      <Badge label={health[tab] ? "configured" : "incomplete"} variant={health[tab] ? "success" : "warning"} />
+    </Box>
+  );
+
   const saveBar = (testLabel?: string) => (
-    <div className="pa-wrap mt-4">
-      <button type="button" className="btn primary" onClick={save} disabled={saving}>
-        {saving ? "Saving…" : "Save"}
-      </button>
+    <Flex alignItems="center" flexWrap="wrap" marginTop="medium" style={{ gap: 12 }}>
+      <Button variant="primary" onClick={save} isLoading={saving}>
+        Save
+      </Button>
       {tab !== "agent" && (
-        <button type="button" className="btn ghost" onClick={test} disabled={testing}>
-          {testing ? "Testing…" : (testLabel ?? "Test connection")}
-        </button>
+        <Button variant="secondary" onClick={test} isLoading={testing}>
+          {testLabel ?? "Test connection"}
+        </Button>
       )}
       {msg && (
-        <span style={{ fontSize: 12.5, fontWeight: 600, color: msg.ok ? "var(--ok-fg)" : "var(--bad-fg)" }}>
+        <Text color={msg.ok ? "success" : "danger"} bold marginBottom="none" style={{ fontSize: 12.5 }}>
           {msg.ok ? "✓ " : "✗ "}
           {msg.detail}
-        </span>
+        </Text>
       )}
-      {dirty && !saving && (
-        <span className="pa-wrap muted" style={{ fontSize: 12, gap: 5 }}>
-          <span className="dot-status warn" />
-          Unsaved changes
-        </span>
-      )}
-    </div>
+      {dirty && !saving && <Badge label="Unsaved changes" variant="warning" />}
+    </Flex>
   );
 
   return (
     <>
-      <p className="muted" style={{ fontSize: 13, margin: "-14px 0 18px" }}>{active.sub}</p>
+      <Text color="secondary60" style={{ fontSize: 13, margin: "-14px 0 18px" }}>
+        {active.sub}
+      </Text>
 
-      <div className="pa-wrap mb-4" role="tablist" aria-label="Settings sections">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            className={`chip-btn tab${tab === t.id ? " on" : ""}`}
-            onClick={() => setTab(t.id)}
-          >
-            <span className="dot" style={{ background: health[t.id] ? "var(--ok-dot)" : "var(--warn-dot)" }} />
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Box marginBottom="medium">
+        <Tabs
+          activeTab={tab}
+          onTabClick={(id) => setTab(id as TabId)}
+          items={TABS.map((t) => ({ id: t.id, title: t.label }))}
+        />
+      </Box>
 
       {/* ── Agent ── */}
       {tab === "agent" && (
-        <div className="card pad">
+        <Panel>
+          {healthBadge}
           {toggle("PO_AGENT_ENABLED", defaults.enabled)}
           {toggle("PO_AGENT_FIRST_ORDER_CONFIRM", defaults.firstOrderConfirm)}
           {toggle("PO_AGENT_SIMULATOR_SEND", defaults.simulatorSend)}
           {toggle("PO_AGENT_SIMULATOR_SEND_EMAILS", defaults.simulatorSendEmails)}
 
-          <div className="pa-form2 mt-4">
+          <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px" marginTop="medium">
             <SettingSlider
               def={byKey.PO_AGENT_PRICE_TOLERANCE_PCT}
               value={tolerance}
@@ -384,134 +396,154 @@ export function SettingsForm({
               note="Question rounds before we escalate instead of asking again."
               onChange={(v) => set("PO_AGENT_MAX_CLARIFICATIONS", v)}
             />
-          </div>
+          </Grid>
 
-          <div className="pa-form2 mt-4">
+          <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px" marginTop="medium">
             {field("PO_AGENT_MODE")}
             {field("PO_AGENT_DAILY_SUBMIT_CAP")}
             {field("PO_AGENT_PO_PAYMENT_CODES", true)}
-          </div>
+          </Grid>
 
           {saveBar()}
-        </div>
+        </Panel>
       )}
 
       {/* ── AI model ── */}
       {tab === "ai" && (
-        <div className="card pad">
-          <p className="muted" style={{ marginTop: 0, fontSize: 13, lineHeight: 1.6 }}>
-            Bring your own model as <span className="num">provider:model-id</span>. Omit it entirely and the built-in
-            heuristic extractor runs free of charge — an LLM is much better on messy PDFs.
-          </p>
-          <div className="pa-form2">
+        <Panel>
+          {healthBadge}
+          <Text color="secondary60" marginBottom="medium" style={{ fontSize: 13, lineHeight: 1.6 }}>
+            Bring your own model as <code>provider:model-id</code>. Omit it entirely and the built-in heuristic
+            extractor runs free of charge — an LLM is much better on messy PDFs.
+          </Text>
+          <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px">
             {field("PO_AGENT_MODEL")}
             {field("ANTHROPIC_API_KEY")}
             {field("OPENAI_API_KEY")}
             {field("GOOGLE_GENERATIVE_AI_API_KEY")}
-          </div>
+          </Grid>
           {saveBar("Test & save")}
-        </div>
+        </Panel>
       )}
 
       {/* ── Email channel ── */}
       {tab === "channel" && (
-        <div className="card pad">
-          <div className="segmented mb-3">
+        <Panel>
+          {healthBadge}
+          <Flex marginBottom="medium" style={{ gap: 8 }}>
             {(["google", "microsoft"] as const).map((c) => (
-              <button
+              <Button
                 key={c}
-                type="button"
-                className={selectedChannel === c ? "on" : ""}
+                variant={selectedChannel === c ? "primary" : "secondary"}
                 onClick={() => set("PO_AGENT_CHANNEL", c)}
               >
                 {c === "google" ? "Gmail" : "Microsoft Graph"}
-              </button>
+              </Button>
             ))}
-          </div>
+          </Flex>
 
-          <div className="pa-form2">
+          <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px">
             {field("PO_AGENT_MAILBOX")}
             {field("PO_AGENT_INBOUND_SECRET")}
-          </div>
+          </Grid>
 
           {selectedChannel === "google" ? (
             <>
-              <div className="pa-form2 mt-3">
+              <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px" marginTop="medium">
                 {field("GOOGLE_PO_CLIENT_ID")}
                 {field("GOOGLE_PO_CLIENT_SECRET")}
                 {field("GOOGLE_PO_REFRESH_TOKEN")}
                 {field("GOOGLE_PO_PUBSUB_TOPIC")}
-              </div>
-              <div className="mt-4">
-                <span className="label">Connect the mailbox</span>
+              </Grid>
+              <Box marginTop="medium">
+                <Text bold marginBottom="small">
+                  Connect the mailbox
+                </Text>
                 <GmailConnect origin={origin} />
-              </div>
+              </Box>
             </>
           ) : (
-            <div className="pa-form2 mt-3">
+            <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px" marginTop="medium">
               {field("MS_PO_TENANT_ID")}
               {field("MS_PO_CLIENT_ID")}
               {field("MS_PO_CLIENT_SECRET")}
               {field("MS_PO_MAILBOX")}
-            </div>
+            </Grid>
           )}
 
           {saveBar("Test channel")}
-        </div>
+        </Panel>
       )}
 
       {/* ── Escalation ── */}
       {tab === "escalation" && (
-        <div className="card pad">
-          {field("PO_AGENT_ESCALATION_EMAIL")}
-          {field("PO_AGENT_SLACK_WEBHOOK_URL")}
-          <p className="faint" style={{ fontSize: 12 }}>
+        <Panel>
+          {healthBadge}
+          <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px">
+            {field("PO_AGENT_ESCALATION_EMAIL")}
+            {field("PO_AGENT_SLACK_WEBHOOK_URL")}
+          </Grid>
+          <Text color="secondary60" marginTop="small" style={{ fontSize: 12 }}>
             Escalations always land in the Inbox; email and Slack are extra nudges.
-          </p>
+          </Text>
           {toggle("PO_AGENT_FORWARD_PRICE_MISMATCH", defaults.forwardPriceMismatch)}
           {saveBar("Send test")}
-        </div>
+        </Panel>
       )}
 
       {/* ── Store ── */}
       {tab === "store" && (
-        <div className="card pad">
-          <p className="muted" style={{ marginTop: 0, fontSize: 13, lineHeight: 1.6 }}>
+        <Panel>
+          {healthBadge}
+          <Text color="secondary60" marginBottom="medium" style={{ fontSize: 13, lineHeight: 1.6 }}>
             Installing the app supplies its own per-store OAuth token automatically. These fields are the manual
             single-store override.
-          </p>
-          <div className="pa-form2">
+          </Text>
+          <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px">
             {field("BIGCOMMERCE_STORE_HASH")}
             {field("BIGCOMMERCE_ACCESS_TOKEN")}
             {field("BIGCOMMERCE_CHANNEL_ID")}
-          </div>
+          </Grid>
 
-          <div className="mt-4">
-            <span className="label">Installed stores</span>
+          <Box marginTop="medium">
+            <Text bold marginBottom="small">
+              Installed stores
+            </Text>
             {installs.length ? (
-              <div className="card">
-                {installs.map((i) => (
-                  <div className="pa-row" key={i.storeHash}>
-                    <div className="pa-grow">
-                      <div className="num" style={{ fontSize: 13, fontWeight: 600, color: "var(--head)" }}>
+              <Box border="box" borderRadius="normal">
+                {installs.map((i, idx) => (
+                  <Flex
+                    key={i.storeHash}
+                    justifyContent="space-between"
+                    alignItems="center"
+                    flexWrap="wrap"
+                    padding="small"
+                    style={{ gap: 10, borderTop: idx > 0 ? `1px solid ${colors.secondary20}` : undefined }}
+                  >
+                    <Box style={{ flex: "1 1 200px", minWidth: 0 }}>
+                      <Text bold marginBottom="none" style={{ fontFamily: "monospace", fontSize: 13 }}>
                         {i.storeHash}
-                      </div>
-                      <div className="r-sub">{i.ownerEmail ?? "unknown owner"}</div>
-                    </div>
-                    <span className="r-meta num">{i.installedAt.slice(0, 16).replace("T", " ")}</span>
-                    <span className="tag">OAuth (per-store)</span>
-                  </div>
+                      </Text>
+                      <Small color="secondary60" marginBottom="none">
+                        {i.ownerEmail ?? "unknown owner"}
+                      </Small>
+                    </Box>
+                    <Small color="secondary60" marginBottom="none" style={{ fontFamily: "monospace" }}>
+                      {i.installedAt.slice(0, 16).replace("T", " ")}
+                    </Small>
+                    <Badge label="OAuth (per-store)" variant="secondary" />
+                  </Flex>
                 ))}
-              </div>
+              </Box>
             ) : (
-              <p className="muted mb-0" style={{ fontSize: 12.5 }}>
+              <Text color="secondary60" marginBottom="none" style={{ fontSize: 12.5 }}>
                 No app installs yet — the agent uses the deployment (env/global) settings.
-              </p>
+              </Text>
             )}
-          </div>
+          </Box>
 
           {saveBar("Test store")}
-        </div>
+        </Panel>
       )}
     </>
   );
