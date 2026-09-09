@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  compiler: { styledComponents: true },
   // The PO agent is server-side only; storefront image needs are minimal. Allow
   // BigCommerce CDN hosts so any product thumbnails surfaced in the staff review
   // queue (Phase 8) render without extra config.
