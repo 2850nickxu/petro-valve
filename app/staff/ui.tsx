@@ -28,6 +28,7 @@ export function Stat({
   value,
   note,
   tone,
+  compact,
   hint,
 }: {
   label: string;
@@ -43,7 +44,10 @@ export function Stat({
       <Text color="secondary60" bold marginBottom="xxSmall">
         {label}
       </Text>
-      <Text color={color} style={{ fontSize: 28, fontWeight: 600, lineHeight: 1 }}>
+      <Text
+        color={color}
+        style={{ fontSize: compact ? 24 : 28, fontWeight: 600, lineHeight: 1, marginTop: compact ? 8 : undefined }}
+      >
         {value}
       </Text>
       {note ? (

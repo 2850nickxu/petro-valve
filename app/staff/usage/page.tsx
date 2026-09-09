@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { Box, Button, Flex, Grid, Panel, Small, Text } from "@bigcommerce/big-design";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { currentYyyymm } from "@/lib/po-agent/metrics";
 import { parseTokenUsage, usageTotals, type ModelUsage } from "@/lib/po-agent/token-usage";
 import { PageHead, Stat } from "../ui";
-import { Banner } from "@/components/ui/states";
+import { Banner, EmptyState } from "@/components/ui/states";
 
 export const dynamic = "force-dynamic";
 
@@ -60,57 +61,72 @@ export default async function UsagePage({ searchParams }: { searchParams: Promis
       />
 
       {!redis && (
-        <div className="mb-3">
+        <Box marginBottom="medium">
           <Banner kind="warn" title="Redis not configured">
             Token usage is recorded in Redis — the figures below read 0 until it&apos;s connected.
           </Banner>
-        </div>
+        </Box>
       )}
 
-      <div className="pa-wrap mb-4">
+      <Flex flexWrap="wrap" marginBottom="large" style={{ gap: 8 }}>
         {months.map((m) => (
-          <Link key={m} href={`/staff/usage?month=${m}`} className={`chip-btn${m === ym ? " on" : ""}`}>
-            {formatYm(m)}
+          <Link key={m} href={`/staff/usage?month=${m}`}>
+            <Button type="button" variant={m === ym ? "secondary" : "subtle"} aria-pressed={m === ym}>
+              {formatYm(m)}
+            </Button>
           </Link>
         ))}
-      </div>
+      </Flex>
 
-      <div className="pa-stats mb-4">
+      <Grid
+        gridColumns={{ mobile: "repeat(2, 1fr)", tablet: "repeat(3, 1fr)", desktop: "repeat(5, 1fr)" }}
+        marginBottom="large"
+      >
         <Stat label="Calls" value={totals.calls.toLocaleString()} compact />
         <Stat label="Input tokens" value={compact(totals.input)} compact hint={`${totals.input.toLocaleString()} tokens`} />
         <Stat label="Output tokens" value={compact(totals.output)} compact hint={`${totals.output.toLocaleString()} tokens`} />
         <Stat label="Total tokens" value={compact(totals.total)} compact hint={`${totals.total.toLocaleString()} tokens`} />
         <Stat label="Est. cost" value={`${totals.costKnown ? "" : "~"}${money(totals.costUsd)}`} compact />
-      </div>
+      </Grid>
 
-      <div className="card">
+      <Panel>
         {rows.length ? (
-          rows.map((r) => (
-            <div className="pa-row" key={r.model}>
-              <div className="pa-grow">
-                <div className="num" style={{ fontSize: 13, fontWeight: 600, color: "var(--head)" }}>{r.model}</div>
-                <div className="r-sub num">
-                  {r.calls.toLocaleString()} calls · {compact(r.input)} in · {compact(r.output)} out
-                </div>
-              </div>
-              <div className="num" style={{ fontSize: 13.5, fontWeight: 700, flex: "none" }}>
-                {r.costUsd != null ? money(r.costUsd) : "—"}
-              </div>
-            </div>
-          ))
+          <Box>
+            {rows.map((r) => (
+              <Flex
+                key={r.model}
+                justifyContent="space-between"
+                alignItems="center"
+                flexWrap="wrap"
+                paddingVertical="small"
+                style={{ gap: 10 }}
+              >
+                <Box style={{ flex: "1 1 200px", minWidth: 0 }}>
+                  <Text bold marginBottom="none" style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {r.model}
+                  </Text>
+                  <Small color="secondary60" marginBottom="none" style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {r.calls.toLocaleString()} calls · {compact(r.input)} in · {compact(r.output)} out
+                  </Small>
+                </Box>
+                <Text bold marginBottom="none" style={{ flex: "none", fontVariantNumeric: "tabular-nums" }}>
+                  {r.costUsd != null ? money(r.costUsd) : "—"}
+                </Text>
+              </Flex>
+            ))}
+          </Box>
         ) : (
-          <div className="pa-row">
-            <span className="muted">
-              No AI usage recorded for {formatYm(ym)}. Set a model + API key in{" "}
-              <Link href="/staff/settings">Settings → AI model</Link> to use an LLM.
-            </span>
-          </div>
+          <EmptyState title={`No AI usage recorded for ${formatYm(ym)}`}>
+            Set a model + API key in <Link href="/staff/settings">Settings → AI model</Link> to use an LLM.
+          </EmptyState>
         )}
-        <div className="card-foot">
-          The heuristic extractor uses no tokens — an LLM is optional but much better on messy PDFs. Cost estimates use a
-          built-in per-model price table (USD per 1M tokens); verify against your provider&apos;s billing.
-        </div>
-      </div>
+        <Box marginTop="medium">
+          <Small color="secondary60">
+            The heuristic extractor uses no tokens — an LLM is optional but much better on messy PDFs. Cost estimates
+            use a built-in per-model price table (USD per 1M tokens); verify against your provider&apos;s billing.
+          </Small>
+        </Box>
+      </Panel>
     </div>
   );
 }

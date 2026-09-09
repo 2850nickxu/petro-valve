@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Link from "next/link";
-import { stateLabel } from "@/app/staff/ui";
+import { SearchIcon } from "@bigcommerce/big-design-icons";
+import { Box, Button, Flex, Input, Panel, Small } from "@bigcommerce/big-design";
+import { SessionRow, stateLabel } from "@/app/staff/ui";
 import { EmptyState } from "@/components/ui/states";
 import type { SessionSummary, PoSessionState } from "@/lib/po-agent/types";
 
@@ -26,6 +27,8 @@ interface SearchResult {
 }
 
 const PAGE_SIZE = 25;
+
+const SKELETON_WIDTHS = ["62%", "100%", "84%", "73%"];
 
 export function SessionsBrowser() {
   const [q, setQ] = useState("");
@@ -103,79 +106,80 @@ export function SessionsBrowser() {
   const hasNext = endItem < total;
 
   return (
-    <div className="card">
-      <div className="pa-wrap" style={{ padding: "12px 18px", borderBottom: "1px solid var(--border2)" }}>
-        <input
-          type="search"
-          value={q}
-          onChange={(e) => handleQChange(e.target.value)}
-          placeholder="Search company, buyer, PO number"
-          aria-label="Search sessions"
-          style={{ flex: "1 1 200px", maxWidth: 300, fontSize: 13 }}
-        />
-        {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            className={`chip-btn round${filter === f.id ? " on" : ""}`}
-            aria-pressed={filter === f.id}
-            onClick={() => handleFilter(f.id)}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
+    <Panel>
+      <Flex justifyContent="space-between" alignItems="center" flexWrap="wrap" marginBottom="medium" style={{ gap: 12 }}>
+        <Box style={{ flex: "1 1 240px", maxWidth: 320 }}>
+          <Input
+            type="search"
+            value={q}
+            onChange={(e) => handleQChange(e.target.value)}
+            placeholder="Search company, buyer, PO number"
+            aria-label="Search sessions"
+            iconLeft={<SearchIcon color="secondary50" />}
+          />
+        </Box>
+        <Flex flexWrap="wrap" style={{ gap: 8 }}>
+          {FILTERS.map((f) => (
+            <Button
+              key={f.id}
+              type="button"
+              variant={filter === f.id ? "secondary" : "subtle"}
+              aria-pressed={filter === f.id}
+              onClick={() => handleFilter(f.id)}
+            >
+              {f.label}
+            </Button>
+          ))}
+        </Flex>
+      </Flex>
 
       {loading ? (
-        <div className="card-body">
-          {["62%", "100%", "84%", "73%"].map((w) => (
-            <div key={w} className="skeleton" style={{ width: w }} />
+        <Flex flexDirection="column" style={{ gap: 10 }}>
+          {SKELETON_WIDTHS.map((w) => (
+            <Box key={w} backgroundColor="secondary20" borderRadius="normal" style={{ width: w, height: 10 }} />
           ))}
-        </div>
+        </Flex>
       ) : items.length === 0 ? (
         <EmptyState title="No matching sessions">Try a different search or filter.</EmptyState>
       ) : (
-        items.map((item) => (
-          <Link
-            key={item.id}
-            href={`/staff/po-inbox/${encodeURIComponent(item.id)}`}
-            className="pa-row link"
-          >
-            <div className="pa-grow">
-              <div className="r-title">{item.company || "(unknown sender)"}</div>
-              <div className="r-sub">
-                {item.email || "unknown"} · {item.poNumber || "no PO number"} ·{" "}
-                {item.updatedAt.slice(0, 16).replace("T", " ")}
-              </div>
-            </div>
-            <span className="r-meta num">{item.decision ?? "—"}</span>
-            <span className={`chip ${item.state}`}>{stateLabel(item.state)}</span>
-          </Link>
-        ))
+        <Box>
+          {items.map((item) => (
+            <SessionRow
+              key={item.id}
+              href={`/staff/po-inbox/${encodeURIComponent(item.id)}`}
+              company={item.company || "(unknown sender)"}
+              sub={`${item.email || "unknown"} · ${item.poNumber || "no PO number"} · ${item.updatedAt
+                .slice(0, 16)
+                .replace("T", " ")}`}
+              meta={item.decision ?? "—"}
+              state={item.state}
+              stateLabel={stateLabel(item.state)}
+            />
+          ))}
+        </Box>
       )}
 
-      <div className="card-foot row-between">
-        <span>
+      <Flex justifyContent="space-between" alignItems="center" flexWrap="wrap" marginTop="medium" style={{ gap: 10 }}>
+        <Small color="secondary60" marginBottom="none">
           {total > 0 ? (
             <>
-              Showing <span className="num">{startItem}</span>–<span className="num">{endItem}</span> of{" "}
-              <span className="num">{total}</span> session{total === 1 ? "" : "s"}
+              Showing {startItem}–{endItem} of {total} session{total === 1 ? "" : "s"}
             </>
           ) : (
             "No sessions"
           )}
-        </span>
+        </Small>
         {total > PAGE_SIZE && (
-          <span className="pa-wrap" style={{ gap: 8 }}>
-            <button type="button" className="btn xs" disabled={!hasPrev} onClick={() => setPage((p) => p - 1)}>
+          <Flex style={{ gap: 8 }}>
+            <Button type="button" variant="secondary" disabled={!hasPrev} onClick={() => setPage((p) => p - 1)}>
               Prev
-            </button>
-            <button type="button" className="btn xs" disabled={!hasNext} onClick={() => setPage((p) => p + 1)}>
+            </Button>
+            <Button type="button" variant="secondary" disabled={!hasNext} onClick={() => setPage((p) => p + 1)}>
               Next
-            </button>
-          </span>
+            </Button>
+          </Flex>
         )}
-      </div>
-    </div>
+      </Flex>
+    </Panel>
   );
 }
