@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { Box, Button, Flex, Grid, Panel, Text } from "@bigcommerce/big-design";
+import { colors } from "@bigcommerce/big-design-theme";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { computeMetrics, currentYyyymm } from "@/lib/po-agent/metrics";
@@ -7,8 +9,8 @@ import { adminStatus } from "@/lib/po-agent/admin-status";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
 import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
 import { activeStoreSource } from "@/lib/bc-app/request-context";
-import { PageHead, Stat, CardHead, HealthRow, SessionRow, stateLabel } from "./ui";
-import { Banner } from "@/components/ui/states";
+import { PageHead, Stat, HealthRow, SessionRow, stateLabel } from "./ui";
+import { Banner, EmptyState } from "@/components/ui/states";
 import { AutoRefresh } from "@/components/ui/auto-refresh";
 import type { PoSession } from "@/lib/po-agent/types";
 
@@ -99,47 +101,67 @@ export default async function Dashboard() {
       </PageHead>
 
       {!redis && (
-        <div className="mb-3">
+        <Box marginBottom="medium">
           <Banner kind="warn" title="Redis not connected">
             Session tracking, the review queue, and metrics are offline. Add <code>UPSTASH_REDIS_REST_URL</code> /{" "}
             <code>UPSTASH_REDIS_REST_TOKEN</code> in <Link href={SETTINGS}>Settings</Link> — the counters below read 0 until then.
           </Banner>
-        </div>
+        </Box>
       )}
 
       {firstRun && (
-        <div className="mb-3">
+        <Box marginBottom="medium">
           <Banner kind="info" title="Finish setup to start processing POs">
-            <ol className="mt-1" style={{ margin: "0 0 8px", paddingLeft: 18 }}>
+            <ol style={{ margin: "6px 0 8px", paddingLeft: 18 }}>
               <li>Connect your <strong>BigCommerce store</strong> and <strong>Redis</strong>.</li>
               <li>Add an <strong>AI model</strong> — optional, a heuristic extractor works without one.</li>
               <li>Connect your <strong>email channel</strong> (Gmail or Microsoft).</li>
               <li><strong>Enable</strong> the agent.</li>
             </ol>
-            <div className="pa-wrap">
-              <Link className="btn primary sm" href={SETTINGS}>Open Settings</Link>
-              <Link className="btn sm" href="/staff/simulator">Try the simulator</Link>
-            </div>
+            <Flex flexWrap="wrap" style={{ gap: 10 }}>
+              <Link href={SETTINGS}>
+                <Button variant="primary">Open Settings</Button>
+              </Link>
+              <Link href="/staff/simulator">
+                <Button variant="secondary">Try the simulator</Button>
+              </Link>
+            </Flex>
           </Banner>
-        </div>
+        </Box>
       )}
 
       {escalatedCount > 0 && (
-        <Link href={INBOX} className="pa-alert mb-5">
-          <div style={{ minWidth: 0 }}>
-            <div className="t">
-              {escalatedCount} escalated session{escalatedCount === 1 ? " is" : "s are"} waiting on a human
-            </div>
-            <div className="d">
-              Buyers have been told we&apos;re checking — nothing was submitted.
-              {waited ? ` Oldest has waited ${waited}.` : ""}
-            </div>
-          </div>
-          <div className="arrow" aria-hidden="true">→</div>
-        </Link>
+        <Box
+          marginBottom="large"
+          backgroundColor="danger10"
+          border="box"
+          borderRadius="normal"
+          style={{ borderLeftWidth: 4, borderLeftColor: colors.danger40 }}
+        >
+          <Link
+            href={INBOX}
+            style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", color: "inherit", textDecoration: "none" }}
+          >
+            <Box style={{ minWidth: 0 }}>
+              <Text bold color="danger" marginBottom="none" style={{ fontSize: 14 }}>
+                {escalatedCount} escalated session{escalatedCount === 1 ? " is" : "s are"} waiting on a human
+              </Text>
+              <Text color="secondary60" marginTop="xxSmall" marginBottom="none" style={{ fontSize: 12.5 }}>
+                Buyers have been told we&apos;re checking — nothing was submitted.
+                {waited ? ` Oldest has waited ${waited}.` : ""}
+              </Text>
+            </Box>
+            <Text color="danger" marginBottom="none" aria-hidden="true" style={{ marginLeft: "auto", fontSize: 18 }}>
+              →
+            </Text>
+          </Link>
+        </Box>
       )}
 
-      <div className="pa-stats mb-5">
+      <Grid
+        gridColumns={{ mobile: "repeat(2, 1fr)", tablet: "repeat(3, 1fr)", desktop: "repeat(6, 1fr)" }}
+        marginBottom="large"
+      >
         <Stat label="Received" value={metrics.received} note="POs this month" hint="POs received this calendar month" />
         <Stat label="Orders" value={metrics.orders} note="pay on account" hint="Orders placed this month" />
         <Stat label="Quotes" value={metrics.quotes} note="checkout link sent" hint="Quotes created this month" />
@@ -163,11 +185,10 @@ export default async function Dashboard() {
           note="orders placed"
           hint="Total order value placed this month (USD)"
         />
-      </div>
+      </Grid>
 
-      <div className="pa-2col">
-        <div className="card">
-          <CardHead title="Recent sessions" />
+      <Grid gridColumns={{ mobile: "1fr", desktop: "1.2fr 1fr" }} gridGap="16px">
+        <Panel header="Recent sessions">
           {recent.length ? (
             recent.map((s) => (
               <SessionRow
@@ -180,24 +201,21 @@ export default async function Dashboard() {
               />
             ))
           ) : (
-            <div className="emptystate">
-              <div className="es-icon">○</div>
-              <div className="es-title">No sessions yet</div>
-              <div className="es-body">Processed POs appear here as they arrive.</div>
-            </div>
+            <EmptyState title="No sessions yet">Processed POs appear here as they arrive.</EmptyState>
           )}
-          <div className="card-foot">
-            <Link href="/staff/sessions" style={{ fontSize: 12.5, fontWeight: 600 }}>All sessions →</Link>
-          </div>
-        </div>
+          <Box marginTop="medium">
+            <Link href="/staff/sessions">
+              <Button variant="subtle">All sessions →</Button>
+            </Link>
+          </Box>
+        </Panel>
 
-        <div className="card">
-          <CardHead title="Setup &amp; health" />
+        <Panel header="Setup & health">
           {health.map((h) => (
             <HealthRow key={h.name} ok={h.ok} warn={h.warn} name={h.name} detail={h.detail} action={h.action} />
           ))}
-        </div>
-      </div>
+        </Panel>
+      </Grid>
     </>
   );
 }
