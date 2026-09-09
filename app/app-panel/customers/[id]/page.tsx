@@ -1,6 +1,7 @@
+import { H2, Panel, Small, Text } from "@bigcommerce/big-design";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
-import { stateLabel } from "@/app/staff/ui";
+import { Chip, stateLabel } from "@/app/staff/ui";
 import type { PoSession } from "@/lib/po-agent/types";
 
 export const dynamic = "force-dynamic";
@@ -20,26 +21,39 @@ export default async function CustomerPanel({ params }: { params: Promise<{ id: 
 
   return (
     <div>
-      <h2 style={{ marginTop: 0 }}>PO Agent</h2>
-      <p className="muted" style={{ marginTop: -6 }}>Customer #{id}</p>
+      <H2 marginBottom="none">PO Agent</H2>
+      <Small color="secondary60">Customer #{id}</Small>
+
       {matches.length ? (
         <>
-          <p className="muted">{matches.length} PO session{matches.length === 1 ? "" : "s"} from this customer.</p>
+          <Text color="secondary60" marginTop="medium">
+            {matches.length} PO session{matches.length === 1 ? "" : "s"} from this customer.
+          </Text>
           {matches.slice(0, 15).map((s) => (
-            <div key={s.id} className="card pad mb-2">
-              <p style={{ margin: 0 }}>
-                <span className={`chip ${s.state}`}>{stateLabel(s.state)}</span> · PO{" "}
-                <span className="num">{s.extracted?.poNumber ?? "—"}</span>
-                {s.result?.orderId ? ` · order ${s.result.orderId}` : s.result?.quoteId ? ` · quote ${s.result.quoteNumber ?? s.result.quoteId}` : ""}
-              </p>
-              <p style={{ margin: "4px 0 0" }}>
-                <a href={`/staff/po-inbox/${encodeURIComponent(s.id)}`} target="_blank" rel="noreferrer">Open ↗</a>
-              </p>
-            </div>
+            <Panel key={s.id} marginTop="medium">
+              <Text marginBottom="xxSmall">
+                <Chip kind={s.state}>{stateLabel(s.state)}</Chip> · PO{" "}
+                <Text as="span" style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {s.extracted?.poNumber ?? "—"}
+                </Text>
+                {s.result?.orderId
+                  ? ` · order ${s.result.orderId}`
+                  : s.result?.quoteId
+                    ? ` · quote ${s.result.quoteNumber ?? s.result.quoteId}`
+                    : ""}
+              </Text>
+              <Text marginBottom="none">
+                <a href={`/staff/po-inbox/${encodeURIComponent(s.id)}`} target="_blank" rel="noreferrer">
+                  Open ↗
+                </a>
+              </Text>
+            </Panel>
           ))}
         </>
       ) : (
-        <p className="muted">No PO Agent email activity from this customer yet.</p>
+        <Text color="secondary60" marginTop="medium">
+          No PO Agent email activity from this customer yet.
+        </Text>
       )}
     </div>
   );

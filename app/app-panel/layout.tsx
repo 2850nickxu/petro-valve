@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { Box, Text } from "@bigcommerce/big-design";
+import { theme } from "@bigcommerce/big-design-theme";
 
 export const dynamic = "force-dynamic";
 
@@ -6,15 +8,16 @@ export const dynamic = "force-dynamic";
 // keeps it visually part of the same product inside the BigCommerce control panel.
 export default function PanelLayout({ children }: { children: ReactNode }) {
   return (
-    <div>
-      <div className="app-gradient" />
-      <div className="public-brand" style={{ padding: "10px 16px" }}>
-        <img className="app-logo light" src="/silk-logo-color.svg" alt="Silk Commerce" style={{ height: 18 }} />
-        <img className="app-logo dark" src="/silk-logo-white.svg" alt="" aria-hidden="true" style={{ height: 18 }} />
-        <span className="app-divider" />
-        <span className="app-title" style={{ fontSize: 13 }}>PO Agent</span>
-      </div>
-      <div style={{ padding: 16, maxWidth: 560 }}>{children}</div>
-    </div>
+    <Box>
+      <Box
+        backgroundColor="white"
+        style={{ padding: "10px 16px", borderBottom: `1px solid ${theme.colors.secondary20}` }}
+      >
+        <Text bold marginBottom="none" style={{ fontSize: 13 }}>
+          PO Agent
+        </Text>
+      </Box>
+      <Box style={{ padding: 16, maxWidth: 560 }}>{children}</Box>
+    </Box>
   );
 }
