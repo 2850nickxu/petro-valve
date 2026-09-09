@@ -3,8 +3,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import styled from "styled-components";
+import { Badge, Box, Button, Flex, Text } from "@bigcommerce/big-design";
+import { theme } from "@bigcommerce/big-design-theme";
 import { AdminNav } from "./nav";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 // The admin chrome. Client-side because the header's burger and the sidebar share one
 // open/closed state: at ≥960px the sidebar is a static column, below that it becomes an
@@ -16,6 +18,78 @@ export interface ShellStatus {
   /** e.g. "live · gmail · anthropic:claude-sonnet-4-6" */
   label: string;
 }
+
+const STATUS_BADGE_VARIANT: Record<ShellStatus["tone"], "success" | "warning" | "danger"> = {
+  ok: "success",
+  warn: "warning",
+  bad: "danger",
+};
+
+// Big Design has no off-canvas drawer / scrim / burger primitive, so those three pieces
+// are a small local styled-components layer reading theme tokens. Everything else below
+// uses Big Design components directly.
+
+const Burger = styled.button`
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid ${theme.colors.secondary20};
+  border-radius: ${theme.borderRadius.normal};
+  background: ${theme.colors.white};
+  color: ${theme.colors.secondary70};
+  cursor: pointer;
+  flex: none;
+  padding: 0;
+
+  @media (max-width: 959px) {
+    display: inline-flex;
+  }
+`;
+
+const Scrim = styled.button`
+  display: none;
+  border: none;
+  padding: 0;
+
+  @media (max-width: 959px) {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 39, 45, 0.42);
+    z-index: ${theme.zIndex.modalBackdrop};
+  }
+`;
+
+const DrawerAside = styled.aside<{ $open: boolean }>`
+  width: 216px;
+  flex: none;
+  background: ${theme.colors.white};
+  border-right: 1px solid ${theme.colors.secondary20};
+  padding: ${theme.spacing.large} 0 ${theme.spacing.xLarge};
+
+  @media (max-width: 959px) {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: ${theme.zIndex.modal};
+    transform: ${(p) => (p.$open ? "none" : "translateX(-105%)")};
+    transition: transform 200ms ease;
+    box-shadow: 0 0 44px rgba(4, 39, 45, 0.28);
+    overflow-y: auto;
+  }
+`;
+
+const HideOnSmall = styled.span`
+  display: inline-flex;
+  align-items: center;
+
+  @media (max-width: 959px) {
+    display: none !important;
+  }
+`;
 
 export function AppShell({
   escalated,
@@ -40,57 +114,48 @@ export function AppShell({
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
 
-  const dotColor = status.tone === "ok" ? "var(--ok-dot)" : status.tone === "warn" ? "var(--warn-dot)" : "var(--bad-dot)";
-
   return (
-    <div className="app">
-      <div className="app-gradient" />
-
-      <header className="app-header">
-        <button
-          type="button"
-          className="pa-burger"
-          onClick={() => setMenuOpen((o) => !o)}
-          aria-label="Toggle navigation"
-          aria-expanded={menuOpen}
-        >
+    <Flex flexDirection="column" backgroundColor="secondary10" style={{ minHeight: "100vh" }}>
+      <Flex
+        as="header"
+        alignItems="center"
+        backgroundColor="white"
+        padding="medium"
+        style={{ gap: 14, flex: "none", minWidth: 0, borderBottom: `1px solid ${theme.colors.secondary20}` }}
+      >
+        <Burger type="button" onClick={() => setMenuOpen((o) => !o)} aria-label="Toggle navigation" aria-expanded={menuOpen}>
           <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
             <path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" fill="none" />
           </svg>
-        </button>
+        </Burger>
 
-        {/* Two logos, one per theme — CSS picks via --logo-light / --logo-dark. */}
-        <img className="app-logo light" src="/silk-logo-color.svg" alt="Silk Commerce" />
-        <img className="app-logo dark" src="/silk-logo-white.svg" alt="" aria-hidden="true" />
+        <Text bold marginBottom="none" style={{ whiteSpace: "nowrap" }}>
+          PO Agent
+        </Text>
 
-        <span className="app-divider pa-hide-sm" />
-        <span className="app-title pa-hide-sm">PO Agent</span>
-
-        <div className="app-header-right">
-          <span className="app-status pa-hide-sm">
-            <span className="dot" style={{ background: dotColor }} />
-            {status.label}
-          </span>
-          <ThemeToggle />
-          <Link className="btn primary sm" href="/staff/simulator">
-            Try the simulator
+        <Flex alignItems="center" style={{ marginLeft: "auto", gap: 12, minWidth: 0 }}>
+          <HideOnSmall>
+            <Badge label={status.label} variant={STATUS_BADGE_VARIANT[status.tone]} />
+          </HideOnSmall>
+          <Link href="/staff/simulator">
+            <Button variant="primary">Try the simulator</Button>
           </Link>
-        </div>
-      </header>
+        </Flex>
+      </Flex>
 
-      <div className="app-body">
+      <Flex style={{ flex: 1, minHeight: 0 }}>
         {menuOpen && (
-          <button type="button" className="pa-scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />
+          <Scrim type="button" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />
         )}
 
-        <aside className={`pa-nav ${menuOpen ? "pa-open" : ""}`}>
+        <DrawerAside $open={menuOpen}>
           <AdminNav escalated={escalated} onNavigate={() => setMenuOpen(false)} />
-        </aside>
+        </DrawerAside>
 
-        <main className="app-main">
+        <Box style={{ flex: 1, minWidth: 0 }}>
           <div className="pa-content">{children}</div>
-        </main>
-      </div>
-    </div>
+        </Box>
+      </Flex>
+    </Flex>
   );
 }
