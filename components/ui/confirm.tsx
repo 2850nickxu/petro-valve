@@ -1,10 +1,12 @@
 "use client";
 
 // Promise-based confirm dialog. useConfirm() returns an async function; awaiting it
-// resolves true/false. Accessible: role=dialog, Esc cancels, backdrop click cancels,
-// the confirm button takes focus on open.
+// resolves true/false. Backed by Big Design's Modal: Esc cancels (closeOnEscKey), backdrop
+// click cancels (closeOnClickOutside), and a destructive confirm renders as
+// actionType="destructive".
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import { Modal, type ModalAction } from "@bigcommerce/big-design";
 
 export interface ConfirmOptions {
   title: string;
@@ -39,38 +41,32 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     setOpts(null);
   }, []);
 
-  useEffect(() => {
-    if (!opts) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [opts, close]);
+  const actions: ModalAction[] | undefined = opts
+    ? [
+        { text: opts.cancelLabel ?? "Cancel", variant: "secondary", onClick: () => close(false) },
+        {
+          text: opts.confirmLabel ?? "Confirm",
+          variant: "primary",
+          actionType: opts.danger ? "destructive" : "normal",
+          onClick: () => close(true),
+        },
+      ]
+    : undefined;
 
   return (
     <ConfirmCtx.Provider value={confirm}>
       {children}
-      {opts && (
-        <div className="modal-backdrop" onClick={() => close(false)}>
-          <div className="modal" role="dialog" aria-modal="true" aria-label={opts.title} onClick={(e) => e.stopPropagation()}>
-            {/* Coloured top rule signals the weight of the action before you read it. */}
-            <div className={`modal-rule ${opts.danger ? "danger" : ""}`} />
-            <div className="modal-inner">
-              <div className="modal-title">{opts.title}</div>
-              {opts.body && <div className="modal-body">{opts.body}</div>}
-              <div className="modal-actions">
-                <button className="btn" onClick={() => close(false)}>{opts.cancelLabel ?? "Cancel"}</button>
-                <button
-                  className={`btn ${opts.danger ? "danger" : "primary"}`}
-                  autoFocus
-                  onClick={() => close(true)}
-                >
-                  {opts.confirmLabel ?? "Confirm"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        isOpen={!!opts}
+        onClose={() => close(false)}
+        header={opts?.title}
+        actions={actions}
+        variant="dialog"
+        closeOnEscKey
+        closeOnClickOutside
+      >
+        {opts?.body}
+      </Modal>
     </ConfirmCtx.Provider>
   );
 }
