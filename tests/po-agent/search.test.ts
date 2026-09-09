@@ -3,6 +3,14 @@ import { createPoStore } from "@/lib/po-agent/store";
 import { createMockRedis } from "@/tests/helpers/mock-redis";
 import type { PoSession } from "@/lib/po-agent/types";
 
+// searchSessions prunes summaries older than its 30-day TTL window, measured against the
+// real Date.now(). Fixtures MUST therefore be anchored near "now" — absolute past dates are
+// a time-bomb that starts failing once wall-clock time moves past them. Anchor a few days
+// back, in ascending order, comfortably inside the window.
+const DAY = 86_400_000;
+const BASE = Date.now() - 5 * DAY;
+const iso = (offsetDays: number) => new Date(BASE + offsetDays * DAY).toISOString();
+
 function makeSession(overrides: Partial<PoSession> & { id: string }): PoSession {
   return {
     channel: "simulator",
@@ -11,8 +19,8 @@ function makeSession(overrides: Partial<PoSession> & { id: string }): PoSession 
     clarificationRounds: 0,
     audit: [],
     messageIds: [],
-    createdAt: overrides.updatedAt ?? "2026-07-01T10:00:00.000Z",
-    updatedAt: "2026-07-01T10:00:00.000Z",
+    createdAt: overrides.updatedAt ?? iso(0),
+    updatedAt: iso(0),
     ...overrides,
   } as PoSession;
 }
@@ -24,8 +32,8 @@ const SESSION_A = makeSession({
   extracted: { poNumber: "PO-1001", lines: [], paymentIntent: "on_account", requestedShipDate: null, shipTo: null, billTo: null, currency: null, confidence: "high", buyerNote: null },
   state: "completed_order",
   decision: { kind: "order", reasons: [] },
-  updatedAt: "2026-07-20T08:00:00.000Z",
-  createdAt: "2026-07-20T08:00:00.000Z",
+  updatedAt: iso(0),
+  createdAt: iso(0),
 });
 
 const SESSION_B = makeSession({
@@ -34,8 +42,8 @@ const SESSION_B = makeSession({
   extracted: { poNumber: "PO-2002", lines: [], paymentIntent: "on_account", requestedShipDate: null, shipTo: null, billTo: null, currency: null, confidence: "medium", buyerNote: null },
   state: "completed_quote",
   decision: { kind: "quote", reasons: [] },
-  updatedAt: "2026-07-21T09:00:00.000Z",
-  createdAt: "2026-07-21T09:00:00.000Z",
+  updatedAt: iso(1),
+  createdAt: iso(1),
 });
 
 const SESSION_C = makeSession({
@@ -44,8 +52,8 @@ const SESSION_C = makeSession({
   extracted: { poNumber: "PO-3003", lines: [], paymentIntent: "on_account", requestedShipDate: null, shipTo: null, billTo: null, currency: null, confidence: "low", buyerNote: null },
   state: "escalated",
   decision: { kind: "escalate", reasons: [] },
-  updatedAt: "2026-07-22T10:00:00.000Z",
-  createdAt: "2026-07-22T10:00:00.000Z",
+  updatedAt: iso(2),
+  createdAt: iso(2),
 });
 
 const SESSION_D = makeSession({
@@ -54,8 +62,8 @@ const SESSION_D = makeSession({
   extracted: { poNumber: "PO-4004", lines: [], paymentIntent: "on_account", requestedShipDate: null, shipTo: null, billTo: null, currency: null, confidence: "high", buyerNote: null },
   state: "rejected",
   decision: { kind: "reject", reasons: [] },
-  updatedAt: "2026-07-23T11:00:00.000Z",
-  createdAt: "2026-07-23T11:00:00.000Z",
+  updatedAt: iso(3),
+  createdAt: iso(3),
 });
 
 async function seedStore() {
@@ -137,7 +145,7 @@ describe("searchSessions — sorting and pagination", () => {
   it("sorts by updatedAt descending", async () => {
     const store = await seedStore();
     const { items } = await store.searchSessions({});
-    // SESSION_D has the most recent updatedAt (2026-07-23), SESSION_A the oldest (2026-07-20).
+    // SESSION_D has the most recent updatedAt, SESSION_A the oldest.
     expect(items[0].id).toBe("simulator:t4");
     expect(items[1].id).toBe("simulator:t3");
     expect(items[2].id).toBe("simulator:t2");
@@ -173,16 +181,16 @@ describe("searchSessions — sorting and pagination", () => {
 describe("searchSessions — from/to bounds", () => {
   it("filters by from timestamp (inclusive)", async () => {
     const store = await seedStore();
-    // Only SESSION_C (July 22) and SESSION_D (July 23) are on or after July 22.
-    const from = Date.parse("2026-07-22T00:00:00.000Z");
+    // Only SESSION_C and SESSION_D are on or after C's timestamp (inclusive).
+    const from = Date.parse(iso(2));
     const { total } = await store.searchSessions({ from });
     expect(total).toBe(2);
   });
 
   it("filters by to timestamp (inclusive)", async () => {
     const store = await seedStore();
-    // Only SESSION_A (July 20) is on or before July 20.
-    const to = Date.parse("2026-07-20T23:59:59.999Z");
+    // Only SESSION_A is on or before its own timestamp (inclusive).
+    const to = Date.parse(iso(0));
     const { total } = await store.searchSessions({ to });
     expect(total).toBe(1);
   });
@@ -208,7 +216,7 @@ describe("searchSessions — summary index", () => {
     const store = createPoStore(redis);
     await store.saveSession(SESSION_A);
 
-    const updated = { ...SESSION_A, state: "escalated" as const, updatedAt: "2026-07-24T00:00:00.000Z" };
+    const updated = { ...SESSION_A, state: "escalated" as const, updatedAt: iso(4) };
     await store.saveSession(updated);
 
     const { items } = await store.searchSessions({ text: "acme" });

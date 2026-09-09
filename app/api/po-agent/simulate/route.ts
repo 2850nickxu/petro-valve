@@ -59,7 +59,15 @@ export async function POST(req: Request) {
     );
 
   const simChannel = new SimulatorChannel();
-  const message = simChannel.inject({ from, subject: body.subject ?? "", bodyText: body.bodyText ?? "" });
+  // Unique per request: a fresh SimulatorChannel always mints "sim-msg-1", so without this
+  // every sandbox run collides on the same message-dedup key (poa:msg:simulator:sim-msg-1)
+  // and processInbound replays the first stored session instead of re-running the pipeline.
+  const message = simChannel.inject({
+    from,
+    subject: body.subject ?? "",
+    bodyText: body.bodyText ?? "",
+    messageId: `sim-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  });
   const extract = resolveExtractor(env);
   const ctx = await resolveRequestStoreContext();
 
