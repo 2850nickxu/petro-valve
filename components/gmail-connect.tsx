@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Box, Button, Flex, Text } from "@bigcommerce/big-design";
 import { useToast } from "@/components/ui/toast";
 import { Banner } from "@/components/ui/states";
 
@@ -32,36 +33,35 @@ export function GmailConnect({ origin }: { origin: string }) {
   }
 
   return (
-    <div>
-      <div className="pa-wrap" style={{ marginBottom: connectClicked ? 10 : 0 }}>
-        <button className="btn primary" onClick={handleConnect}>
+    <Box>
+      <Flex flexWrap="wrap" alignItems="center" marginBottom={connectClicked ? "small" : "none"} style={{ gap: 10 }}>
+        <Button variant="primary" onClick={handleConnect}>
           Connect Gmail
-        </button>
-        <button
-          className="btn"
+        </Button>
+        <Button
+          variant="secondary"
           onClick={registerWatch}
-          disabled={busy}
+          isLoading={busy}
           title="Registers a Gmail push watch so new emails are delivered to the inbound webhook via Pub/Sub"
         >
           {busy ? "Registering…" : "Register Pub/Sub watch"}
-        </button>
-      </div>
+        </Button>
+      </Flex>
 
       {connectClicked && (
-        <div style={{ marginBottom: 10 }}>
+        <Box marginBottom="small">
           <Banner kind="info">
-            Complete the Google sign-in in the opened tab, then return here. The refresh token will
-            be saved automatically.
+            Complete the Google sign-in in the opened tab, then return here. The refresh token will be saved
+            automatically.
           </Banner>
-        </div>
+        </Box>
       )}
 
-      <p className="muted" style={{ marginTop: 10, marginBottom: 0 }}>
-        In Google Cloud, add{" "}
-        <code>{origin}/api/gmail-oauth/callback</code> as an authorized redirect URI on your OAuth
-        client, and point a Pub/Sub push subscription at{" "}
+      <Text color="secondary60" marginTop="small" marginBottom="none">
+        In Google Cloud, add <code>{origin}/api/gmail-oauth/callback</code> as an authorized redirect URI on your
+        OAuth client, and point a Pub/Sub push subscription at{" "}
         <code>{origin}/api/po-agent/inbound/google?token=&lt;inbound secret&gt;</code>.
-      </p>
-    </div>
+      </Text>
+    </Box>
   );
 }
