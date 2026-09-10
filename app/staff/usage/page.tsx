@@ -54,7 +54,7 @@ export default async function UsagePage({ searchParams }: { searchParams: Promis
   const totals = usageTotals(rows);
 
   return (
-    <div className="narrow">
+    <Box style={{ maxWidth: 860 }}>
       <PageHead
         title="Token usage"
         sub={`AI model consumption for ${formatYm(ym)} · costs are estimates from list prices`}
@@ -127,6 +127,6 @@ export default async function UsagePage({ searchParams }: { searchParams: Promis
           </Small>
         </Box>
       </Panel>
-    </div>
+    </Box>
   );
 }

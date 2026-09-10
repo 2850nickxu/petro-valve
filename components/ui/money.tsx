@@ -12,5 +12,5 @@ export function formatMoney(n?: number | null, currency?: string | null): string
 }
 
 export function Money({ value, currency }: { value?: number | null; currency?: string | null }) {
-  return <span className="mono">{formatMoney(value, currency)}</span>;
+  return <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatMoney(value, currency)}</span>;
 }

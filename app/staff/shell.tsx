@@ -91,6 +91,12 @@ const HideOnSmall = styled.span`
   }
 `;
 
+const PageContent = styled.div`
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 26px clamp(16px, 4vw, 36px) 72px;
+`;
+
 export function AppShell({
   escalated,
   status,
@@ -153,7 +159,7 @@ export function AppShell({
         </DrawerAside>
 
         <Box style={{ flex: 1, minWidth: 0 }}>
-          <div className="pa-content">{children}</div>
+          <PageContent>{children}</PageContent>
         </Box>
       </Flex>
     </Flex>

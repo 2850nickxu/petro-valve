@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { theme } from "@bigcommerce/big-design-theme";
 
 // Renders a deterministic absolute stamp on the server (from the ISO string, no clock)
 // and enhances with a relative "· 2h ago" on the client after mount — so there's no
@@ -37,12 +38,12 @@ export function Timestamp({ iso, relative: showRelative = true }: { iso?: string
     return () => clearInterval(id);
   }, [showRelative]);
 
-  if (!iso) return <span className="muted">—</span>;
+  if (!iso) return <span style={{ color: theme.colors.secondary60 }}>—</span>;
   const rel = showRelative && now != null ? relative(iso, now) : "";
   return (
-    <span className="mono" title={iso}>
+    <span style={{ fontVariantNumeric: "tabular-nums" }} title={iso}>
       {absolute(iso)}
-      {rel ? <span className="muted"> · {rel}</span> : null}
+      {rel ? <span style={{ color: theme.colors.secondary60 }}> · {rel}</span> : null}
     </span>
   );
 }

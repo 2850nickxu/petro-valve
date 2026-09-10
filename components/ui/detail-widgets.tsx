@@ -5,9 +5,9 @@ import type { Colors } from "@bigcommerce/big-design-theme";
 
 // Bespoke, presentation-only widgets the PO inbox detail screens need that Big Design has
 // no equivalent for: the audit-trail timeline, key/value blocks, the AI-extraction card,
-// the escalation callout, and status dots. Visuals are ported from the corresponding rules
-// in app/globals.css (`.timeline .ev`, `.kv`/`.kv-lines`, `.card.ai`/`.ai-tag`, `.pa-callout.*`,
-// `.dot-status.*` — deleted in Task 11); every color here reads from the Big Design theme,
+// the escalation callout, and status dots. Visuals are ported from the old Silk stylesheet's
+// rules (the timeline row, key/value block, AI-extraction card, escalation callout, and
+// status dot classes — since removed); every color here reads from the Big Design theme,
 // never from the old CSS custom properties.
 
 /* ---------------------------------------------------------------- StatusDot */

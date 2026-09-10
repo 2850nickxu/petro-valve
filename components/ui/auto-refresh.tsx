@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button, Flex, Small } from "@bigcommerce/big-design";
 
 // Keeps a server-rendered list fresh: periodic router.refresh() plus a manual button and
 // an "updated Xs ago" readout, so operators aren't looking at a stale snapshot.
@@ -30,9 +31,15 @@ export function AutoRefresh({ intervalMs = 15_000, label = "Refresh" }: { interv
   const ago = lastAt != null && now != null ? Math.round((now - lastAt) / 1000) : null;
 
   return (
-    <div className="pa-wrap">
-      <button className="btn xs" onClick={manual} disabled={busy}>{busy ? "Refreshing…" : label}</button>
-      {ago != null && <span className="muted" style={{ fontSize: 12 }}>updated {ago < 5 ? "just now" : `${ago}s ago`}</span>}
-    </div>
+    <Flex alignItems="center" flexWrap="wrap" style={{ gap: 10 }}>
+      <Button type="button" variant="subtle" onClick={manual} disabled={busy}>
+        {busy ? "Refreshing…" : label}
+      </Button>
+      {ago != null && (
+        <Small color="secondary60" marginBottom="none">
+          updated {ago < 5 ? "just now" : `${ago}s ago`}
+        </Small>
+      )}
+    </Flex>
   );
 }
