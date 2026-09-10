@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
 import { GlobalStyles } from "@bigcommerce/big-design";
-import { theme } from "@bigcommerce/big-design-theme";
-import { ThemeProvider } from "styled-components";
 import "./globals.css";
 import { StyledComponentsRegistry } from "@/lib/styled-registry";
 import { UiProviders } from "@/components/ui/providers";
@@ -16,10 +14,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <body>
         <StyledComponentsRegistry>
-          <ThemeProvider theme={theme}>
-            <GlobalStyles />
-            <UiProviders>{children}</UiProviders>
-          </ThemeProvider>
+          <GlobalStyles />
+          <UiProviders>{children}</UiProviders>
         </StyledComponentsRegistry>
       </body>
     </html>

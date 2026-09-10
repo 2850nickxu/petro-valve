@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import styled from "styled-components";
-import { Badge, Box, Button, Flex, Text } from "@bigcommerce/big-design";
+import { Badge, Box, Flex, Text } from "@bigcommerce/big-design";
 import { theme } from "@bigcommerce/big-design-theme";
 import { AdminNav } from "./nav";
+import { LinkButton } from "@/components/ui/link-button";
 
 // The admin chrome. Client-side because the header's burger and the sidebar share one
 // open/closed state: at ≥960px the sidebar is a static column, below that it becomes an
@@ -143,9 +143,7 @@ export function AppShell({
           <HideOnSmall>
             <Badge label={status.label} variant={STATUS_BADGE_VARIANT[status.tone]} />
           </HideOnSmall>
-          <Link href="/staff/simulator">
-            <Button variant="primary">Try the simulator</Button>
-          </Link>
+          <LinkButton href="/staff/simulator" variant="primary">Try the simulator</LinkButton>
         </Flex>
       </Flex>
 

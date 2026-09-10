@@ -1,7 +1,7 @@
-import Link from "next/link";
-import { Box, Button, Flex, Grid, H3, Panel, Text } from "@bigcommerce/big-design";
+import { Box, Flex, Grid, H3, Panel, Text } from "@bigcommerce/big-design";
 import { theme } from "@bigcommerce/big-design-theme";
 import { PageHead } from "@/app/staff/ui";
+import { LinkButton } from "@/components/ui/link-button";
 
 export default function Home() {
   return (
@@ -28,16 +28,12 @@ export default function Home() {
           <Panel>
             <H3 marginBottom="xSmall">Admin console</H3>
             <Text color="secondary60">Dashboard, review queue, sessions, simulator, and settings.</Text>
-            <Link href="/staff">
-              <Button variant="primary">Open admin</Button>
-            </Link>
+            <LinkButton href="/staff" variant="primary">Open admin</LinkButton>
           </Panel>
           <Panel>
             <H3 marginBottom="xSmall">Public demo</H3>
             <Text color="secondary60">Paste a PO and watch the pipeline run — no credentials needed.</Text>
-            <Link href="/demo">
-              <Button>Open demo</Button>
-            </Link>
+            <LinkButton href="/demo">Open demo</LinkButton>
           </Panel>
         </Grid>
       </Box>

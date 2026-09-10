@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { isValidElement } from "react";
 import Link from "next/link";
-import { Badge, Box, Button, Flex, H1, Panel, Small, Text } from "@bigcommerce/big-design";
+import { Badge, Box, Flex, H1, Panel, Small, Text } from "@bigcommerce/big-design";
 import type { Colors } from "@bigcommerce/big-design-theme";
 import { badgeVariant } from "@/lib/ui/badge-variant";
+import { LinkButton } from "@/components/ui/link-button";
 
 // Server-safe presentational primitives shared by the admin screens, built on Big Design.
 
@@ -113,9 +114,7 @@ export function HealthRow({
         {detail}
       </Small>
       {!ok && action ? (
-        <Link href={action.href}>
-          <Button variant="subtle">{action.label}</Button>
-        </Link>
+        <LinkButton href={action.href} variant="subtle">{action.label}</LinkButton>
       ) : null}
     </Flex>
   );

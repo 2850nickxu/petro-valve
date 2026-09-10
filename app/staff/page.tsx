@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { Box, Button, Flex, Grid, Panel, Text } from "@bigcommerce/big-design";
+import { Box, Flex, Grid, Panel, Text } from "@bigcommerce/big-design";
 import { colors } from "@bigcommerce/big-design-theme";
+import { LinkButton } from "@/components/ui/link-button";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { computeMetrics, currentYyyymm } from "@/lib/po-agent/metrics";
@@ -119,12 +120,8 @@ export default async function Dashboard() {
               <li><strong>Enable</strong> the agent.</li>
             </ol>
             <Flex flexWrap="wrap" style={{ gap: 10 }}>
-              <Link href={SETTINGS}>
-                <Button variant="primary">Open Settings</Button>
-              </Link>
-              <Link href="/staff/simulator">
-                <Button variant="secondary">Try the simulator</Button>
-              </Link>
+              <LinkButton href={SETTINGS} variant="primary">Open Settings</LinkButton>
+              <LinkButton href="/staff/simulator" variant="secondary">Try the simulator</LinkButton>
             </Flex>
           </Banner>
         </Box>
@@ -204,9 +201,7 @@ export default async function Dashboard() {
             <EmptyState title="No sessions yet">Processed POs appear here as they arrive.</EmptyState>
           )}
           <Box marginTop="medium">
-            <Link href="/staff/sessions">
-              <Button variant="subtle">All sessions →</Button>
-            </Link>
+            <LinkButton href="/staff/sessions" variant="subtle">All sessions →</LinkButton>
           </Box>
         </Panel>
 

@@ -1,8 +1,8 @@
-import Link from "next/link";
-import { Box, Button, Flex, Panel, Text } from "@bigcommerce/big-design";
+import { Box, Flex, Panel, Text } from "@bigcommerce/big-design";
 import { theme } from "@bigcommerce/big-design-theme";
 import { Simulator } from "@/components/simulator";
 import { PageHead } from "@/app/staff/ui";
+import { LinkButton } from "@/components/ui/link-button";
 
 export const dynamic = "force-dynamic";
 
@@ -47,9 +47,7 @@ export default function DemoPage() {
                 real store, configure rules, and monitor live PO traffic.
               </Text>
             </Box>
-            <Link href="/staff">
-              <Button variant="primary">Go to Admin →</Button>
-            </Link>
+            <LinkButton href="/staff" variant="primary">Go to Admin →</LinkButton>
           </Flex>
         </Panel>
       </Box>

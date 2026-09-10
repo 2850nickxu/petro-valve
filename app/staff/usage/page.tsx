@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { Box, Button, Flex, Grid, Panel, Small, Text } from "@bigcommerce/big-design";
+import { Box, Flex, Grid, Panel, Small, Text } from "@bigcommerce/big-design";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { currentYyyymm } from "@/lib/po-agent/metrics";
 import { parseTokenUsage, usageTotals, type ModelUsage } from "@/lib/po-agent/token-usage";
 import { PageHead, Stat } from "../ui";
 import { Banner, EmptyState } from "@/components/ui/states";
+import { LinkButton } from "@/components/ui/link-button";
 
 export const dynamic = "force-dynamic";
 
@@ -70,11 +71,14 @@ export default async function UsagePage({ searchParams }: { searchParams: Promis
 
       <Flex flexWrap="wrap" marginBottom="large" style={{ gap: 8 }}>
         {months.map((m) => (
-          <Link key={m} href={`/staff/usage?month=${m}`}>
-            <Button type="button" variant={m === ym ? "secondary" : "subtle"} aria-pressed={m === ym}>
-              {formatYm(m)}
-            </Button>
-          </Link>
+          <LinkButton
+            key={m}
+            href={`/staff/usage?month=${m}`}
+            variant={m === ym ? "secondary" : "subtle"}
+            aria-current={m === ym ? "page" : undefined}
+          >
+            {formatYm(m)}
+          </LinkButton>
         ))}
       </Flex>
 
