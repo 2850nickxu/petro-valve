@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import styled from "styled-components";
-import { Badge, Box, Button, Flex, Grid, Input, Panel, Text, Textarea } from "@bigcommerce/big-design";
-import { colors, theme, type Colors } from "@bigcommerce/big-design-theme";
+import { useState, type CSSProperties } from "react";
+import { Badge, Button, Panel, Spinner, TextField, TextareaField } from "@/components/backbone";
 import { useToast } from "@/components/ui/toast";
 import { Banner, EmptyState } from "@/components/ui/states";
+import { Timeline, type StatusTone } from "@/components/ui/detail-widgets";
 import { badgeVariant } from "@/lib/ui/badge-variant";
 import { summarizeOutcome } from "@/lib/po-agent/summary";
 import { formatMoney } from "@/components/ui/money";
@@ -98,33 +97,22 @@ type SimResult = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Left-rule colour for the decision panel, keyed off the shared Badge-variant map
- * (the same `order`/`quote`/`clarify`/`escalate`/`reject` → variant mapping used across
- * the staff surface, so the decision colour is consistent everywhere it appears). */
-const RULE_COLOR: Record<string, keyof Colors> = {
-  primary: "primary40",
-  secondary: "secondary40",
-  success: "success40",
-  warning: "warning40",
-  danger: "danger40",
+/** Audit-event dot colour, in the app's StatusTone vocabulary. */
+const STEP_TONE: Record<string, StatusTone> = {
+  received: "ok",
+  identified: "ok",
+  extracted: "ok",
+  resolved: "ok",
+  triaged: "ok",
+  decided: "sky",
+  reopened: "ok",
+  error: "bad",
+  escalated: "bad",
 };
 
-/** Audit-event dot colour. */
-const STEP_COLOR: Record<string, keyof Colors> = {
-  received: "success40",
-  identified: "success40",
-  extracted: "success40",
-  resolved: "success40",
-  triaged: "success40",
-  decided: "primary40",
-  reopened: "success40",
-  error: "danger40",
-  escalated: "danger40",
-};
-
-function stepColor(event: string, detail?: unknown): keyof Colors {
-  if (STEP_COLOR[event]) return STEP_COLOR[event];
-  return typeof detail === "string" && detail.includes("error") ? "danger40" : "success40";
+function stepTone(event: string, detail?: unknown): StatusTone {
+  if (STEP_TONE[event]) return STEP_TONE[event];
+  return typeof detail === "string" && detail.includes("error") ? "bad" : "ok";
 }
 
 /** Compact, readable rendering of an audit detail blob. */
@@ -139,23 +127,20 @@ function stepDetail(detail: unknown): string {
   return String(detail);
 }
 
-const SKELETON_WIDTHS = ["62%", "100%", "84%", "73%", "91%"];
-
-// Bespoke themed code block — Big Design has no pre-formatted output primitive, so this
-// reads its colours straight from the shared theme (never `props.theme`).
-const CodeBlock = styled.pre`
-  margin: 0;
-  padding: 13px;
-  border-radius: ${theme.borderRadius.normal};
-  background: ${theme.colors.secondary70};
-  color: ${theme.colors.white};
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow: auto;
-`;
+// Backbone has no pre-formatted output primitive; this is a token-driven dark code block.
+const CODE_BLOCK: CSSProperties = {
+  margin: 0,
+  padding: 13,
+  borderRadius: "var(--radius-md)",
+  background: "var(--surface-inverse)",
+  color: "var(--text-inverse)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 12,
+  lineHeight: 1.5,
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  overflow: "auto",
+};
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -231,103 +216,88 @@ export function Simulator({
   const s = result?.session;
   const outcome = s ? summarizeOutcome(s) : null;
   const decisionKind = s?.decision?.kind ?? "";
-  const decisionVariant = decisionKind ? badgeVariant(decisionKind) : "primary";
-  const ruleColor = RULE_COLOR[decisionVariant] ?? "primary40";
+  const decisionTone = decisionKind ? badgeVariant(decisionKind) : "info";
   const currency = s?.extracted?.currency;
 
   return (
-    <Grid gridColumns={{ mobile: "1fr", tablet: "1.2fr 1fr" }} gridGap="14px" style={{ alignItems: "start" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "var(--gap-group)", alignItems: "start" }}>
       {/* ── Left: the PO ── */}
-      <Panel marginBottom="none">
+      <Panel title="Purchase order" bodyStyle={{ gap: "var(--gap-group)" }}>
         {sandbox && (
-          <Box marginBottom="medium">
-            <Banner kind="warn" title="Sandbox — real submissions ON">
-              {sandboxEmails
-                ? "Orders/quotes go to the connected store and buyer emails will send."
-                : "Orders/quotes go to the connected store; buyer emails are suppressed and captured below."}
-            </Banner>
-          </Box>
+          <Banner kind="warn" title="Sandbox — real submissions on">
+            {sandboxEmails
+              ? "Orders/quotes go to the connected store and buyer emails will send."
+              : "Orders/quotes go to the connected store; buyer emails are suppressed and captured below."}
+          </Banner>
         )}
 
-        <Box marginBottom="medium">
-          <Text bold marginBottom="xSmall" style={{ fontSize: 12.5 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+          <span style={{ fontSize: "var(--text-label-size)", fontWeight: "var(--text-label-weight)", letterSpacing: "var(--text-label-tracking)", textTransform: "uppercase", color: "var(--text-muted)" }}>
             Scenario
-          </Text>
-          <Flex flexWrap="wrap" alignItems="center" style={{ gap: 8 }}>
+          </span>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
             {SCENARIOS.map((sc) => (
               <Button
                 key={sc.label}
                 variant={scenario === sc.label ? "primary" : "secondary"}
+                size="micro"
                 onClick={() => handleScenarioChange(sc.label)}
               >
                 {sc.label}
               </Button>
             ))}
-            {scenario === CUSTOM_LABEL && <Badge label="Custom" variant="secondary" />}
-          </Flex>
-        </Box>
+            {scenario === CUSTOM_LABEL && <Badge tone="neutral">Custom</Badge>}
+          </div>
+        </div>
 
-        <Box marginBottom="medium">
-          <Input
-            label="Sender email"
-            value={from}
-            onChange={(e) => {
-              setFrom(e.target.value);
-              handleFormEdit();
-            }}
-          />
-        </Box>
+        <TextField
+          label="Sender email"
+          value={from}
+          onChange={(e) => {
+            setFrom(e.target.value);
+            handleFormEdit();
+          }}
+        />
+        <TextField
+          label="Subject"
+          value={subject}
+          onChange={(e) => {
+            setSubject(e.target.value);
+            handleFormEdit();
+          }}
+        />
+        <TextareaField
+          label="PO body"
+          value={bodyText}
+          onChange={(e) => {
+            setBodyText(e.target.value);
+            handleFormEdit();
+          }}
+          rows={7}
+        />
 
-        <Box marginBottom="medium">
-          <Input
-            label="Subject"
-            value={subject}
-            onChange={(e) => {
-              setSubject(e.target.value);
-              handleFormEdit();
-            }}
-          />
-        </Box>
-
-        <Box marginBottom="medium">
-          <Textarea
-            label="PO body"
-            value={bodyText}
-            onChange={(e) => {
-              setBodyText(e.target.value);
-              handleFormEdit();
-            }}
-            rows={7}
-            style={{ fontSize: 13 }}
-          />
-        </Box>
-
-        <Flex alignItems="center" flexWrap="wrap" style={{ gap: 12 }}>
-          <Button variant="primary" onClick={run} isLoading={loading}>
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <Button variant="primary" onClick={run} loading={loading} icon="arrow-right">
             {loading ? "Running…" : "Run pipeline"}
           </Button>
-          <Text color="secondary60" marginBottom="none" style={{ fontSize: 11.5 }}>
+          <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
             Try &ldquo;pay by credit card&rdquo; for a quote, or an unknown sender for a reject.
-          </Text>
-        </Flex>
+          </span>
+        </div>
 
-        {error && (
-          <Text color="danger" marginTop="small" marginBottom="none">
-            {error}
-          </Text>
-        )}
+        {error && <span style={{ color: "var(--danger-600)" }}>{error}</span>}
 
-        <Text color="secondary60" marginTop="small" marginBottom="none" style={{ fontSize: 12 }}>
+        <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
           {sandbox
             ? "Sandbox mode — submits a REAL order/quote to the connected store (tagged “[PO agent sandbox]”)."
             : "Dry run — never submits an order/quote and never sends email."}
-        </Text>
+        </span>
       </Panel>
 
       {/* ── Right: the decision ── */}
-      <Box>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap-group)" }}>
         {!result && !loading && (
-          <Panel marginBottom="none">
+          <Panel>
             <EmptyState title="Run a PO to see the decision">
               identify → extract → resolve → price → validate → decide
             </EmptyState>
@@ -335,243 +305,165 @@ export function Simulator({
         )}
 
         {loading && (
-          <Panel marginBottom="none">
-            <Flex flexDirection="column" style={{ gap: 10 }}>
-              {SKELETON_WIDTHS.map((w) => (
-                <Box
-                  key={w}
-                  backgroundColor="secondary20"
-                  borderRadius="normal"
-                  style={{ width: w, height: 10 }}
-                />
-              ))}
-            </Flex>
+          <Panel>
+            <Spinner label="Running the pipeline…" />
           </Panel>
         )}
 
         {!loading && result && !result.storeConfigured && (
-          <Panel marginBottom="none" header="Store not configured">
-            <Text color="secondary60" marginBottom="medium">
-              {result.note}
-            </Text>
+          <Panel title="Store not configured" bodyStyle={{ gap: "var(--gap-group)" }}>
+            <span style={{ color: "var(--text-secondary)" }}>{result.note}</span>
             <Banner kind="info">
               Connect a BigCommerce store in <a href="/staff/settings">Settings</a> to run the full pipeline.
             </Banner>
-            {result.extracted ? (
-              <Box marginTop="medium">
-                <CodeBlock>{JSON.stringify(result.extracted, null, 2)}</CodeBlock>
-              </Box>
-            ) : null}
+            {result.extracted ? <pre style={CODE_BLOCK}>{JSON.stringify(result.extracted, null, 2)}</pre> : null}
           </Panel>
         )}
 
         {!loading && s && (
-          <Flex flexDirection="column" style={{ gap: 14 }}>
+          <>
             {result?.sandboxBlocked && (
               <Banner kind="warn" title="Ran as a dry run">
                 Sandbox mode is on but Redis or a store token is missing. No order/quote was placed.
               </Banner>
             )}
 
-            <Panel
-              marginBottom="none"
-              style={{ borderLeftWidth: 4, borderLeftStyle: "solid", borderLeftColor: colors[ruleColor] }}
-            >
-              <Flex flexWrap="wrap" alignItems="center" style={{ gap: 10 }}>
-                <Badge label={decisionKind || "—"} variant={decisionVariant} />
-                <Text color="secondary60" marginBottom="none" style={{ fontSize: 12.5 }}>
-                  {s.decision?.reasons.join(" · ") || outcome?.headline}
-                </Text>
-              </Flex>
-              <Text color="secondary60" marginTop="small" marginBottom="none" style={{ fontSize: 12 }}>
+            <Panel title="Decision" actions={<Badge tone={decisionTone}>{decisionKind || "—"}</Badge>} bodyStyle={{ gap: "var(--space-2)" }}>
+              <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-secondary)" }}>
+                {s.decision?.reasons.join(" · ") || outcome?.headline}
+              </span>
+              <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
                 {s.buyer?.companyName ?? "unidentified sender"}
                 {s.buyer?.email ? ` · ${s.buyer.email}` : ""}
-              </Text>
+              </span>
               {outcome && outcome.reasons.length > 0 && (
-                <Box as="ul" marginTop="small" style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 12.5 }}>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: "var(--text-caption-size)" }}>
                   {outcome.reasons.map((r, i) => (
                     <li key={i}>{r}</li>
                   ))}
-                </Box>
+                </ul>
               )}
             </Panel>
 
             {result?.sandbox && s.result && (s.result.orderId || s.result.quoteId) && (
-              <Panel
-                marginBottom="none"
-                header="Submitted"
-                badge={{ label: result.emailsSent ? "emails sent" : "emails captured", variant: "secondary" }}
-              >
+              <Panel title="Submitted" actions={<Badge tone="neutral">{result.emailsSent ? "emails sent" : "emails captured"}</Badge>} bodyStyle={{ gap: "var(--space-2)" }}>
                 {s.result.orderId && (
-                  <Text marginBottom="small">
-                    Order <span style={{ fontFamily: "monospace", fontWeight: 600 }}>#{s.result.orderId}</span> placed
-                    in the store.
-                  </Text>
+                  <span>
+                    Order <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>#{s.result.orderId}</span> placed in the store.
+                  </span>
                 )}
                 {s.result.quoteId && (
-                  <Text marginBottom="small">
-                    Quote{" "}
-                    <span style={{ fontFamily: "monospace", fontWeight: 600 }}>
-                      {s.result.quoteNumber ?? s.result.quoteId}
-                    </span>{" "}
-                    created.
+                  <span>
+                    Quote <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{s.result.quoteNumber ?? s.result.quoteId}</span> created.
                     {s.result.checkoutUrl && (
                       <>
                         {" "}
-                        <a href={s.result.checkoutUrl} target="_blank" rel="noreferrer">
-                          Checkout link →
-                        </a>{" "}
-                        <Button variant="subtle" onClick={() => copyText(s.result!.checkoutUrl!)}>
-                          Copy
-                        </Button>
+                        <a href={s.result.checkoutUrl} target="_blank" rel="noreferrer">Checkout link →</a>{" "}
+                        <Button variant="ghost" size="micro" icon="copy" onClick={() => copyText(s.result!.checkoutUrl!)}>Copy</Button>
                       </>
                     )}
-                  </Text>
+                  </span>
                 )}
-                <Text color="secondary60" marginBottom="none" style={{ fontSize: 12 }}>
+                <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
                   Tagged &ldquo;[PO agent sandbox]&rdquo; — safe to delete in the store.
-                </Text>
+                </span>
               </Panel>
             )}
 
             {result?.sandbox && !result.emailsSent && result.captured && result.captured.length > 0 && (
-              <Panel
-                marginBottom="none"
-                header="Captured emails"
-                badge={{ label: String(result.captured.length), variant: "secondary" }}
-              >
-                <Flex flexDirection="column" style={{ gap: 12 }}>
-                  {result.captured.map((c, i) => (
-                    <Box key={i}>
-                      <Flex
-                        justifyContent="space-between"
-                        alignItems="center"
-                        flexWrap="wrap"
-                        marginBottom="xxSmall"
-                        style={{ gap: 8 }}
-                      >
-                        <Text color="secondary60" marginBottom="none" style={{ fontSize: 12 }}>
-                          {c.to ? `to ${c.to} · ` : ""}
-                          {c.subject}
-                        </Text>
-                        <Button variant="subtle" onClick={() => copyText(c.text ?? "")}>
-                          Copy
-                        </Button>
-                      </Flex>
-                      <CodeBlock>{c.text}</CodeBlock>
-                    </Box>
-                  ))}
-                </Flex>
+              <Panel title="Captured emails" actions={<Badge tone="neutral" mono>{result.captured.length}</Badge>} bodyStyle={{ gap: 12 }}>
+                {result.captured.map((c, i) => (
+                  <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                      <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
+                        {c.to ? `to ${c.to} · ` : ""}
+                        {c.subject}
+                      </span>
+                      <Button variant="ghost" size="micro" icon="copy" onClick={() => copyText(c.text ?? "")}>Copy</Button>
+                    </div>
+                    <pre style={CODE_BLOCK}>{c.text}</pre>
+                  </div>
+                ))}
               </Panel>
             )}
 
             {s.resolution && s.resolution.length > 0 && (
-              <Panel marginBottom="none" header="Lines">
-                <Flex flexDirection="column">
-                  {s.resolution.map((r, i) => {
-                    const bad = r.issues.some(
-                      (x) => x === "line_unresolved" || x === "line_parent_sku" || x === "price_mismatch",
-                    );
-                    const warn = !bad && r.issues.length > 0;
-                    const tone: keyof Colors = bad ? "danger" : warn ? "warning" : "success";
-                    const rowBg: keyof Colors | undefined = bad ? "danger10" : warn ? "warning10" : undefined;
-                    return (
-                      <Flex
-                        key={i}
-                        justifyContent="space-between"
-                        alignItems="flex-start"
-                        flexWrap="wrap"
-                        backgroundColor={rowBg}
-                        padding="small"
-                        style={{ gap: 10, borderTop: i > 0 ? `1px solid ${colors.secondary20}` : undefined }}
-                      >
-                        <Box style={{ flex: "1 1 230px", minWidth: 0 }}>
-                          <Text marginBottom="none" style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 600 }}>
-                            {r.matchedSku ?? "— no match —"}
-                          </Text>
-                          <Text
-                            color="secondary60"
-                            marginTop="xxSmall"
-                            marginBottom="none"
-                            style={{ fontFamily: "monospace", fontSize: 12 }}
-                          >
-                            read from: “{r.line.rawText.trim()}”
-                          </Text>
-                          {r.parentSku && r.variantChoices?.length ? (
-                            <Text
-                              color="secondary60"
-                              marginTop="xxSmall"
-                              marginBottom="none"
-                              style={{ fontFamily: "monospace", fontSize: 12 }}
-                            >
-                              parent SKU — choose one:{" "}
-                              {r.variantChoices
-                                .slice(0, 4)
-                                .map((c) =>
-                                  c.unitPrice != null ? `${c.sku} @ ${formatMoney(c.unitPrice, currency)}` : c.sku,
-                                )
-                                .join(", ")}
-                              {(r.variantChoiceCount ?? r.variantChoices.length) > 4
-                                ? ` +${(r.variantChoiceCount ?? r.variantChoices.length) - 4} more`
-                                : ""}
-                            </Text>
-                          ) : null}
-                        </Box>
-                        <Text
-                          marginBottom="none"
-                          style={{ fontFamily: "monospace", fontSize: 12.5, color: colors.secondary60, flex: "none" }}
-                        >
-                          {r.line.quantity ?? "?"} ×{" "}
-                          {r.calculatedUnitPrice != null ? formatMoney(r.calculatedUnitPrice, currency) : "?"}
-                        </Text>
-                        <Text
-                          bold
-                          marginBottom="none"
-                          style={{ fontFamily: "monospace", fontSize: 11.5, color: colors[tone], flex: "none" }}
-                        >
-                          {r.issues.join(", ") || "ok"}
-                        </Text>
-                      </Flex>
-                    );
-                  })}
-                </Flex>
+              <Panel title="Lines" padded={false}>
+                {s.resolution.map((r, i) => {
+                  const bad = r.issues.some((x) => x === "line_unresolved" || x === "line_parent_sku" || x === "price_mismatch");
+                  const warn = !bad && r.issues.length > 0;
+                  const rowBg = bad ? "var(--danger-tint)" : warn ? "var(--warning-tint)" : undefined;
+                  const issueColor = bad ? "var(--danger-600)" : warn ? "var(--warning-600)" : "var(--success-600)";
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        flexWrap: "wrap",
+                        gap: 10,
+                        padding: "var(--space-2-5) var(--panel-pad)",
+                        background: rowBg,
+                        borderTop: i > 0 ? "var(--border-w) solid var(--border-subtle)" : undefined,
+                      }}
+                    >
+                      <span style={{ flex: "1 1 230px", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600 }}>{r.matchedSku ?? "— no match —"}</span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-metadata)" }}>read from: “{r.line.rawText.trim()}”</span>
+                        {r.parentSku && r.variantChoices?.length ? (
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-metadata)" }}>
+                            parent SKU — choose one:{" "}
+                            {r.variantChoices
+                              .slice(0, 4)
+                              .map((c) => (c.unitPrice != null ? `${c.sku} @ ${formatMoney(c.unitPrice, currency)}` : c.sku))
+                              .join(", ")}
+                            {(r.variantChoiceCount ?? r.variantChoices.length) > 4
+                              ? ` +${(r.variantChoiceCount ?? r.variantChoices.length) - 4} more`
+                              : ""}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--text-metadata)", flex: "none" }}>
+                        {r.line.quantity ?? "?"} × {r.calculatedUnitPrice != null ? formatMoney(r.calculatedUnitPrice, currency) : "?"}
+                      </span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: 700, color: issueColor, flex: "none" }}>
+                        {r.issues.join(", ") || "ok"}
+                      </span>
+                    </div>
+                  );
+                })}
               </Panel>
             )}
 
             {s.validation && s.validation.length > 0 && (
-              <Panel marginBottom="none" header="Issues">
-                <Box as="ul" style={{ margin: 0, paddingLeft: 18, fontSize: 12.5 }}>
+              <Panel title="Issues">
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: "var(--text-caption-size)" }}>
                   {s.validation.map((v, i) => (
                     <li key={i}>
                       <code>{v.kind}</code>
                       {v.lineRef ? ` (${v.lineRef})` : ""} — {v.message}
                     </li>
                   ))}
-                </Box>
+                </ul>
               </Panel>
             )}
 
             {s.audit && s.audit.length > 0 && (
-              <Panel marginBottom="none" header="Pipeline">
-                <Flex flexDirection="column" style={{ gap: 8 }}>
-                  {s.audit.map((a, i) => (
-                    <Flex key={i} alignItems="flex-start" style={{ gap: 8 }}>
-                      <Box
-                        backgroundColor={stepColor(a.event, a.detail)}
-                        borderRadius="circle"
-                        style={{ width: 7, height: 7, marginTop: 5, flex: "none" }}
-                      />
-                      <Text marginBottom="none" style={{ fontSize: 12 }}>
-                        <strong>{a.event}</strong> <span>{stepDetail(a.detail)}</span>
-                      </Text>
-                    </Flex>
-                  ))}
-                </Flex>
+              <Panel title="Pipeline">
+                <Timeline
+                  items={s.audit.map((a, i) => ({
+                    key: i,
+                    tone: stepTone(a.event, a.detail),
+                    title: a.event,
+                    detail: stepDetail(a.detail),
+                  }))}
+                />
               </Panel>
             )}
-          </Flex>
+          </>
         )}
-      </Box>
-    </Grid>
+      </div>
+    </div>
   );
 }

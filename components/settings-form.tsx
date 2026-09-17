@@ -4,20 +4,14 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   Badge,
-  Box,
   Button,
-  Counter,
-  Flex,
-  Grid,
-  Input,
   Panel,
-  Select,
-  Small,
+  SelectField,
   Switch,
   Tabs,
-  Text,
-} from "@bigcommerce/big-design";
-import { colors } from "@bigcommerce/big-design-theme";
+  TabPanel,
+  TextField,
+} from "@/components/backbone";
 import { useToast } from "@/components/ui/toast";
 import { GmailConnect } from "@/components/gmail-connect";
 
@@ -65,6 +59,12 @@ const TABS: Array<{ id: TabId; label: string; sub: string }> = [
   { id: "store", label: "Store", sub: "The BigCommerce store the agent transacts against." },
 ];
 
+const GRID_TWO: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+  gap: "var(--gap-group)",
+};
+
 // ── Controls ──────────────────────────────────────────────────────────────────
 // Defined at module scope: a component declared inside the parent's render would be a new
 // type on every keystroke, remounting the input and dropping focus mid-typing.
@@ -83,67 +83,48 @@ function SettingField({
   wide?: boolean;
 }) {
   if (!def) return null;
-  const label: ReactNode = def.secret ? (
-    <>
-      {def.label}
-      <span title="Encrypted at rest"> 🔒</span>
-    </>
-  ) : (
-    def.label
-  );
+  // Secrets note that they are encrypted in their help text — Backbone's voice has no emoji.
+  const help = def.secret ? [def.help, "Encrypted at rest."].filter(Boolean).join(" ") : def.help;
 
   if (def.type === "select") {
     return (
-      <Box style={wide ? { gridColumn: "1 / -1" } : undefined}>
-        <Select
-          label={label}
-          description={def.help}
-          value={value}
-          options={[
-            { value: "", content: "(default)" },
-            ...(def.options ?? []).map((o) => ({ value: o, content: o })),
-          ]}
-          onOptionChange={(v) => onChange(v ?? "")}
-        />
-      </Box>
+      <SelectField
+        label={def.label}
+        help={help}
+        value={value}
+        placeholder="(default)"
+        options={(def.options ?? []).map((o) => ({ value: o, label: o }))}
+        onChange={(e) => onChange(e.target.value)}
+        style={wide ? { gridColumn: "1 / -1" } : undefined}
+      />
     );
   }
 
   return (
-    <Box style={wide ? { gridColumn: "1 / -1" } : undefined}>
-      <Input
-        label={label}
-        description={def.help}
-        type={def.secret ? "password" : def.type === "number" ? "number" : "text"}
-        value={value}
-        placeholder={def.secret && configured ? "•••• saved (enter to replace)" : (def.placeholder ?? "")}
-        onChange={(e) => onChange(e.target.value)}
-        autoComplete="off"
-      />
-    </Box>
+    <TextField
+      label={def.label}
+      help={help}
+      type={def.secret ? "password" : def.type === "number" ? "number" : "text"}
+      value={value}
+      placeholder={def.secret && configured ? "•••• saved (enter to replace)" : (def.placeholder ?? "")}
+      onChange={(e) => onChange(e.target.value)}
+      autoComplete="off"
+      style={wide ? { gridColumn: "1 / -1" } : undefined}
+    />
   );
 }
 
 function SettingToggle({ def, on, onToggle }: { def?: FieldDef; on: boolean; onToggle: () => void }) {
   if (!def) return null;
   return (
-    <Flex justifyContent="space-between" alignItems="center" paddingVertical="small" style={{ gap: 12 }}>
-      <Box style={{ minWidth: 0 }}>
-        <Text bold marginBottom="none">
-          {def.label}
-        </Text>
-        {def.help ? (
-          <Small color="secondary60" marginBottom="none">
-            {def.help}
-          </Small>
-        ) : null}
-      </Box>
-      <Switch checked={on} onChange={onToggle} aria-label={def.label} style={{ flex: "none" }} />
-    </Flex>
+    <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingTop: "var(--space-1)", paddingBottom: "var(--space-1)" }}>
+      <Switch checked={on} onChange={onToggle} label={def.label} />
+      {def.help ? <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>{def.help}</span> : null}
+    </div>
   );
 }
 
-function SettingSlider({
+function SettingNumber({
   def,
   value,
   min,
@@ -164,12 +145,18 @@ function SettingSlider({
   // Some field labels already carry the unit (e.g. "Price tolerance %"); avoid doubling it up.
   const showSuffix = suffix && !def.label.trim().endsWith(suffix.trim());
   return (
-    <Counter
+    <TextField
       label={showSuffix ? `${def.label} (${suffix})` : def.label}
-      description={note}
-      value={value}
+      help={typeof note === "string" ? note : undefined}
+      type="number"
+      min={min}
+      max={max}
       step={1}
-      onCountChange={(n) => onChange(String(Math.min(max, Math.max(min, n))))}
+      value={String(value)}
+      onChange={(e) => {
+        const n = Number(e.target.value);
+        onChange(String(Math.min(max, Math.max(min, Number.isFinite(n) ? n : min))));
+      }}
     />
   );
 }
@@ -321,61 +308,55 @@ export function SettingsForm({
     }
   }
 
-  const active = TABS.find((t) => t.id === tab)!;
+  const subOf = (id: TabId) => TABS.find((t) => t.id === id)?.sub;
   const msg = testMsg[tab];
   const tolerance = numOf("PO_AGENT_PRICE_TOLERANCE_PCT", defaults.priceTolerancePct);
 
   const healthBadge = (
-    <Box marginBottom="medium">
-      <Badge label={health[tab] ? "configured" : "incomplete"} variant={health[tab] ? "success" : "warning"} />
-    </Box>
+    <Badge tone={health[tab] ? "success" : "warning"}>{health[tab] ? "configured" : "incomplete"}</Badge>
   );
 
   const saveBar = (testLabel?: string) => (
-    <Flex alignItems="center" flexWrap="wrap" marginTop="medium" style={{ gap: 12 }}>
-      <Button variant="primary" onClick={save} isLoading={saving}>
+    <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, marginTop: "var(--gap-group)" }}>
+      <Button variant="primary" onClick={save} loading={saving}>
         Save
       </Button>
       {tab !== "agent" && (
-        <Button variant="secondary" onClick={test} isLoading={testing}>
+        <Button variant="secondary" onClick={test} loading={testing}>
           {testLabel ?? "Test connection"}
         </Button>
       )}
       {msg && (
-        <Text color={msg.ok ? "success" : "danger"} bold marginBottom="none" style={{ fontSize: 12.5 }}>
-          {msg.ok ? "✓ " : "✗ "}
+        <span style={{ fontSize: "var(--text-caption-size)", fontWeight: 600, color: msg.ok ? "var(--success-600)" : "var(--danger-600)" }}>
           {msg.detail}
-        </Text>
+        </span>
       )}
-      {dirty && !saving && <Badge label="Unsaved changes" variant="warning" />}
-    </Flex>
+      {dirty && !saving && <Badge tone="warning">Unsaved changes</Badge>}
+    </div>
   );
 
   return (
     <>
-      <Text color="secondary60" style={{ fontSize: 13, margin: "-14px 0 18px" }}>
-        {active.sub}
-      </Text>
-
-      <Box marginBottom="medium">
-        <Tabs
-          activeTab={tab}
-          onTabClick={(id) => setTab(id as TabId)}
-          items={TABS.map((t) => ({ id: t.id, title: t.label }))}
-        />
-      </Box>
+      <Tabs
+        label="Settings sections"
+        idPrefix="settings"
+        tabs={TABS.map((t) => ({ value: t.id, label: t.label }))}
+        value={tab}
+        onChange={(v) => setTab(v as TabId)}
+      />
 
       {/* ── Agent ── */}
-      {tab === "agent" && (
-        <Panel>
-          {healthBadge}
-          {toggle("PO_AGENT_ENABLED", defaults.enabled)}
-          {toggle("PO_AGENT_FIRST_ORDER_CONFIRM", defaults.firstOrderConfirm)}
-          {toggle("PO_AGENT_SIMULATOR_SEND", defaults.simulatorSend)}
-          {toggle("PO_AGENT_SIMULATOR_SEND_EMAILS", defaults.simulatorSendEmails)}
+      <TabPanel value="agent" activeValue={tab} idPrefix="settings">
+        <Panel title="Agent" meta={subOf("agent")} actions={healthBadge} bodyStyle={{ gap: "var(--gap-group)" }}>
+          <div>
+            {toggle("PO_AGENT_ENABLED", defaults.enabled)}
+            {toggle("PO_AGENT_FIRST_ORDER_CONFIRM", defaults.firstOrderConfirm)}
+            {toggle("PO_AGENT_SIMULATOR_SEND", defaults.simulatorSend)}
+            {toggle("PO_AGENT_SIMULATOR_SEND_EMAILS", defaults.simulatorSendEmails)}
+          </div>
 
-          <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px" marginTop="medium">
-            <SettingSlider
+          <div style={GRID_TWO}>
+            <SettingNumber
               def={byKey.PO_AGENT_PRICE_TOLERANCE_PCT}
               value={tolerance}
               min={0}
@@ -388,7 +369,7 @@ export function SettingsForm({
               }
               onChange={(v) => set("PO_AGENT_PRICE_TOLERANCE_PCT", v)}
             />
-            <SettingSlider
+            <SettingNumber
               def={byKey.PO_AGENT_MAX_CLARIFICATIONS}
               value={numOf("PO_AGENT_MAX_CLARIFICATIONS", defaults.maxClarifications)}
               min={0}
@@ -396,41 +377,39 @@ export function SettingsForm({
               note="Question rounds before we escalate instead of asking again."
               onChange={(v) => set("PO_AGENT_MAX_CLARIFICATIONS", v)}
             />
-          </Grid>
+          </div>
 
-          <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px" marginTop="medium">
+          <div style={GRID_TWO}>
             {field("PO_AGENT_MODE")}
             {field("PO_AGENT_DAILY_SUBMIT_CAP")}
             {field("PO_AGENT_PO_PAYMENT_CODES", true)}
-          </Grid>
+          </div>
 
           {saveBar()}
         </Panel>
-      )}
+      </TabPanel>
 
       {/* ── AI model ── */}
-      {tab === "ai" && (
-        <Panel>
-          {healthBadge}
-          <Text color="secondary60" marginBottom="medium" style={{ fontSize: 13, lineHeight: 1.6 }}>
+      <TabPanel value="ai" activeValue={tab} idPrefix="settings">
+        <Panel title="AI model" actions={healthBadge} bodyStyle={{ gap: "var(--gap-group)" }}>
+          <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-secondary)", lineHeight: 1.6 }}>
             Bring your own model as <code>provider:model-id</code>. Omit it entirely and the built-in heuristic
             extractor runs free of charge — an LLM is much better on messy PDFs.
-          </Text>
-          <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px">
+          </span>
+          <div style={GRID_TWO}>
             {field("PO_AGENT_MODEL")}
             {field("ANTHROPIC_API_KEY")}
             {field("OPENAI_API_KEY")}
             {field("GOOGLE_GENERATIVE_AI_API_KEY")}
-          </Grid>
+          </div>
           {saveBar("Test & save")}
         </Panel>
-      )}
+      </TabPanel>
 
       {/* ── Email channel ── */}
-      {tab === "channel" && (
-        <Panel>
-          {healthBadge}
-          <Flex marginBottom="medium" style={{ gap: 8 }}>
+      <TabPanel value="channel" activeValue={tab} idPrefix="settings">
+        <Panel title="Email channel" actions={healthBadge} bodyStyle={{ gap: "var(--gap-group)" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {(["google", "microsoft"] as const).map((c) => (
               <Button
                 key={c}
@@ -440,111 +419,105 @@ export function SettingsForm({
                 {c === "google" ? "Gmail" : "Microsoft Graph"}
               </Button>
             ))}
-          </Flex>
+          </div>
 
-          <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px">
+          <div style={GRID_TWO}>
             {field("PO_AGENT_MAILBOX")}
             {field("PO_AGENT_INBOUND_SECRET")}
-          </Grid>
+          </div>
 
           {selectedChannel === "google" ? (
             <>
-              <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px" marginTop="medium">
+              <div style={GRID_TWO}>
                 {field("GOOGLE_PO_CLIENT_ID")}
                 {field("GOOGLE_PO_CLIENT_SECRET")}
                 {field("GOOGLE_PO_REFRESH_TOKEN")}
                 {field("GOOGLE_PO_PUBSUB_TOPIC")}
-              </Grid>
-              <Box marginTop="medium">
-                <Text bold marginBottom="small">
-                  Connect the mailbox
-                </Text>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                <span style={{ fontWeight: "var(--weight-semibold)" }}>Connect the mailbox</span>
                 <GmailConnect origin={origin} />
-              </Box>
+              </div>
             </>
           ) : (
-            <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px" marginTop="medium">
+            <div style={GRID_TWO}>
               {field("MS_PO_TENANT_ID")}
               {field("MS_PO_CLIENT_ID")}
               {field("MS_PO_CLIENT_SECRET")}
               {field("MS_PO_MAILBOX")}
-            </Grid>
+            </div>
           )}
 
           {saveBar("Test channel")}
         </Panel>
-      )}
+      </TabPanel>
 
       {/* ── Escalation ── */}
-      {tab === "escalation" && (
-        <Panel>
-          {healthBadge}
-          <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px">
+      <TabPanel value="escalation" activeValue={tab} idPrefix="settings">
+        <Panel title="Escalation" meta={subOf("escalation")} actions={healthBadge} bodyStyle={{ gap: "var(--gap-group)" }}>
+          <div style={GRID_TWO}>
             {field("PO_AGENT_ESCALATION_EMAIL")}
             {field("PO_AGENT_SLACK_WEBHOOK_URL")}
-          </Grid>
-          <Text color="secondary60" marginTop="small" style={{ fontSize: 12 }}>
+          </div>
+          <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
             Escalations always land in the Inbox; email and Slack are extra nudges.
-          </Text>
+          </span>
           {toggle("PO_AGENT_FORWARD_PRICE_MISMATCH", defaults.forwardPriceMismatch)}
           {saveBar("Send test")}
         </Panel>
-      )}
+      </TabPanel>
 
       {/* ── Store ── */}
-      {tab === "store" && (
-        <Panel>
-          {healthBadge}
-          <Text color="secondary60" marginBottom="medium" style={{ fontSize: 13, lineHeight: 1.6 }}>
+      <TabPanel value="store" activeValue={tab} idPrefix="settings">
+        <Panel title="Store" actions={healthBadge} bodyStyle={{ gap: "var(--gap-group)" }}>
+          <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-secondary)", lineHeight: 1.6 }}>
             Installing the app supplies its own per-store OAuth token automatically. These fields are the manual
             single-store override.
-          </Text>
-          <Grid gridColumns={{ mobile: "1fr", tablet: "1fr 1fr" }} gridGap="16px">
+          </span>
+          <div style={GRID_TWO}>
             {field("BIGCOMMERCE_STORE_HASH")}
             {field("BIGCOMMERCE_ACCESS_TOKEN")}
             {field("BIGCOMMERCE_CHANNEL_ID")}
-          </Grid>
+          </div>
 
-          <Box marginTop="medium">
-            <Text bold marginBottom="small">
-              Installed stores
-            </Text>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+            <span style={{ fontWeight: "var(--weight-semibold)" }}>Installed stores</span>
             {installs.length ? (
-              <Box border="box" borderRadius="normal">
+              <div style={{ border: "var(--border-w) solid var(--border-default)", borderRadius: "var(--radius-md)" }}>
                 {installs.map((i, idx) => (
-                  <Flex
+                  <div
                     key={i.storeHash}
-                    justifyContent="space-between"
-                    alignItems="center"
-                    flexWrap="wrap"
-                    padding="small"
-                    style={{ gap: 10, borderTop: idx > 0 ? `1px solid ${colors.secondary20}` : undefined }}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: 10,
+                      padding: "var(--space-2-5) var(--space-3)",
+                      borderTop: idx > 0 ? "var(--border-w) solid var(--border-subtle)" : undefined,
+                    }}
                   >
-                    <Box style={{ flex: "1 1 200px", minWidth: 0 }}>
-                      <Text bold marginBottom="none" style={{ fontFamily: "monospace", fontSize: 13 }}>
-                        {i.storeHash}
-                      </Text>
-                      <Small color="secondary60" marginBottom="none">
-                        {i.ownerEmail ?? "unknown owner"}
-                      </Small>
-                    </Box>
-                    <Small color="secondary60" marginBottom="none" style={{ fontFamily: "monospace" }}>
+                    <span style={{ flex: "1 1 200px", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-primary)" }}>{i.storeHash}</span>
+                      <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>{i.ownerEmail ?? "unknown owner"}</span>
+                    </span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
                       {i.installedAt.slice(0, 16).replace("T", " ")}
-                    </Small>
-                    <Badge label="OAuth (per-store)" variant="secondary" />
-                  </Flex>
+                    </span>
+                    <Badge tone="neutral">OAuth (per-store)</Badge>
+                  </div>
                 ))}
-              </Box>
+              </div>
             ) : (
-              <Text color="secondary60" marginBottom="none" style={{ fontSize: 12.5 }}>
+              <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
                 No app installs yet — the agent uses the deployment (env/global) settings.
-              </Text>
+              </span>
             )}
-          </Box>
+          </div>
 
           {saveBar("Test store")}
         </Panel>
-      )}
+      </TabPanel>
     </>
   );
 }

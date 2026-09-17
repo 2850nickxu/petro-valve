@@ -1,0 +1,8 @@
+/* Motion is functional: short, linear-ish, no bounce, nothing decorative. */
+:root {
+  --dur-instant: 90ms; /* @kind other */
+  --dur-fast: 120ms; /* @kind other */
+  --dur-spin: 640ms; /* @kind other */
+  --dur-shimmer: 1200ms; /* @kind other */
+  --ease-default: ease; /* @kind other */
+}

@@ -1,0 +1,27 @@
+/* Backbone type. Inter for interface, Roboto Mono for code, identifiers, logs
+   and dense numeric columns. Ordinary quantities are UI-font tabular figures.
+   Nothing above 30px — this is not a marketing site.
+
+   Sizes that move with density (title, section, body, caption, metric) are
+   defined in tokens/density.css. This file holds the fixed ends of the scale,
+   the weights and the tracking. */
+:root {
+  --text-display-size: 30px;   --text-display-line: 36px;  --text-display-weight: 600; --text-display-tracking: -0.02em;
+  --text-title-weight: 600;    --text-title-tracking: -0.015em;
+  --text-section-weight: 600;  --text-section-tracking: -0.01em;
+  --text-heading-size: 16px;   --text-heading-line: 24px;  --text-heading-weight: 600; --text-heading-tracking: -0.01em;
+  --text-subheading-weight: 600;
+  --text-body-weight: 400;
+  --text-caption-weight: 400;
+  --text-label-size: 11px;     --text-label-line: 16px;    --text-label-weight: 600;   --text-label-tracking: 0.08em;
+  --text-micro-size: 10px;     --text-micro-line: 12px;
+  --text-metric-weight: 500;   --text-metric-tracking: -0.02em;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Figure style. Use UI tabular for ordinary quantities, mono for identifiers. */
+  --numeric-tabular: tabular-nums; /* @kind other */
+}

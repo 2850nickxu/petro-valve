@@ -1,0 +1,89 @@
+/* Backbone density.
+   Two densities, one attribute. `data-density="standard"` is the default and is
+   what a general application screen should use; `data-density="compact"` is for
+   sustained scanning and data-heavy work. Density is not a table setting — it
+   moves typography, controls, navigation, spacing and rows together.
+
+   Nest freely: a standard page shell containing a compact table is
+   <main data-density="standard"> … <div data-density="compact"><DataTable/></div>
+   because every token below is inherited, not global. */
+
+:root,
+[data-density='standard'] {
+  /* Type */
+  --text-title-size: 24px;      --text-title-line: 32px;
+  --text-section-size: 16px;    --text-section-line: 24px;
+  --text-subheading-size: 13px; --text-subheading-line: 18px;
+  --text-body-size: 14px;       --text-body-line: 22px;
+  --text-caption-size: 12px;    --text-caption-line: 18px;
+  --text-metric-size: 24px;     --text-metric-line: 30px;
+  --control-font-size: 13px;
+
+  /* Controls */
+  --control-h-micro: 28px;
+  --control-h-default: 36px;
+  --control-h-large: 44px;
+  --field-pad-x: 12px;
+
+  /* Rows and navigation */
+  --row-h: 40px;
+  --table-head-h: 36px;
+  --cell-pad-x: 14px;
+  --nav-item-h: 36px;
+
+  /* Layout rhythm */
+  --page-pad: 24px;
+  --panel-pad: 20px;
+  --panel-gutter: 20px;
+  --gap-within: 12px;   /* between items inside one group */
+  --gap-group: 20px;    /* between sibling groups in a section */
+  --gap-section: 32px;  /* between major sections of a page */
+}
+
+[data-density='compact'] {
+  --text-title-size: 20px;      --text-title-line: 28px;
+  --text-section-size: 14px;    --text-section-line: 20px;
+  --text-subheading-size: 12px; --text-subheading-line: 16px;
+  --text-body-size: 13px;       --text-body-line: 20px;
+  --text-caption-size: 12px;    --text-caption-line: 16px;
+  --text-metric-size: 20px;     --text-metric-line: 24px;
+  --control-font-size: 12px;
+
+  --control-h-micro: 24px;
+  --control-h-default: 32px;
+  --control-h-large: 40px;
+  --field-pad-x: 10px;
+
+  --row-h: 32px;
+  --table-head-h: 30px;
+  --cell-pad-x: 10px;
+  --nav-item-h: 30px;
+
+  --page-pad: 20px;
+  --panel-pad: 14px;
+  --panel-gutter: 12px;
+  --gap-within: 8px;
+  --gap-group: 14px;
+  --gap-section: 20px;
+}
+
+/* Touch is not a density. A coarse pointer gets real targets in both densities;
+   it does not get compact type. */
+@media (pointer: coarse) {
+  :root, [data-density] {
+    --control-h-micro: 32px;
+    --control-h-default: 44px;
+    --control-h-large: 48px;
+    --row-h: 48px;
+    --nav-item-h: 44px;
+  }
+}
+
+/* Narrow viewports lose page padding before they lose anything else. */
+@media (max-width: 720px) {
+  :root, [data-density] {
+    --page-pad: 16px;
+    --panel-gutter: 12px;
+    --gap-section: 24px;
+  }
+}

@@ -1,0 +1,30 @@
+/* 4px base, with a 6 and a 10 in it because 32px controls need odd insets.
+   This file holds only the raw scale and the fixed frame. Everything that
+   changes with density — control heights, row heights, page padding, panel
+   padding, section gaps — lives in tokens/density.css. */
+:root {
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Fixed frame — the app chrome does not change with content density */
+  --control-h-header: 48px;
+  --sidebar-w: 232px;
+  --sidebar-w-collapsed: 56px;
+  --content-max: 1080px;
+  --content-max-form: 680px;
+  --touch-min: 44px;
+
+  /* Fixed small geometry — deliberately not density-scaled. A 16px checkbox is
+     a 16px checkbox in both densities; only its hit area grows. */
+  --box-sm: 16px;
+  --dot-sm: 8px;
+}

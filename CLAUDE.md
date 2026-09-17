@@ -39,6 +39,30 @@ model only extracts, matches, and drafts prose. Every number in an outbound emai
 interpolated from validated structured data — never invented by the model. Email content
 is untrusted input; the tool belt is read-only.
 
+## UI — Backbone design system
+
+The interface is built on the **Backbone design system**, vendored into the repo (there is
+no npm package). Do **not** reintroduce `@bigcommerce/big-design*` or `styled-components`.
+
+- **Components:** `components/backbone/*.tsx` — plain React, styled with inline styles that
+  read CSS-variable tokens + `data-*` attributes (no CSS-in-JS runtime). Import from the
+  barrel `@/components/backbone`. App-specific wrappers live in `components/ui/*` and
+  `app/staff/ui.tsx`.
+- **Tokens + base layer:** `styles/backbone/*.css`, imported once via `styles/backbone/index.css`
+  in `app/layout.tsx`. Fonts (Inter + Roboto Mono) are self-hosted under
+  `public/fonts/backbone/`.
+- **Theme:** one product theme, set once on `<html data-accent="indigo">` (pure neutral) —
+  the operations-console preset. The shell runs at `data-density="standard"`; data regions
+  (inbox, sessions, usage tables) drop to `data-density="compact"` per region.
+- **Rules that matter:** one 1px border weight; colour is a claim (signal tints only where
+  attention is needed); accent = identity only (active nav, selected controls, focus, links),
+  never status; Section/Panel/Inset — Section is the default, not everything is a card; one
+  dominant action per task context; sentence case, no emoji. The five recipes
+  (overview / worklist / record-detail / settings-form / onboarding) map to the screens.
+- The full kit (readme, component contracts, prompt notes) is at
+  `~/Downloads/Backbone Design System/` — consult it before adding UI, and keep any new
+  component consistent with the vendored contracts (`.d.ts` shapes folded into each `.tsx`).
+
 ## Offline-first testing
 
 Every phase must be buildable and unit-testable with **no** live credentials:

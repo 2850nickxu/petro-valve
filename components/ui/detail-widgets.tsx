@@ -1,41 +1,34 @@
 import { Fragment, type ReactNode } from "react";
-import styled from "styled-components";
-import { theme } from "@bigcommerce/big-design-theme";
-import type { Colors } from "@bigcommerce/big-design-theme";
+import { InlineMessage } from "@/components/backbone";
 
-// Bespoke, presentation-only widgets the PO inbox detail screens need that Big Design has
-// no equivalent for: the audit-trail timeline, key/value blocks, the AI-extraction card,
-// the escalation callout, and status dots. Visuals are ported from the old Silk stylesheet's
-// rules (the timeline row, key/value block, AI-extraction card, escalation callout, and
-// status dot classes — since removed); every color here reads from the Big Design theme,
-// never from the old CSS custom properties.
+// App-specific, presentation-only widgets the PO inbox detail screens need. Backbone ships
+// a Timeline and a FieldList, but the audit trail here carries a tone dot, an actor pill and
+// a free-form detail per row, and the record's key/value blocks have their own layouts — so
+// these are composed directly from Backbone tokens (the system explicitly allows building
+// app widgets this way). Every colour is a token; nothing is hard-coded. The escalation
+// callout maps to Backbone's InlineMessage. All server-safe (no client hooks).
 
 /* ---------------------------------------------------------------- StatusDot */
 
 export type StatusTone = "ok" | "bad" | "warn" | "sage" | "sky";
 
-/** Nearest Big Design token for each of the old five dot colors. "sage" (routine pipeline
- * events) and "sky" (informational actions) have no direct Big Design equivalent, so they
- * borrow secondary/primary the same way the rest of this migration maps them. */
-const DOT_COLOR: Record<StatusTone, keyof Colors> = {
-  ok: "success40",
-  bad: "danger40",
-  warn: "warning40",
-  sage: "secondary40",
-  sky: "primary40",
+// The audit trail's five dot roles, mapped to signal/neutral tokens. "sage" (routine
+// pipeline events) is neutral; "sky" (informational actions) is info.
+const DOT_COLOR: Record<StatusTone, string> = {
+  ok: "var(--success-500)",
+  bad: "var(--danger-500)",
+  warn: "var(--warning-500)",
+  sage: "var(--gray-400)",
+  sky: "var(--info-500)",
 };
 
-const Dot = styled.span<{ $tone: StatusTone }>`
-  display: inline-block;
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: ${(p) => theme.colors[DOT_COLOR[p.$tone]]};
-`;
-
 export function StatusDot({ tone }: { tone: StatusTone }) {
-  return <Dot $tone={tone} aria-hidden="true" />;
+  return (
+    <span
+      aria-hidden="true"
+      style={{ display: "inline-block", flex: "none", width: 8, height: 8, borderRadius: "var(--radius-full)", background: DOT_COLOR[tone] }}
+    />
+  );
 }
 
 /* ---------------------------------------------------------------- Timeline */
@@ -53,73 +46,54 @@ export interface TimelineItem {
   time?: ReactNode;
 }
 
-const TimelineRow = styled.div`
-  display: flex;
-  gap: ${theme.spacing.small};
-  align-items: baseline;
-  padding-bottom: ${theme.spacing.small};
-
-  &:last-child {
-    padding-bottom: 0;
-  }
-`;
-
-const TimelineDotWrap = styled.span`
-  align-self: center;
-  display: inline-flex;
-`;
-
-const TimelineText = styled.div`
-  min-width: 0;
-  font-size: 12.5px;
-`;
-
-const TimelineTitle = styled.strong`
-  color: ${theme.colors.secondary70};
-  font-variant-numeric: tabular-nums;
-`;
-
-const TimelineTag = styled.span`
-  display: inline-block;
-  background: ${theme.colors.secondary10};
-  border: 1px solid ${theme.colors.secondary20};
-  border-radius: 3px;
-  padding: 2px 8px;
-  margin: 0 6px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${theme.colors.secondary60};
-`;
-
-const TimelineDetail = styled.span`
-  color: ${theme.colors.secondary60};
-`;
-
-const TimelineAt = styled.div`
-  margin-left: auto;
-  flex: none;
-  font-size: 11px;
-  color: ${theme.colors.secondary50};
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-`;
-
 /** Audit-trail / pipeline-step list — a status dot, event text, and a right-aligned time. */
 export function Timeline({ items }: { items: TimelineItem[] }) {
   return (
     <div>
       {items.map((it) => (
-        <TimelineRow key={it.key}>
-          <TimelineDotWrap>
+        <div
+          key={it.key}
+          style={{ display: "flex", gap: "var(--space-2)", alignItems: "baseline", paddingBottom: "var(--space-2)" }}
+        >
+          <span style={{ alignSelf: "center", display: "inline-flex" }}>
             <StatusDot tone={it.tone} />
-          </TimelineDotWrap>
-          <TimelineText>
-            <TimelineTitle>{it.title}</TimelineTitle>
-            {it.tag ? <TimelineTag>{it.tag}</TimelineTag> : null}
-            {it.detail ? <TimelineDetail>{it.detail}</TimelineDetail> : null}
-          </TimelineText>
-          {it.time ? <TimelineAt>{it.time}</TimelineAt> : null}
-        </TimelineRow>
+          </span>
+          <div style={{ minWidth: 0, fontSize: "var(--text-caption-size)" }}>
+            <strong style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}>{it.title}</strong>
+            {it.tag ? (
+              <span
+                style={{
+                  display: "inline-block",
+                  background: "var(--surface-inset)",
+                  border: "var(--border-w) solid var(--border-default)",
+                  borderRadius: "var(--radius-sm)",
+                  padding: "2px 8px",
+                  margin: "0 6px",
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  color: "var(--text-metadata)",
+                }}
+              >
+                {it.tag}
+              </span>
+            ) : null}
+            {it.detail ? <span style={{ color: "var(--text-metadata)" }}>{it.detail}</span> : null}
+          </div>
+          {it.time ? (
+            <div
+              style={{
+                marginLeft: "auto",
+                flex: "none",
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                color: "var(--text-muted)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {it.time}
+            </div>
+          ) : null}
+        </div>
       ))}
     </div>
   );
@@ -133,106 +107,87 @@ export interface KeyValueRow {
   value: ReactNode;
 }
 
-const GridKV = styled.div`
-  display: grid;
-  grid-template-columns: minmax(120px, 200px) 1fr;
-  gap: 8px ${theme.spacing.medium};
-  font-size: 12.5px;
-`;
-
-const GridKVLabel = styled.span`
-  color: ${theme.colors.secondary60};
-`;
-
-const LinesKV = styled.div`
-  font-size: 12.5px;
-  line-height: 2;
-`;
-
-const LinesKVLabel = styled.span`
-  color: ${theme.colors.warning70};
-`;
-
 /**
- * Two label/value layouts: "grid" (the `.kv` two-column table — Result, Original email) and
- * "lines" (the `.kv-lines` stacked "label · value" rows used inside `<AiCard>`).
+ * Two label/value layouts: "grid" (a two-column label/value table — Result, Original email)
+ * and "lines" (stacked "label · value" rows, used inside <AiCard>).
  */
 export function KeyValue({ rows, variant = "grid" }: { rows: KeyValueRow[]; variant?: "grid" | "lines" }) {
   if (variant === "lines") {
     return (
-      <LinesKV>
+      <div style={{ fontSize: "var(--text-caption-size)", lineHeight: 2 }}>
         {rows.map((r) => (
           <div key={r.key}>
-            <LinesKVLabel>{r.label}</LinesKVLabel> · {r.value}
+            <span style={{ color: "var(--text-metadata)" }}>{r.label}</span> · {r.value}
           </div>
         ))}
-      </LinesKV>
+      </div>
     );
   }
   return (
-    <GridKV>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(120px, 200px) 1fr",
+        gap: "8px var(--space-4)",
+        fontSize: "var(--text-caption-size)",
+      }}
+    >
       {rows.map((r) => (
         <Fragment key={r.key}>
-          <GridKVLabel>{r.label}</GridKVLabel>
-          <span>{r.value}</span>
+          <span style={{ color: "var(--text-metadata)" }}>{r.label}</span>
+          <span style={{ color: "var(--text-primary)" }}>{r.value}</span>
         </Fragment>
       ))}
-    </GridKV>
+    </div>
   );
 }
 
 /* ---------------------------------------------------------------- AiCard */
 
-const AiCardRoot = styled.div`
-  background: ${theme.colors.warning10};
-  border: 1px solid ${theme.colors.warning30};
-  border-radius: ${theme.borderRadius.normal};
-`;
-
-const AiCardHead = styled.div`
-  display: flex;
-  align-items: center;
-  gap: ${theme.spacing.small};
-  padding: 12px 16px;
-  border-bottom: 1px solid ${theme.colors.warning30};
-`;
-
-const AiTag = styled.span`
-  display: inline-block;
-  flex: none;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: ${theme.colors.white};
-  background: ${theme.colors.warning60};
-  padding: 3px 7px;
-  border-radius: 2px;
-`;
-
-const AiCardTitle = styled.span`
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: ${theme.colors.warning70};
-`;
-
-const AiCardBody = styled.div`
-  padding: 13px 16px;
-`;
-
-/** The xanthous "AI extraction" card — an AI tag, a title, and arbitrary body content
- * (typically a `<KeyValue variant="lines">`). */
+/** The AI-extraction block: an "AI extraction" label and arbitrary body content (typically a
+ * <KeyValue variant="lines">). Rendered as a quiet Inset, not an alarm — the extraction is
+ * provisional context, and colour in Backbone is reserved for things that need attention. */
 export function AiCard({ title, children }: { title: ReactNode; children: ReactNode }) {
   return (
-    <AiCardRoot>
-      <AiCardHead>
-        <AiTag>AI</AiTag>
-        <AiCardTitle>{title}</AiCardTitle>
-      </AiCardHead>
-      <AiCardBody>{children}</AiCardBody>
-    </AiCardRoot>
+    <div style={{ background: "var(--surface-inset)", border: "var(--border-w) solid var(--border-default)", borderRadius: "var(--radius-md)" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--space-2)",
+          padding: "10px 16px",
+          borderBottom: "var(--border-w) solid var(--border-default)",
+        }}
+      >
+        <span
+          style={{
+            flex: "none",
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: "var(--accent-on-surface)",
+            background: "var(--accent-surface)",
+            padding: "3px 7px",
+            borderRadius: "var(--radius-sm)",
+          }}
+        >
+          AI
+        </span>
+        <span
+          style={{
+            fontSize: "var(--text-label-size)",
+            fontWeight: "var(--text-label-weight)",
+            letterSpacing: "var(--text-label-tracking)",
+            textTransform: "uppercase",
+            color: "var(--text-secondary)",
+          }}
+        >
+          {title}
+        </span>
+      </div>
+      <div style={{ padding: "13px 16px" }}>{children}</div>
+    </div>
   );
 }
 
@@ -240,41 +195,19 @@ export function AiCard({ title, children }: { title: ReactNode; children: ReactN
 
 export type CalloutTone = "bad" | "warn" | "ok" | "info";
 
-const CALLOUT_TONE: Record<CalloutTone, { bg: keyof Colors; border: keyof Colors; title: keyof Colors }> = {
-  bad: { bg: "danger10", border: "danger40", title: "danger" },
-  warn: { bg: "warning10", border: "warning40", title: "warning70" },
-  ok: { bg: "success10", border: "success40", title: "success70" },
-  info: { bg: "primary10", border: "primary40", title: "secondary70" },
+const CALLOUT_TONE: Record<CalloutTone, "danger" | "warning" | "success" | "info"> = {
+  bad: "danger",
+  warn: "warning",
+  ok: "success",
+  info: "info",
 };
 
-const CalloutRoot = styled.div<{ $tone: CalloutTone }>`
-  border-radius: ${theme.borderRadius.normal};
-  padding: 13px 16px;
-  border: 1px solid ${(p) => theme.colors[CALLOUT_TONE[p.$tone].border]};
-  border-left-width: 4px;
-  background: ${(p) => theme.colors[CALLOUT_TONE[p.$tone].bg]};
-`;
-
-const CalloutTitle = styled.div<{ $tone: CalloutTone }>`
-  font-size: 13px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: ${(p) => theme.colors[CALLOUT_TONE[p.$tone].title]};
-`;
-
-const CalloutBody = styled.div`
-  font-size: 12.5px;
-  color: ${theme.colors.secondary70};
-  margin-top: 4px;
-  line-height: 1.6;
-`;
-
-/** Left-ruled callout (the escalation-reason box on the session detail page). */
+/** The escalation-reason box — a Backbone InlineMessage carrying the tinted, titled callout. */
 export function Callout({ tone, title, children }: { tone: CalloutTone; title: ReactNode; children?: ReactNode }) {
   return (
-    <CalloutRoot $tone={tone}>
-      {title ? <CalloutTitle $tone={tone}>{title}</CalloutTitle> : null}
-      {children ? <CalloutBody>{children}</CalloutBody> : null}
-    </CalloutRoot>
+    <InlineMessage tone={CALLOUT_TONE[tone]} title={typeof title === "string" ? title : undefined} live={false}>
+      {typeof title !== "string" ? title : null}
+      {children}
+    </InlineMessage>
   );
 }

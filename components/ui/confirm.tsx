@@ -1,12 +1,12 @@
 "use client";
 
-// Promise-based confirm dialog. useConfirm() returns an async function; awaiting it
-// resolves true/false. Backed by Big Design's Modal: Esc cancels (closeOnEscKey), backdrop
-// click cancels (closeOnClickOutside), and a destructive confirm renders as
-// actionType="destructive".
+// Promise-based confirm dialog on Backbone's Modal. useConfirm() returns an async function;
+// awaiting it resolves true/false. The Modal implements the overlay contract (role=dialog,
+// Escape to dismiss, focus trap and return). A destructive confirm renders the primary
+// action as variant="destructive".
 
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
-import { Modal, type ModalAction } from "@bigcommerce/big-design";
+import { Button, Modal } from "@/components/backbone";
 
 export interface ConfirmOptions {
   title: string;
@@ -30,10 +30,14 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [opts, setOpts] = useState<ConfirmOptions | null>(null);
   const resolver = useRef<Resolver | null>(null);
 
-  const confirm = useCallback((o: ConfirmOptions) => new Promise<boolean>((resolve) => {
-    resolver.current = resolve;
-    setOpts(o);
-  }), []);
+  const confirm = useCallback(
+    (o: ConfirmOptions) =>
+      new Promise<boolean>((resolve) => {
+        resolver.current = resolve;
+        setOpts(o);
+      }),
+    [],
+  );
 
   const close = useCallback((ok: boolean) => {
     resolver.current?.(ok);
@@ -41,29 +45,25 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     setOpts(null);
   }, []);
 
-  const actions: ModalAction[] | undefined = opts
-    ? [
-        { text: opts.cancelLabel ?? "Cancel", variant: "secondary", onClick: () => close(false) },
-        {
-          text: opts.confirmLabel ?? "Confirm",
-          variant: "primary",
-          actionType: opts.danger ? "destructive" : "normal",
-          onClick: () => close(true),
-        },
-      ]
-    : undefined;
-
   return (
     <ConfirmCtx.Provider value={confirm}>
       {children}
       <Modal
-        isOpen={!!opts}
+        open={!!opts}
+        title={opts?.title ?? ""}
         onClose={() => close(false)}
-        header={opts?.title}
-        actions={actions}
-        variant="dialog"
-        closeOnEscKey
-        closeOnClickOutside
+        footer={
+          opts ? (
+            <>
+              <Button variant="secondary" onClick={() => close(false)}>
+                {opts.cancelLabel ?? "Cancel"}
+              </Button>
+              <Button variant={opts.danger ? "destructive" : "primary"} onClick={() => close(true)}>
+                {opts.confirmLabel ?? "Confirm"}
+              </Button>
+            </>
+          ) : undefined
+        }
       >
         {opts?.body}
       </Modal>

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { Box, Flex, Grid, Panel, Text } from "@bigcommerce/big-design";
-import { colors } from "@bigcommerce/big-design-theme";
+import { KpiRow, Panel } from "@/components/backbone";
 import { LinkButton } from "@/components/ui/link-button";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
@@ -75,12 +74,12 @@ export default async function Dashboard() {
   const hasChannel = status.channelCreds.google || status.channelCreds.microsoft;
   const hasEscalation = status.escalation.email || status.escalation.slack;
   const health = [
-    { ok: status.enabled, warn: !status.enabled, name: "PO agent", detail: status.enabled ? "enabled" : "disabled", action: { label: "Enable →", href: SETTINGS } },
-    { ok: active.source !== "none", name: "BigCommerce store", detail: active.storeHash ? `${active.storeHash} · token: ${active.source}` : "not configured", action: { label: "Connect →", href: SETTINGS } },
-    { ok: status.redis, name: "Redis (state)", detail: status.redis ? "connected" : "not configured", action: { label: "Set up →", href: SETTINGS } },
-    { ok: status.ai.configured, warn: !status.ai.configured, name: "AI model", detail: status.ai.model ?? "heuristic fallback", action: { label: "Add model →", href: SETTINGS } },
-    { ok: hasChannel, warn: !hasChannel, name: "Email channel", detail: status.channelCreds.google ? "gmail" : status.channelCreds.microsoft ? "microsoft" : "none", action: { label: "Connect →", href: SETTINGS } },
-    { ok: hasEscalation, warn: !hasEscalation, name: "Escalation targets", detail: [status.escalation.email && "email", status.escalation.slack && "slack"].filter(Boolean).join(", ") || "queue only", action: { label: "Set up →", href: SETTINGS } },
+    { ok: status.enabled, warn: !status.enabled, name: "PO agent", detail: status.enabled ? "enabled" : "disabled", action: { label: "Enable", href: SETTINGS } },
+    { ok: active.source !== "none", name: "BigCommerce store", detail: active.storeHash ? `${active.storeHash} · token: ${active.source}` : "not configured", action: { label: "Connect", href: SETTINGS } },
+    { ok: status.redis, name: "Redis (state)", detail: status.redis ? "connected" : "not configured", action: { label: "Set up", href: SETTINGS } },
+    { ok: status.ai.configured, warn: !status.ai.configured, name: "AI model", detail: status.ai.model ?? "heuristic fallback", action: { label: "Add model", href: SETTINGS } },
+    { ok: hasChannel, warn: !hasChannel, name: "Email channel", detail: status.channelCreds.google ? "gmail" : status.channelCreds.microsoft ? "microsoft" : "none", action: { label: "Connect", href: SETTINGS } },
+    { ok: hasEscalation, warn: !hasEscalation, name: "Escalation targets", detail: [status.escalation.email && "email", status.escalation.slack && "slack"].filter(Boolean).join(", ") || "queue only", action: { label: "Set up", href: SETTINGS } },
   ];
   const firstRun = health.filter((h) => h.ok).length <= 2;
 
@@ -94,98 +93,65 @@ export default async function Dashboard() {
 
   return (
     <>
-      <PageHead
-        title="Dashboard"
-        sub={`Email → purchase-order agent for BigCommerce B2B Edition · ${monthLabel}`}
-      >
+      <PageHead title="Dashboard" sub={`Email → purchase-order agent for BigCommerce B2B Edition · ${monthLabel}`}>
         <AutoRefresh />
       </PageHead>
 
       {!redis && (
-        <Box marginBottom="medium">
-          <Banner kind="warn" title="Redis not connected">
-            Session tracking, the review queue, and metrics are offline. Add <code>UPSTASH_REDIS_REST_URL</code> /{" "}
-            <code>UPSTASH_REDIS_REST_TOKEN</code> in <Link href={SETTINGS}>Settings</Link> — the counters below read 0 until then.
-          </Banner>
-        </Box>
+        <Banner kind="warn" title="Redis not connected">
+          Session tracking, the review queue, and metrics are offline. Add <code>UPSTASH_REDIS_REST_URL</code> /{" "}
+          <code>UPSTASH_REDIS_REST_TOKEN</code> in <Link href={SETTINGS}>Settings</Link> — the counters below read 0 until then.
+        </Banner>
       )}
 
       {firstRun && (
-        <Box marginBottom="medium">
-          <Banner kind="info" title="Finish setup to start processing POs">
-            <ol style={{ margin: "6px 0 8px", paddingLeft: 18 }}>
-              <li>Connect your <strong>BigCommerce store</strong> and <strong>Redis</strong>.</li>
-              <li>Add an <strong>AI model</strong> — optional, a heuristic extractor works without one.</li>
-              <li>Connect your <strong>email channel</strong> (Gmail or Microsoft).</li>
-              <li><strong>Enable</strong> the agent.</li>
-            </ol>
-            <Flex flexWrap="wrap" style={{ gap: 10 }}>
-              <LinkButton href={SETTINGS} variant="primary">Open Settings</LinkButton>
-              <LinkButton href="/staff/simulator" variant="secondary">Try the simulator</LinkButton>
-            </Flex>
-          </Banner>
-        </Box>
+        <Banner kind="info" title="Finish setup to start processing POs">
+          <ol style={{ margin: "6px 0 8px", paddingLeft: 18 }}>
+            <li>Connect your <strong>BigCommerce store</strong> and <strong>Redis</strong>.</li>
+            <li>Add an <strong>AI model</strong> — optional, a heuristic extractor works without one.</li>
+            <li>Connect your <strong>email channel</strong> (Gmail or Microsoft).</li>
+            <li><strong>Enable</strong> the agent.</li>
+          </ol>
+          <span style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <LinkButton href={SETTINGS} variant="primary">Open settings</LinkButton>
+            <LinkButton href="/staff/simulator" variant="secondary">Try the simulator</LinkButton>
+          </span>
+        </Banner>
       )}
 
       {escalatedCount > 0 && (
-        <Box
-          marginBottom="large"
-          backgroundColor="danger10"
-          border="box"
-          borderRadius="normal"
-          style={{ borderLeftWidth: 4, borderLeftColor: colors.danger40 }}
-        >
-          <Link
-            href={INBOX}
-            style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", color: "inherit", textDecoration: "none" }}
-          >
-            <Box style={{ minWidth: 0 }}>
-              <Text bold color="danger" marginBottom="none" style={{ fontSize: 14 }}>
-                {escalatedCount} escalated session{escalatedCount === 1 ? " is" : "s are"} waiting on a human
-              </Text>
-              <Text color="secondary60" marginTop="xxSmall" marginBottom="none" style={{ fontSize: 12.5 }}>
-                Buyers have been told we&apos;re checking — nothing was submitted.
-                {waited ? ` Oldest has waited ${waited}.` : ""}
-              </Text>
-            </Box>
-            <Text color="danger" marginBottom="none" aria-hidden="true" style={{ marginLeft: "auto", fontSize: 18 }}>
-              →
-            </Text>
-          </Link>
-        </Box>
+        <Banner kind="error" title={`${escalatedCount} escalated session${escalatedCount === 1 ? " is" : "s are"} waiting on a human`}>
+          <span style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <span>
+              Buyers have been told the order is being checked — nothing was submitted.
+              {waited ? ` Oldest has waited ${waited}.` : ""}
+            </span>
+            <LinkButton href={INBOX} variant="secondary" size="micro" iconAfter="arrow-right">
+              Review queue
+            </LinkButton>
+          </span>
+        </Banner>
       )}
 
-      <Grid
-        gridColumns={{ mobile: "repeat(2, 1fr)", tablet: "repeat(3, 1fr)", desktop: "repeat(6, 1fr)" }}
-        marginBottom="large"
-      >
-        <Stat label="Received" value={metrics.received} note="POs this month" hint="POs received this calendar month" />
-        <Stat label="Orders" value={metrics.orders} note="pay on account" hint="Orders placed this month" />
-        <Stat label="Quotes" value={metrics.quotes} note="checkout link sent" hint="Quotes created this month" />
-        <Stat
-          label="Escalations"
-          value={metrics.escalations}
-          note={`${escalatedCount} still open`}
-          tone="bad"
-          hint="Sessions sent to human review this month"
-        />
-        <Stat
-          label="Touchless"
-          value={`${Math.round(metrics.touchlessRate * 100)}%`}
-          note="no human needed"
-          tone="ok"
-          hint="Share completed without human review"
-        />
+      <KpiRow>
+        <Stat label="Received" value={metrics.received} note="POs this month" />
+        <Stat label="Orders" value={metrics.orders} note="pay on account" />
+        <Stat label="Quotes" value={metrics.quotes} note="checkout link sent" />
+        <Stat label="Escalations" value={metrics.escalations} note={`${escalatedCount} still open`} tone="bad" />
+        <Stat label="Touchless" value={`${Math.round(metrics.touchlessRate * 100)}%`} note="no human needed" tone="ok" />
         <Stat
           label="Value"
           value={`$${metrics.valueProcessed.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
           note="orders placed"
-          hint="Total order value placed this month (USD)"
         />
-      </Grid>
+      </KpiRow>
 
-      <Grid gridColumns={{ mobile: "1fr", desktop: "1.2fr 1fr" }} gridGap="16px">
-        <Panel header="Recent sessions">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "var(--gap-group)", alignItems: "start" }}>
+        <Panel
+          title="Recent sessions"
+          padded={false}
+          actions={<LinkButton href="/staff/sessions" variant="ghost" size="micro" iconAfter="arrow-right">All sessions</LinkButton>}
+        >
           {recent.length ? (
             recent.map((s) => (
               <SessionRow
@@ -198,19 +164,18 @@ export default async function Dashboard() {
               />
             ))
           ) : (
-            <EmptyState title="No sessions yet">Processed POs appear here as they arrive.</EmptyState>
+            <div style={{ padding: "var(--panel-pad)" }}>
+              <EmptyState title="No sessions yet">Processed POs appear here as they arrive.</EmptyState>
+            </div>
           )}
-          <Box marginTop="medium">
-            <LinkButton href="/staff/sessions" variant="subtle">All sessions →</LinkButton>
-          </Box>
         </Panel>
 
-        <Panel header="Setup & health">
+        <Panel title="Setup & health">
           {health.map((h) => (
             <HealthRow key={h.name} ok={h.ok} warn={h.warn} name={h.name} detail={h.detail} action={h.action} />
           ))}
         </Panel>
-      </Grid>
+      </div>
     </>
   );
 }

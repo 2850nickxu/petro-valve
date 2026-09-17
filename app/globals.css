@@ -1,10 +1,15 @@
-/* Big Design's <GlobalStyles /> (polished's normalize + the theme's body font) covers the
-   base reset. The one thing it doesn't provide — and that the app still needs — is respecting
-   the user's reduced-motion preference for any CSS animation/transition. */
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
+/* App-specific global overrides. The Backbone base layer (styles/backbone/base.css) already
+   provides the reset, focus-visible ring, link colours, tabular-numeric helper and the
+   prefers-reduced-motion handling, so there is very little to add here.
+
+   The app renders full-height shells (the staff console, the public pages), so make the
+   document fill the viewport height. */
+html,
+body {
+  min-height: 100%;
+}
+
+#__next,
+body > div {
+  min-height: 100vh;
 }

@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { usePathname } from "next/navigation";
-import styled from "styled-components";
-import { Badge, Box, Flex, Text } from "@bigcommerce/big-design";
-import { theme } from "@bigcommerce/big-design-theme";
-import { AdminNav } from "./nav";
+import { usePathname, useRouter } from "next/navigation";
+import { Badge, Icon, PageBody, SidebarNav, StatusDot, type IconName } from "@/components/backbone";
 import { LinkButton } from "@/components/ui/link-button";
+import styles from "./shell.module.css";
 
-// The admin chrome. Client-side because the header's burger and the sidebar share one
-// open/closed state: at ≥960px the sidebar is a static column, below that it becomes an
-// off-canvas drawer over a scrim.
+// The admin chrome, built on Backbone's fixed frame: a 232px sticky sidebar and a 48px
+// sticky header at standard density, dropping to compact only inside data regions (each
+// screen does that per table). Client-side because the burger and the sidebar share one
+// open/closed state: at >=960px the sidebar is a static column; below that it is an
+// off-canvas drawer over a scrim (the one piece Backbone has no primitive for — see
+// shell.module.css).
 
 export interface ShellStatus {
   /** Green when live, amber mid-setup, red when disabled. */
@@ -19,83 +20,25 @@ export interface ShellStatus {
   label: string;
 }
 
-const STATUS_BADGE_VARIANT: Record<ShellStatus["tone"], "success" | "warning" | "danger"> = {
+const STATUS_TONE: Record<ShellStatus["tone"], "success" | "warning" | "danger"> = {
   ok: "success",
   warn: "warning",
   bad: "danger",
 };
 
-// Big Design has no off-canvas drawer / scrim / burger primitive, so those three pieces
-// are a small local styled-components layer reading theme tokens. Everything else below
-// uses Big Design components directly.
+interface NavRow {
+  id: string;
+  label: string;
+  icon: IconName;
+  trailing?: ReactNode;
+}
 
-const Burger = styled.button`
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid ${theme.colors.secondary20};
-  border-radius: ${theme.borderRadius.normal};
-  background: ${theme.colors.white};
-  color: ${theme.colors.secondary70};
-  cursor: pointer;
-  flex: none;
-  padding: 0;
-
-  @media (max-width: 959px) {
-    display: inline-flex;
-  }
-`;
-
-const Scrim = styled.button`
-  display: none;
-  border: none;
-  padding: 0;
-
-  @media (max-width: 959px) {
-    display: block;
-    position: fixed;
-    inset: 0;
-    background: rgba(4, 39, 45, 0.42);
-    z-index: ${theme.zIndex.modalBackdrop};
-  }
-`;
-
-const DrawerAside = styled.aside<{ $open: boolean }>`
-  width: 216px;
-  flex: none;
-  background: ${theme.colors.white};
-  border-right: 1px solid ${theme.colors.secondary20};
-  padding: ${theme.spacing.large} 0 ${theme.spacing.xLarge};
-
-  @media (max-width: 959px) {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    z-index: ${theme.zIndex.modal};
-    transform: ${(p) => (p.$open ? "none" : "translateX(-105%)")};
-    transition: transform 200ms ease;
-    box-shadow: 0 0 44px rgba(4, 39, 45, 0.28);
-    overflow-y: auto;
-  }
-`;
-
-const HideOnSmall = styled.span`
-  display: inline-flex;
-  align-items: center;
-
-  @media (max-width: 959px) {
-    display: none !important;
-  }
-`;
-
-const PageContent = styled.div`
-  max-width: 1060px;
-  margin: 0 auto;
-  padding: 26px clamp(16px, 4vw, 36px) 72px;
-`;
+/** Longest nav id the current path falls under. `/staff` is the index (exact match only) so
+ * a session-detail page still highlights Inbox. */
+function activeNavId(path: string, ids: string[]): string | undefined {
+  const matches = ids.filter((id) => (id === "/staff" ? path === "/staff" : path.startsWith(id)));
+  return matches.sort((a, b) => b.length - a.length)[0];
+}
 
 export function AppShell({
   escalated,
@@ -108,6 +51,7 @@ export function AppShell({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const path = usePathname();
+  const router = useRouter();
 
   // Close the drawer on route change and on Escape.
   useEffect(() => setMenuOpen(false), [path]);
@@ -120,46 +64,99 @@ export function AppShell({
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
 
+  const sections: Array<{ label?: string; items: NavRow[] }> = [
+    { label: "Overview", items: [{ id: "/staff", label: "Dashboard", icon: "home" }] },
+    {
+      label: "Work",
+      items: [
+        {
+          id: "/staff/po-inbox",
+          label: "Inbox",
+          icon: "mail",
+          trailing: escalated > 0 ? <Badge tone="danger" mono>{escalated}</Badge> : undefined,
+        },
+        { id: "/staff/sessions", label: "Sessions", icon: "layers" },
+        { id: "/staff/simulator", label: "Simulator", icon: "build" },
+      ],
+    },
+    {
+      label: "Admin",
+      items: [
+        { id: "/staff/settings", label: "Settings", icon: "settings" },
+        { id: "/staff/usage", label: "Token usage", icon: "compare" },
+      ],
+    },
+  ];
+
+  const allIds = sections.flatMap((s) => s.items.map((i) => i.id));
+  const activeId = activeNavId(path, allIds);
+
   return (
-    <Flex flexDirection="column" backgroundColor="secondary10" style={{ minHeight: "100vh" }}>
-      <Flex
-        as="header"
-        alignItems="center"
-        backgroundColor="white"
-        padding="medium"
-        style={{ gap: 14, flex: "none", minWidth: 0, borderBottom: `1px solid ${theme.colors.secondary20}` }}
-      >
-        <Burger type="button" onClick={() => setMenuOpen((o) => !o)} aria-label="Toggle navigation" aria-expanded={menuOpen}>
-          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-            <path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" fill="none" />
-          </svg>
-        </Burger>
+    <div className={styles.frame} data-density="standard">
+      {menuOpen ? (
+        <button type="button" className={styles.scrim} aria-label="Close navigation" onClick={() => setMenuOpen(false)} />
+      ) : null}
 
-        <Text bold marginBottom="none" style={{ whiteSpace: "nowrap" }}>
-          PO Agent
-        </Text>
+      <aside className={`${styles.aside} ${menuOpen ? styles.asideOpen : ""}`}>
+        <div style={{ flex: "1 1 auto", overflow: "auto", minHeight: 0 }}>
+          <SidebarNav
+            label="Admin sections"
+            sections={sections}
+            activeId={activeId}
+            onSelect={(id) => {
+              router.push(id);
+              setMenuOpen(false);
+            }}
+          />
+        </div>
+        <a
+          href="/api/staff/signout"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-2-5)",
+            height: "var(--nav-item-h)",
+            padding: "0 16px",
+            borderTop: "var(--border-w) solid var(--border-subtle)",
+            color: "var(--text-secondary)",
+            fontSize: "var(--text-body-size)",
+            textDecoration: "none",
+            flex: "0 0 auto",
+          }}
+        >
+          <Icon name="subdir" size={16} />
+          Sign out
+        </a>
+      </aside>
 
-        <Flex alignItems="center" style={{ marginLeft: "auto", gap: 12, minWidth: 0 }}>
-          <HideOnSmall>
-            <Badge label={status.label} variant={STATUS_BADGE_VARIANT[status.tone]} />
-          </HideOnSmall>
-          <LinkButton href="/staff/simulator" variant="primary">Try the simulator</LinkButton>
-        </Flex>
-      </Flex>
+      <div className={styles.main}>
+        <header className={styles.header}>
+          <button
+            type="button"
+            className={styles.burger}
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-label="Toggle navigation"
+            aria-expanded={menuOpen}
+          >
+            <Icon name="menu" size={18} />
+          </button>
 
-      <Flex style={{ flex: 1, minHeight: 0 }}>
-        {menuOpen && (
-          <Scrim type="button" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />
-        )}
+          <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>
+            PO Agent
+          </span>
 
-        <DrawerAside $open={menuOpen}>
-          <AdminNav escalated={escalated} onNavigate={() => setMenuOpen(false)} />
-        </DrawerAside>
+          <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "var(--space-3)", minWidth: 0 }}>
+            <StatusDot tone={STATUS_TONE[status.tone]} label={status.label} halo={status.tone === "ok"} />
+            <LinkButton href="/staff/simulator" variant="secondary" size="default" icon="build">
+              Try the simulator
+            </LinkButton>
+          </span>
+        </header>
 
-        <Box style={{ flex: 1, minWidth: 0 }}>
-          <PageContent>{children}</PageContent>
-        </Box>
-      </Flex>
-    </Flex>
+        <main className={styles.content}>
+          <PageBody>{children}</PageBody>
+        </main>
+      </div>
+    </div>
   );
 }

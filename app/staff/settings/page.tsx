@@ -1,5 +1,5 @@
 import { cookies, headers } from "next/headers";
-import { Badge, Box } from "@bigcommerce/big-design";
+import { Badge } from "@/components/backbone";
 import { SETTINGS_FIELDS, settingsView, type SettingsScope } from "@/lib/po-agent/settings-store";
 import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
 import { listStoreInstalls } from "@/lib/bc-app/store-tokens";
@@ -48,14 +48,14 @@ export default async function SettingsPage() {
   };
 
   return (
-    <Box style={{ maxWidth: 860 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap-section)", maxWidth: "var(--content-max-form)" }}>
       <PageHead
         title="Settings"
         sub={
           <>
             Configure the agent here — no env or CLI needed. Saved to{" "}
-            <Badge label={scope === "global" ? "this deployment" : `store ${hash}`} variant="secondary" />. Secrets
-            are encrypted at rest 🔒.
+            <Badge tone="neutral">{scope === "global" ? "this deployment" : `store ${hash}`}</Badge>. Secrets are
+            encrypted at rest.
           </>
         }
       />
@@ -68,6 +68,6 @@ export default async function SettingsPage() {
         origin={origin}
         installs={installs}
       />
-    </Box>
+    </div>
   );
 }

@@ -1,9 +1,17 @@
 import type { ReactNode } from "react";
-import { Flex, Text } from "@bigcommerce/big-design";
-import { Banner as RichBanner } from "@/components/ui/banner";
+import { EmptyState as BbEmptyState, InlineMessage, type IconName } from "@/components/backbone";
 
-// Server-safe presentational states. Banner distinguishes "backend is down" from an
-// ordinary empty list; EmptyState/ErrorState give lists a consistent, non-alarming look.
+// Server-safe presentational states, re-expressed on Backbone. Banner distinguishes a
+// "backend is down" notice from an ordinary empty list; EmptyState/ErrorState give lists a
+// consistent, non-alarming look. Backbone's InlineMessage and EmptyState are presentational
+// (no client hooks), so these stay usable from server components.
+
+const BANNER_TONE = {
+  info: "info",
+  warn: "warning",
+  error: "danger",
+  ok: "success",
+} as const satisfies Record<string, "info" | "warning" | "danger" | "success">;
 
 export function Banner({
   kind = "info",
@@ -14,45 +22,37 @@ export function Banner({
   title?: ReactNode;
   children?: ReactNode;
 }) {
+  // InlineMessage's title is a string; a ReactNode title collapses into the body so callers
+  // can still pass rich content.
+  const stringTitle = typeof title === "string" ? title : undefined;
   return (
-    <RichBanner kind={kind} title={title}>
+    <InlineMessage tone={BANNER_TONE[kind]} title={stringTitle} live={false}>
+      {stringTitle == null && title != null ? title : null}
       {children}
-    </RichBanner>
+    </InlineMessage>
   );
 }
 
-export function EmptyState({ icon = "○", title, children }: { icon?: ReactNode; title: ReactNode; children?: ReactNode }) {
+export function EmptyState({
+  icon,
+  title,
+  children,
+}: {
+  icon?: IconName;
+  title: ReactNode;
+  children?: ReactNode;
+}) {
   return (
-    <Flex flexDirection="column" alignItems="center" padding="large" style={{ textAlign: "center" }}>
-      <Text color="secondary60" marginBottom="none" style={{ fontSize: 20, opacity: 0.55 }}>
-        {icon}
-      </Text>
-      <Text bold color="secondary70" marginTop="xSmall" marginBottom="none">
-        {title}
-      </Text>
-      {children ? (
-        <Text color="secondary60" marginTop="xxSmall" marginBottom="none">
-          {children}
-        </Text>
-      ) : null}
-    </Flex>
+    <BbEmptyState variant="inline" icon={icon} title={typeof title === "string" ? title : String(title)}>
+      {children}
+    </BbEmptyState>
   );
 }
 
-export function ErrorState({ title = "Something went wrong", children }: { title?: ReactNode; children?: ReactNode }) {
+export function ErrorState({ title = "Something went wrong", children }: { title?: string; children?: ReactNode }) {
   return (
-    <Flex flexDirection="column" alignItems="center" padding="large" style={{ textAlign: "center" }}>
-      <Text bold color="danger" marginBottom="none" style={{ fontSize: 20 }}>
-        !
-      </Text>
-      <Text bold color="secondary70" marginTop="xSmall" marginBottom="none">
-        {title}
-      </Text>
-      {children ? (
-        <Text color="secondary60" marginTop="xxSmall" marginBottom="none">
-          {children}
-        </Text>
-      ) : null}
-    </Flex>
+    <BbEmptyState variant="inline" tone="danger" title={title}>
+      {children}
+    </BbEmptyState>
   );
 }

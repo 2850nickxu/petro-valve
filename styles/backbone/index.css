@@ -1,0 +1,14 @@
+/* Backbone design system — global CSS entry point.
+   Vendored from the Backbone Design System kit; import this one file. The kit's original
+   nested tokens/ + guidelines/ folders are flattened into this directory, so the import
+   order below matches the kit's styles.css exactly. */
+@import './fonts.css';
+@import './colors.css';
+@import './typography.css';
+@import './spacing.css';
+@import './density.css';
+@import './radius.css';
+@import './elevation.css';
+@import './motion.css';
+@import './keyframes.css';
+@import './base.css';

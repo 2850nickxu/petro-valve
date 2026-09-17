@@ -1,4 +1,4 @@
-import { H2, Panel, Small, Text } from "@bigcommerce/big-design";
+import { Panel } from "@/components/backbone";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { Chip, stateLabel } from "@/app/staff/ui";
@@ -20,33 +20,33 @@ export default async function OrderPanel({ params }: { params: Promise<{ id: str
   }
 
   return (
-    <div>
-      <H2 marginBottom="none">PO Agent</H2>
-      <Small color="secondary60">Order #{id}</Small>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap-group)" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <span style={{ fontSize: "var(--text-section-size)", fontWeight: "var(--text-section-weight)" }}>PO Agent</span>
+        <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>Order #{id}</span>
+      </div>
 
       {matches.length ? (
         matches.map((s) => (
-          <Panel key={s.id} marginTop="medium">
-            <Text marginBottom="xxSmall">
-              <Chip kind={s.state}>{stateLabel(s.state)}</Chip> · PO{" "}
-              <Text as="span" bold style={{ fontVariantNumeric: "tabular-nums" }}>
-                {s.extracted?.poNumber ?? "—"}
-              </Text>
-            </Text>
-            <Text color="secondary60" marginBottom="xxSmall">
+          <Panel key={s.id} bodyStyle={{ gap: 4 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <Chip kind={s.state}>{stateLabel(s.state)}</Chip>
+              <span>
+                PO <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{s.extracted?.poNumber ?? "—"}</span>
+              </span>
+            </span>
+            <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
               {s.buyer?.companyName} · {s.buyer?.email}
-            </Text>
-            <Text marginBottom="none">
-              <a href={`/staff/po-inbox/${encodeURIComponent(s.id)}`} target="_blank" rel="noreferrer">
-                Open session ↗
-              </a>
-            </Text>
+            </span>
+            <span>
+              <a href={`/staff/po-inbox/${encodeURIComponent(s.id)}`} target="_blank" rel="noreferrer">Open session ↗</a>
+            </span>
           </Panel>
         ))
       ) : (
-        <Text color="secondary60" marginTop="medium">
+        <span style={{ color: "var(--text-secondary)" }}>
           This order wasn’t placed by the PO Agent (no matching email session).
-        </Text>
+        </span>
       )}
     </div>
   );

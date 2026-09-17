@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { SearchIcon } from "@bigcommerce/big-design-icons";
-import { Box, Button, Flex, Input, Panel, Small } from "@bigcommerce/big-design";
+import { Button, Panel, SearchInput, SegmentedControl, Spinner } from "@/components/backbone";
 import { SessionRow, stateLabel } from "@/app/staff/ui";
 import { EmptyState } from "@/components/ui/states";
 import type { SessionSummary, PoSessionState } from "@/lib/po-agent/types";
@@ -27,8 +26,6 @@ interface SearchResult {
 }
 
 const PAGE_SIZE = 25;
-
-const SKELETON_WIDTHS = ["62%", "100%", "84%", "73%"];
 
 export function SessionsBrowser() {
   const [q, setQ] = useState("");
@@ -106,80 +103,62 @@ export function SessionsBrowser() {
   const hasNext = endItem < total;
 
   return (
-    <Panel>
-      <Flex justifyContent="space-between" alignItems="center" flexWrap="wrap" marginBottom="medium" style={{ gap: 12 }}>
-        <Box style={{ flex: "1 1 240px", maxWidth: 320 }}>
-          <Input
-            type="search"
-            value={q}
-            onChange={(e) => handleQChange(e.target.value)}
-            placeholder="Search company, buyer, PO number"
-            aria-label="Search sessions"
-            iconLeft={<SearchIcon color="secondary50" />}
-          />
-        </Box>
-        <Flex flexWrap="wrap" style={{ gap: 8 }}>
-          {FILTERS.map((f) => (
-            <Button
-              key={f.id}
-              type="button"
-              variant={filter === f.id ? "secondary" : "subtle"}
-              aria-pressed={filter === f.id}
-              onClick={() => handleFilter(f.id)}
-            >
-              {f.label}
-            </Button>
-          ))}
-        </Flex>
-      </Flex>
+    <Panel padded={false}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, padding: "var(--panel-pad)", borderBottom: "var(--border-w) solid var(--border-subtle)" }}>
+        <SearchInput
+          value={q}
+          onChange={(e) => handleQChange(e.target.value)}
+          placeholder="Search company, buyer, PO number"
+          label="Search sessions"
+          width={320}
+        />
+        <SegmentedControl
+          label="Filter by status"
+          options={FILTERS.map((f) => ({ value: f.id, label: f.label }))}
+          value={filter}
+          onChange={(v) => handleFilter(v as FilterId)}
+        />
+      </div>
 
-      {loading ? (
-        <Flex flexDirection="column" style={{ gap: 10 }}>
-          {SKELETON_WIDTHS.map((w) => (
-            <Box key={w} backgroundColor="secondary20" borderRadius="normal" style={{ width: w, height: 10 }} />
-          ))}
-        </Flex>
-      ) : items.length === 0 ? (
-        <EmptyState title="No matching sessions">Try a different search or filter.</EmptyState>
-      ) : (
-        <Box>
-          {items.map((item) => (
+      <div data-density="compact">
+        {loading ? (
+          <div style={{ padding: "var(--panel-pad)" }}>
+            <Spinner label="Searching…" />
+          </div>
+        ) : items.length === 0 ? (
+          <div style={{ padding: "var(--panel-pad)" }}>
+            <EmptyState title="No matching sessions">Try a different search or filter.</EmptyState>
+          </div>
+        ) : (
+          items.map((item) => (
             <SessionRow
               key={item.id}
               href={`/staff/po-inbox/${encodeURIComponent(item.id)}`}
               company={item.company || "(unknown sender)"}
-              sub={`${item.email || "unknown"} · ${item.poNumber || "no PO number"} · ${item.updatedAt
-                .slice(0, 16)
-                .replace("T", " ")}`}
+              sub={`${item.email || "unknown"} · ${item.poNumber || "no PO number"} · ${item.updatedAt.slice(0, 16).replace("T", " ")}`}
               meta={item.decision ?? "—"}
               state={item.state}
               stateLabel={stateLabel(item.state)}
             />
-          ))}
-        </Box>
-      )}
+          ))
+        )}
+      </div>
 
-      <Flex justifyContent="space-between" alignItems="center" flexWrap="wrap" marginTop="medium" style={{ gap: 10 }}>
-        <Small color="secondary60" marginBottom="none">
-          {total > 0 ? (
-            <>
-              Showing {startItem}–{endItem} of {total} session{total === 1 ? "" : "s"}
-            </>
-          ) : (
-            "No sessions"
-          )}
-        </Small>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, padding: "var(--panel-pad)", borderTop: "var(--border-w) solid var(--border-subtle)" }}>
+        <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)", fontVariantNumeric: "tabular-nums" }}>
+          {total > 0 ? `Showing ${startItem}–${endItem} of ${total} session${total === 1 ? "" : "s"}` : "No sessions"}
+        </span>
         {total > PAGE_SIZE && (
-          <Flex style={{ gap: 8 }}>
-            <Button type="button" variant="secondary" disabled={!hasPrev} onClick={() => setPage((p) => p - 1)}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button type="button" variant="secondary" size="micro" icon="arrow-left" disabled={!hasPrev} onClick={() => setPage((p) => p - 1)}>
               Prev
             </Button>
-            <Button type="button" variant="secondary" disabled={!hasNext} onClick={() => setPage((p) => p + 1)}>
+            <Button type="button" variant="secondary" size="micro" iconAfter="arrow-right" disabled={!hasNext} onClick={() => setPage((p) => p + 1)}>
               Next
             </Button>
-          </Flex>
+          </div>
         )}
-      </Flex>
+      </div>
     </Panel>
   );
 }

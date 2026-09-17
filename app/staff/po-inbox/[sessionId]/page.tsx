@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { Box, Flex, Grid, H2, Link as BdLink, Panel, Small, Text } from "@bigcommerce/big-design";
-import { colors, type Colors } from "@bigcommerce/big-design-theme";
+import type { CSSProperties } from "react";
+import { Panel } from "@/components/backbone";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { activeStoreSource } from "@/lib/bc-app/request-context";
@@ -13,7 +13,7 @@ import { summarizeOutcome } from "@/lib/po-agent/summary";
 import { estimatedSubtotal } from "@/lib/po-agent/core/price";
 import { submittableLines } from "@/lib/po-agent/core/resolve";
 import { replyTemplates } from "@/lib/po-agent/reply-templates";
-import { Chip, CardHead, stateLabel } from "../../ui";
+import { Chip, PageHead, stateLabel } from "../../ui";
 import { Banner } from "@/components/ui/states";
 import { Disclosure } from "@/components/ui/section";
 import { formatMoney } from "@/components/ui/money";
@@ -43,12 +43,12 @@ const CALLOUT_TONE: Record<DecisionKind | "pending", CalloutTone> = {
 };
 
 /** Row tint + issue colour follow the worst issue on the line. */
-function lineSeverity(l: ResolvedLine): { tint?: "bad" | "warn"; tone: keyof Colors } {
+function lineSeverity(l: ResolvedLine): { tint?: "bad" | "warn"; color: string } {
   const bad = ["line_unresolved", "line_parent_sku", "line_blocked_by_assortment", "price_mismatch"];
   const warn = ["line_inventory_short", "line_qty_bounds", "missing_quantity"];
-  if (l.issues.some((i) => bad.includes(i))) return { tint: "bad", tone: "danger" };
-  if (l.issues.some((i) => warn.includes(i))) return { tint: "warn", tone: "warning" };
-  return { tone: "success" };
+  if (l.issues.some((i) => bad.includes(i))) return { tint: "bad", color: "var(--danger-600)" };
+  if (l.issues.some((i) => warn.includes(i))) return { tint: "warn", color: "var(--warning-600)" };
+  return { color: "var(--success-600)" };
 }
 
 /** Compact issue label for the line row — "price_mismatch 5.3%" style. */
@@ -112,7 +112,24 @@ function addressLine(a: NonNullable<PoSession["extracted"]>["shipTo"]): string |
   return parts.length ? parts.join(", ") : null;
 }
 
-const num = { fontVariantNumeric: "tabular-nums" as const };
+const num: CSSProperties = { fontVariantNumeric: "tabular-nums" };
+
+// Dark, quiet block for the raw email body and JSON — reads from the inverse surface tokens.
+const RAW_BLOCK: CSSProperties = {
+  margin: 0,
+  padding: "var(--panel-pad)",
+  background: "var(--surface-inverse)",
+  borderRadius: "var(--radius-md)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 12,
+  lineHeight: 1.5,
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  color: "var(--text-inverse)",
+  overflow: "auto",
+};
+
+const backLink: CSSProperties = { fontSize: "var(--text-caption-size)", fontWeight: 600, color: "var(--text-link)", textDecoration: "none" };
 
 export default async function SessionDetail({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await params;
@@ -130,14 +147,12 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
   const session = await store.loadSession(id);
   if (!session) {
     return (
-      <>
-        <Link href="/staff/po-inbox" style={{ fontSize: 12.5, fontWeight: 600, color: colors.primary }}>
-          ← Inbox
-        </Link>
-        <Box marginTop="medium" border="box" borderRadius="normal" backgroundColor="white" padding="medium">
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap-group)" }}>
+        <Link href="/staff/po-inbox" style={backLink}>← Inbox</Link>
+        <Panel>
           Not found: <code>{id}</code>.
-        </Box>
-      </>
+        </Panel>
+      </div>
     );
   }
 
@@ -178,9 +193,7 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
           {links && (
             <>
               {" · "}
-              <BdLink href={links.order(orderId)} external target="_blank" rel="noreferrer">
-                view in BigCommerce
-              </BdLink>
+              <a href={links.order(orderId)} target="_blank" rel="noreferrer">view in BigCommerce</a>
             </>
           )}
         </span>
@@ -198,22 +211,14 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
     resultRows.push({
       key: "checkout",
       label: "Checkout link",
-      value: (
-        <BdLink href={session.result.checkoutUrl} external target="_blank" rel="noreferrer">
-          open
-        </BdLink>
-      ),
+      value: <a href={session.result.checkoutUrl} target="_blank" rel="noreferrer">open</a>,
     });
   }
   if (session.result?.quoteUrl) {
     resultRows.push({
       key: "portal",
       label: "Buyer portal",
-      value: (
-        <BdLink href={session.result.quoteUrl} external target="_blank" rel="noreferrer">
-          open
-        </BdLink>
-      ),
+      value: <a href={session.result.quoteUrl} target="_blank" rel="noreferrer">open</a>,
     });
   }
 
@@ -242,269 +247,168 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
     time: a.at.slice(11, 16),
   }));
 
+  const metaLine = (
+    <span style={{ display: "inline-flex", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+      <span>
+        {session.buyer?.email ?? session.inbound?.from ?? "unknown sender"} · <span style={num}>{session.id}</span>
+        {poOf(session) ? <> · <span style={num}>{poOf(session)}</span></> : null}
+      </span>
+      <Chip kind={session.state}>{stateLabel(session.state)}</Chip>
+    </span>
+  );
+
   return (
-    <Box style={{ maxWidth: 900 }}>
-      <Link href="/staff/po-inbox" style={{ fontSize: 12.5, fontWeight: 600, color: colors.primary }}>
-        ← Inbox
-      </Link>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap-section)", maxWidth: 920 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+        <Link href="/staff/po-inbox" style={backLink}>← Inbox</Link>
+        <PageHead title={session.buyer?.companyName || "(unknown sender)"} sub={metaLine}>
+          <SessionActionButtons sessionId={id} summary={actionSummary} />
+        </PageHead>
+      </div>
 
-      <Flex
-        justifyContent="space-between"
-        alignItems="flex-end"
-        flexWrap="wrap"
-        marginTop="small"
-        marginBottom="medium"
-        style={{ gap: "12px 16px" }}
-      >
-        <Box>
-          <H2 marginBottom="none">{session.buyer?.companyName || "(unknown sender)"}</H2>
-          <Flex alignItems="center" flexWrap="wrap" marginTop="xxSmall" style={{ gap: 10 }}>
-            <Small color="secondary60" marginBottom="none">
-              {session.buyer?.email ?? session.inbound?.from ?? "unknown sender"} · <span style={num}>{session.id}</span>
-              {poOf(session) ? (
-                <>
-                  {" · "}
-                  <span style={num}>{poOf(session)}</span>
-                </>
-              ) : null}
-            </Small>
-            <Chip kind={session.state} size="sm">
-              {stateLabel(session.state)}
-            </Chip>
-          </Flex>
-        </Box>
-        <SessionActionButtons sessionId={id} summary={actionSummary} />
-      </Flex>
-
-      <Box marginBottom="medium">
-        <Callout tone={CALLOUT_TONE[outcome.kind]} title={
+      <Callout
+        tone={CALLOUT_TONE[outcome.kind]}
+        title={
           <>
             {outcome.headline}
             {outcome.kind === "escalate" && session.escalation?.reasons.length
               ? ` — ${session.escalation.reasons.join(", ")}`
               : ""}
           </>
-        }>
-          {outcome.reasons.length ? outcome.reasons.join(" ") : "No blocking issues."}
-          {notified.length ? ` Notified: ${notified.join(", ")}.` : ""}
-          {session.clarificationRounds > 0
-            ? ` ${session.clarificationRounds} clarification round${session.clarificationRounds === 1 ? "" : "s"} used.`
-            : ""}
-        </Callout>
-      </Box>
+        }
+      >
+        {outcome.reasons.length ? outcome.reasons.join(" ") : "No blocking issues."}
+        {notified.length ? ` Notified: ${notified.join(", ")}.` : ""}
+        {session.clarificationRounds > 0
+          ? ` ${session.clarificationRounds} clarification round${session.clarificationRounds === 1 ? "" : "s"} used.`
+          : ""}
+      </Callout>
 
-      <Box marginBottom="medium">
-        <ReplyBox
-          sessionId={id}
-          mailbox={status.mailbox}
-          templates={replyTemplates(session)}
-          canSend={canReply}
-          disabledReason={replyDisabledReason}
-        />
-      </Box>
+      <ReplyBox
+        sessionId={id}
+        mailbox={status.mailbox}
+        templates={replyTemplates(session)}
+        canSend={canReply}
+        disabledReason={replyDisabledReason}
+      />
 
       {session.result && (session.result.orderId || session.result.quoteId) && (
-        <Panel header="Result" marginBottom="medium">
+        <Panel title="Result">
           <KeyValue rows={resultRows} />
         </Panel>
       )}
 
-      <Box border="box" borderRadius="normal" backgroundColor="white" marginBottom="medium">
-        <Box
-          padding="medium"
-          style={lines.length ? { borderBottom: `1px solid ${colors.secondary20}` } : undefined}
-        >
-          <CardHead title="Lines">
-            <Small color="secondary60" marginBottom="none" style={num}>
-              {submittable.length} of {lines.length} submittable · est. {actionSummary.estimatedTotal}
-            </Small>
-          </CardHead>
-        </Box>
+      <Panel
+        title="Lines"
+        padded={false}
+        meta={<span style={num}>{submittable.length} of {lines.length} submittable · est. {actionSummary.estimatedTotal}</span>}
+      >
         {lines.length ? (
           lines.map((l, i) => {
             const sev = lineSeverity(l);
             const unit = l.calculatedUnitPrice ?? l.line.statedUnitPrice;
-            const bg = sev.tint === "bad" ? "danger10" : sev.tint === "warn" ? "warning10" : undefined;
+            const bg = sev.tint === "bad" ? "var(--danger-tint)" : sev.tint === "warn" ? "var(--warning-tint)" : undefined;
             return (
-              <Flex
+              <div
                 key={i}
-                justifyContent="space-between"
-                alignItems="center"
-                flexWrap="wrap"
-                backgroundColor={bg}
-                padding="medium"
                 style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
                   gap: "8px 14px",
-                  borderBottom: i < lines.length - 1 ? `1px solid ${colors.secondary20}` : undefined,
+                  padding: "var(--space-3) var(--panel-pad)",
+                  background: bg,
+                  borderTop: i > 0 ? "var(--border-w) solid var(--border-subtle)" : undefined,
                 }}
               >
-                <Box style={{ flex: "1 1 230px", minWidth: 0 }}>
-                  <Text bold marginBottom="none" style={{ fontSize: 13, ...num }}>
-                    {l.matchedSku ?? l.line.sku ?? "— no match —"}
-                  </Text>
-                  <Small color="secondary50" marginBottom="none" style={num}>
-                    read from: “{l.line.rawText.trim()}”
-                  </Small>
-                  {l.productName ? (
-                    <Small color="secondary50" marginBottom="none">
-                      {l.productName}
-                    </Small>
-                  ) : null}
+                <span style={{ flex: "1 1 230px", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, ...num }}>{l.matchedSku ?? l.line.sku ?? "— no match —"}</span>
+                  <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-muted)", ...num }}>read from: “{l.line.rawText.trim()}”</span>
+                  {l.productName ? <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-muted)" }}>{l.productName}</span> : null}
                   {l.parentSku && l.variantChoices?.length ? (
-                    <Small color="secondary50" marginBottom="none" style={num}>
+                    <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-muted)", ...num }}>
                       choose one: {l.variantChoices.slice(0, 4).map((c) => c.sku).join(", ")}
-                      {(l.variantChoiceCount ?? l.variantChoices.length) > 4
-                        ? ` +${(l.variantChoiceCount ?? l.variantChoices.length) - 4} more`
-                        : ""}
-                    </Small>
+                      {(l.variantChoiceCount ?? l.variantChoices.length) > 4 ? ` +${(l.variantChoiceCount ?? l.variantChoices.length) - 4} more` : ""}
+                    </span>
                   ) : null}
-                </Box>
-                <Small color="secondary60" marginBottom="none" style={{ fontSize: 12.5, flex: "none", ...num }}>
+                </span>
+                <span style={{ fontSize: 12.5, color: "var(--text-metadata)", flex: "none", ...num }}>
                   {l.line.quantity ?? "?"} × {unit != null ? formatMoney(unit, currency) : "?"}
-                </Small>
-                <Text bold color={sev.tone} marginBottom="none" style={{ fontSize: 11.5, flex: "none", ...num }}>
-                  {issueLabel(l)}
-                </Text>
-              </Flex>
+                </span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: sev.color, flex: "none", ...num }}>{issueLabel(l)}</span>
+              </div>
             );
           })
         ) : (
-          <Box padding="medium">
-            <Text color="secondary60" marginBottom="none">
-              No resolved lines.
-            </Text>
-          </Box>
+          <div style={{ padding: "var(--panel-pad)", color: "var(--text-secondary)" }}>No resolved lines.</div>
         )}
-      </Box>
+      </Panel>
 
-      <Grid gridColumns={{ mobile: "1fr", desktop: "1.2fr 1fr" }} gridGap="14px" marginBottom="medium">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "var(--gap-group)", alignItems: "start" }}>
         <AiCard title="Extracted from the email">
-          {extracted ? (
-            <KeyValue variant="lines" rows={aiRows} />
-          ) : (
-            <Text color="secondary60" marginBottom="none">
-              Nothing extracted for this session.
-            </Text>
-          )}
+          {extracted ? <KeyValue variant="lines" rows={aiRows} /> : <span style={{ color: "var(--text-secondary)" }}>Nothing extracted for this session.</span>}
         </AiCard>
 
-        <Flex flexDirection="column" style={{ gap: 14 }}>
-          <Panel header="Buyer" marginBottom="none">
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap-group)" }}>
+          <Panel title="Buyer">
             {session.buyer ? (
-              <Flex flexDirection="column" style={{ gap: 6 }}>
-                <Text marginBottom="none" style={{ fontSize: 12.5 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12.5 }}>
+                <span>
                   B2B user <span style={num}>#{session.buyer.b2bUserId}</span>
                   {session.buyer.companyRoleName ? ` · ${session.buyer.companyRoleName}` : ""}
-                </Text>
-                <Text marginBottom="none" style={{ fontSize: 12.5 }}>
+                </span>
+                <span>
                   Customer <span style={num}>#{session.buyer.customerId}</span>
-                  {session.buyer.customerGroupId != null ? (
-                    <>
-                      {" · group "}
-                      <span style={num}>#{session.buyer.customerGroupId}</span>
-                    </>
-                  ) : null}
+                  {session.buyer.customerGroupId != null ? <> · group <span style={num}>#{session.buyer.customerGroupId}</span></> : null}
                   {links && (
-                    <>
-                      {" · "}
-                      <BdLink href={links.customer(session.buyer.customerId)} external target="_blank" rel="noreferrer">
-                        view
-                      </BdLink>
-                    </>
+                    <> · <a href={links.customer(session.buyer.customerId)} target="_blank" rel="noreferrer">view</a></>
                   )}
-                </Text>
-                <Text marginBottom="none" style={{ fontSize: 12.5 }}>
+                </span>
+                <span>
                   {session.buyer.channelList?.length ? (
-                    <>
-                      Channels <span style={num}>{session.buyer.channelList.join(", ")}</span>
-                    </>
+                    <>Channels <span style={num}>{session.buyer.channelList.join(", ")}</span></>
                   ) : (
-                    <>
-                      Channel <span style={num}>{session.channelId ?? "default"}</span>
-                    </>
+                    <>Channel <span style={num}>{session.channelId ?? "default"}</span></>
                   )}
-                </Text>
-              </Flex>
+                </span>
+              </div>
             ) : (
-              <Text color="secondary60" marginBottom="none">
-                No B2B user matched this sender.
-              </Text>
+              <span style={{ color: "var(--text-secondary)" }}>No B2B user matched this sender.</span>
             )}
           </Panel>
 
-          <Panel header="Audit trail" marginBottom="none">
+          <Panel title="Audit trail">
             <Timeline items={auditItems} />
           </Panel>
 
-          <Panel header="Internal note" marginBottom="none">
+          <Panel title="Internal note">
             <SessionNote sessionId={id} />
           </Panel>
-        </Flex>
-      </Grid>
+        </div>
+      </div>
 
-      <Panel header="Original email" marginBottom="medium">
+      <Panel title="Original email">
         {session.inbound ? (
-          <>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2-5)" }}>
             <KeyValue
               rows={[
                 { key: "from", label: "From", value: <span style={num}>{session.inbound.from}</span> },
                 { key: "subject", label: "Subject", value: session.inbound.subject || "—" },
               ]}
             />
-            <Box
-              marginTop="small"
-              backgroundColor="secondary70"
-              borderRadius="normal"
-              padding="medium"
-              style={{ overflow: "auto" }}
-            >
-              <pre
-                style={{
-                  margin: 0,
-                  fontFamily: "inherit",
-                  fontSize: 12,
-                  lineHeight: 1.5,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  color: colors.secondary10,
-                }}
-              >
-                {session.inbound.bodyText || "(empty body)"}
-              </pre>
-            </Box>
-          </>
+            <pre style={RAW_BLOCK}>{session.inbound.bodyText || "(empty body)"}</pre>
+          </div>
         ) : (
-          <Text color="secondary60" marginBottom="none">
+          <span style={{ color: "var(--text-secondary)" }}>
             Original email not stored for this session (it predates capture, or was a simulator run).
-          </Text>
+          </span>
         )}
       </Panel>
 
-      <Box border="box" borderRadius="normal" backgroundColor="white" padding="medium">
-        <Disclosure title="Raw extraction (JSON)">
-          <Box
-            marginTop="small"
-            backgroundColor="secondary70"
-            borderRadius="normal"
-            padding="medium"
-            style={{ overflow: "auto" }}
-          >
-            <pre
-              style={{
-                margin: 0,
-                fontFamily: "inherit",
-                fontSize: 12,
-                lineHeight: 1.5,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                color: colors.secondary10,
-              }}
-            >
-              {JSON.stringify(session.extracted, null, 2)}
-            </pre>
-          </Box>
-        </Disclosure>
-      </Box>
-    </Box>
+      <Disclosure title="Raw extraction (JSON)">
+        <pre style={RAW_BLOCK}>{JSON.stringify(session.extracted, null, 2)}</pre>
+      </Disclosure>
+    </div>
   );
 }

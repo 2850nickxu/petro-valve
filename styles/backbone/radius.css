@@ -1,0 +1,10 @@
+/* Lightly rounded: 6 on interactive surfaces, 8 on things that float,
+   4 on small boxes, 0 inside tables. */
+:root {
+  --radius-none: 0;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 999px;
+  --border-w: 1px;
+}

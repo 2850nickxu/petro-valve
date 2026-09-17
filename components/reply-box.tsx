@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Flex, Panel, Text, Textarea } from "@bigcommerce/big-design";
+import { Button, Panel, TextareaField } from "@/components/backbone";
 import { useToast } from "@/components/ui/toast";
 import type { ReplyTemplate } from "@/lib/po-agent/reply-templates";
 
@@ -58,46 +58,39 @@ export function ReplyBox({
 
   return (
     <Panel
-      header="Reply to the buyer"
-      description={
-        mailbox ? (
-          <Text color="secondary60" marginBottom="none" style={{ fontSize: 11.5 }}>
-            sends as <span style={{ fontFamily: "monospace" }}>{mailbox}</span> on the same email thread
-          </Text>
-        ) : undefined
-      }
+      title="Reply to the buyer"
+      meta={mailbox ? <>sends as <span style={{ fontFamily: "var(--font-mono)" }}>{mailbox}</span> on the same email thread</> : undefined}
     >
       {canSend ? (
-        <>
-          <Flex flexWrap="wrap" marginBottom="small" style={{ gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2-5)" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {templates.map((t) => (
-              <Button key={t.id} variant="subtle" onClick={() => setText(t.text)}>
+              <Button key={t.id} variant="ghost" size="micro" onClick={() => setText(t.text)}>
                 {t.label}
               </Button>
             ))}
-          </Flex>
-          <Textarea
+          </div>
+          <TextareaField
+            label="Reply body"
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Write a reply — it goes out on the buyer's thread, from the app's mailbox."
             rows={4}
-            aria-label="Reply body"
-            style={{ fontSize: 13 }}
           />
-          <Flex alignItems="center" flexWrap="wrap" marginTop="small" style={{ gap: 12 }}>
-            <Button variant="primary" onClick={send} isLoading={sending}>
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+            <Button variant="primary" onClick={send} loading={sending} icon="mail">
               {sending ? "Sending…" : "Send reply"}
             </Button>
-            <Text color="secondary60" marginBottom="none" style={{ fontSize: 11.5 }}>
+            <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
               Your reply is logged in the audit trail. The session keeps its current state until you force a decision
               or dismiss it.
-            </Text>
-          </Flex>
-        </>
+            </span>
+          </div>
+        </div>
       ) : (
-        <Text color="secondary60" marginBottom="none">
+        <span style={{ color: "var(--text-secondary)" }}>
           {disabledReason ?? "Replying is unavailable until an email channel is configured."}
-        </Text>
+        </span>
       )}
     </Panel>
   );

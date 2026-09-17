@@ -14,14 +14,14 @@ describe("badgeVariant", () => {
     expect(badgeVariant("clarifying")).toBe("warning");
     expect(badgeVariant("awaiting_confirmation")).toBe("warning");
   });
-  it("maps in-flight states to primary", () => {
-    expect(badgeVariant("new")).toBe("primary");
-    expect(badgeVariant("identifying")).toBe("primary");
-    expect(badgeVariant("validating")).toBe("primary");
-    expect(badgeVariant("submitting")).toBe("primary");
+  it("maps in-flight states to info", () => {
+    expect(badgeVariant("new")).toBe("info");
+    expect(badgeVariant("identifying")).toBe("info");
+    expect(badgeVariant("validating")).toBe("info");
+    expect(badgeVariant("submitting")).toBe("info");
   });
-  it("falls back to secondary for expired/unknown", () => {
-    expect(badgeVariant("expired")).toBe("secondary");
-    expect(badgeVariant("something-else")).toBe("secondary");
+  it("falls back to neutral for expired/unknown", () => {
+    expect(badgeVariant("expired")).toBe("neutral");
+    expect(badgeVariant("something-else")).toBe("neutral");
   });
 });

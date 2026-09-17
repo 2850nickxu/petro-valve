@@ -1,110 +1,90 @@
+"use client";
+
 import Link from "next/link";
-import type { ComponentProps } from "react";
-import styled, { css } from "styled-components";
-import { addValues, theme } from "@bigcommerce/big-design-theme";
+import { useState, type ComponentProps, type CSSProperties } from "react";
+import { Icon, type IconName } from "@/components/backbone";
 
-// A single, valid <a> that LOOKS like a Big Design `Button` — replaces the
-// `<Link><Button/></Link>` nesting the migration introduced (invalid HTML5: an
-// interactive element inside an interactive element, and a double tab stop). The old,
-// pre-migration code used a single anchor styled as a button (`<Link className="btn ...">`);
-// this restores that shape on top of Big Design's visual language.
-//
-// Big Design has no button-styled-anchor primitive, so the styles below reproduce the
-// relevant parts of its `Button` token-for-token — see
-// node_modules/@bigcommerce/big-design/dist/es/components/Button/{styled,private}.js.
-// Like every other bespoke styled-component in this app, it imports `theme` directly
-// rather than reading `props.theme` (undefined at SSR here).
+// Navigation styled as a Backbone `Button` — one real, focusable `<a>`. Backbone's own
+// Button renders a <button>, which is wrong for a link (invalid to nest, and a plain
+// full-page anchor loses client routing), so this reproduces the Button token styles on a
+// Next <Link>. It mirrors Button.jsx: same variants, same density-driven geometry, same
+// 90ms hover, resolved entirely from CSS-variable tokens.
 
-export type LinkButtonVariant = "primary" | "secondary" | "subtle";
+export type LinkButtonVariant = "primary" | "accent" | "secondary" | "ghost";
+export type LinkButtonSize = "micro" | "default" | "large";
 
-const VARIANT_STYLES = {
-  primary: css`
-    background-color: ${theme.colors.primary};
-    border-color: ${theme.colors.primary};
-    color: ${theme.colors.white};
-    font-weight: ${theme.typography.fontWeight.semiBold};
+const SIZE: Record<LinkButtonSize, { h: string; padX: number; font: string; gap: number; icon: number }> = {
+  micro: { h: "var(--control-h-micro)", padX: 10, font: "calc(var(--control-font-size) - 1px)", gap: 5, icon: 12 },
+  default: { h: "var(--control-h-default)", padX: 14, font: "var(--control-font-size)", gap: 6, icon: 14 },
+  large: { h: "var(--control-h-large)", padX: 18, font: "calc(var(--control-font-size) + 1px)", gap: 8, icon: 16 },
+};
 
-    &:hover {
-      background-color: ${theme.colors.primary50};
-    }
+const VARIANT: Record<LinkButtonVariant, CSSProperties> = {
+  primary: { background: "var(--control-primary-bg)", color: "var(--control-primary-fg)", borderColor: "var(--control-primary-bg)" },
+  accent: { background: "var(--accent-solid)", color: "var(--accent-on-solid)", borderColor: "var(--accent-solid)" },
+  secondary: { background: "var(--control-secondary-bg)", color: "var(--text-primary)", borderColor: "var(--control-secondary-border)" },
+  ghost: { background: "transparent", color: "var(--text-secondary)", borderColor: "transparent" },
+};
 
-    &:active {
-      background-color: ${theme.colors.primary60};
-    }
-  `,
-  secondary: css`
-    background-color: transparent;
-    border-color: ${theme.colors.primary};
-    color: ${theme.colors.primary};
-
-    &:hover {
-      background-color: ${theme.colors.primary10};
-    }
-
-    &:active {
-      background-color: ${theme.colors.primary20};
-    }
-  `,
-  subtle: css`
-    background-color: transparent;
-    border-color: transparent;
-    color: ${theme.colors.primary};
-
-    &:hover {
-      background-color: ${theme.colors.primary10};
-    }
-
-    &:active {
-      background-color: ${theme.colors.primary20};
-    }
-  `,
-} satisfies Record<LinkButtonVariant, ReturnType<typeof css>>;
-
-const StyledLinkButton = styled(Link)<{ $variant: LinkButtonVariant }>`
-  align-items: center;
-  appearance: none;
-  border: 1px solid ${theme.colors.secondary30};
-  border-radius: ${theme.borderRadius.normal};
-  cursor: pointer;
-  display: inline-flex;
-  font-size: ${theme.typography.fontSize.medium};
-  font-weight: ${theme.typography.fontWeight.regular};
-  height: ${addValues(theme.spacing.xxLarge, theme.spacing.xxSmall)};
-  justify-content: center;
-  line-height: ${theme.lineHeight.xLarge};
-  padding: 0 ${theme.spacing.medium};
-  position: relative;
-  text-align: center;
-  text-decoration: none;
-  transition: all 150ms ease-out;
-  transition-property: background-color, border-color, box-shadow, color;
-  user-select: none;
-  vertical-align: middle;
-  white-space: nowrap;
-  width: 100%;
-
-  ${theme.breakpoints.tablet} {
-    width: auto;
-  }
-
-  &:focus {
-    outline: none;
-  }
-
-  /* Big Design's Button shows its ring on every :focus; anchors get a mouse click too,
-     so this uses :focus-visible instead — same ring, but only for keyboard/AT focus. */
-  &:focus-visible {
-    box-shadow: 0 0 0 ${theme.spacing.xxSmall} ${theme.colors.primary20};
-  }
-
-  ${({ $variant }) => VARIANT_STYLES[$variant]}
-`;
+const HOVER: Record<LinkButtonVariant, CSSProperties> = {
+  primary: { background: "var(--control-primary-bg-hover)", borderColor: "var(--control-primary-bg-hover)" },
+  accent: { background: "var(--accent-solid-hover)", borderColor: "var(--accent-solid-hover)" },
+  secondary: { background: "var(--surface-hover)", borderColor: "var(--border-hover)" },
+  ghost: { background: "var(--control-ghost-bg-hover)", color: "var(--text-primary)" },
+};
 
 export type LinkButtonProps = ComponentProps<typeof Link> & {
   variant?: LinkButtonVariant;
+  size?: LinkButtonSize;
+  icon?: IconName;
+  iconAfter?: IconName;
+  block?: boolean;
 };
 
-/** Navigation styled as a Big Design `Button` — one real, focusable `<a>`. */
-export function LinkButton({ variant = "primary", ...props }: LinkButtonProps) {
-  return <StyledLinkButton $variant={variant} {...props} />;
+export function LinkButton({
+  variant = "primary",
+  size = "default",
+  icon,
+  iconAfter,
+  block = false,
+  style,
+  children,
+  ...props
+}: LinkButtonProps) {
+  const [hover, setHover] = useState(false);
+  const s = SIZE[size];
+  const base: CSSProperties = {
+    display: block ? "flex" : "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: s.gap,
+    width: block ? "100%" : undefined,
+    height: s.h,
+    padding: `0 ${s.padX}px`,
+    borderRadius: "var(--radius-md)",
+    borderStyle: "solid",
+    borderWidth: "var(--border-w)",
+    fontFamily: "var(--font-ui)",
+    fontSize: s.font,
+    fontWeight: "var(--weight-medium)",
+    textDecoration: "none",
+    whiteSpace: "nowrap",
+    cursor: "pointer",
+    transition: "background var(--dur-instant), border-color var(--dur-instant)",
+    ...VARIANT[variant],
+    ...(hover ? HOVER[variant] : null),
+    ...style,
+  };
+  return (
+    <Link
+      {...props}
+      style={base}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      {icon ? <Icon name={icon} size={s.icon} /> : null}
+      {children}
+      {iconAfter ? <Icon name={iconAfter} size={s.icon} /> : null}
+    </Link>
+  );
 }

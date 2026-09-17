@@ -1,0 +1,108 @@
+/* The three pieces Backbone has no primitive for: a burger, an off-canvas sidebar and a
+   scrim. Everything reads Backbone tokens; no styled-components. At >=960px the sidebar is
+   a static sticky column; below that it becomes a drawer over a scrim, toggled by the
+   burger. The fixed frame (sidebar width, header height) does not change with density. */
+
+.frame {
+  display: flex;
+  min-height: 100vh;
+  background: var(--surface-page);
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+}
+
+.aside {
+  flex: 0 0 auto;
+  width: var(--sidebar-w);
+  background: var(--surface-panel);
+  border-right: var(--border-w) solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.scrim {
+  display: none;
+  border: none;
+  padding: 0;
+}
+
+.burger {
+  display: none;
+}
+
+.main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2-5);
+  height: var(--control-h-header);
+  padding: 0 var(--page-pad);
+  background: var(--surface-panel);
+  border-bottom: var(--border-w) solid var(--border-default);
+}
+
+.content {
+  flex: 1 1 auto;
+  padding: var(--page-pad);
+  min-width: 0;
+}
+
+@media (max-width: 959px) {
+  .aside {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 40;
+    height: 100vh;
+    transform: translateX(-105%);
+    transition: transform 200ms ease;
+    box-shadow: var(--shadow-overlay, 0 0 44px rgba(13, 13, 13, 0.28));
+    overflow-y: auto;
+  }
+
+  .asideOpen {
+    transform: none;
+  }
+
+  .scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: var(--overlay-scrim);
+    z-index: 39;
+  }
+
+  .burger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    padding: 0;
+    border: var(--border-w) solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface-panel);
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aside {
+    transition: none;
+  }
+}

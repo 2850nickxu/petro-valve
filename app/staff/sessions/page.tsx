@@ -1,4 +1,3 @@
-import { Box } from "@bigcommerce/big-design";
 import { getRedis } from "@/lib/redis";
 import { SessionsBrowser } from "@/components/sessions-browser";
 import { PageHead } from "../ui";
@@ -14,11 +13,9 @@ export default function SessionsPage() {
       <PageHead title="Sessions" sub="Search and review every processed PO — one session per email thread" />
 
       {!redis && (
-        <Box marginBottom="medium">
-          <Banner kind="warn" title="Redis not configured">
-            Session search is unavailable until Redis credentials are added.
-          </Banner>
-        </Box>
+        <Banner kind="warn" title="Redis not configured">
+          Session search is unavailable until Redis credentials are added.
+        </Banner>
       )}
 
       <SessionsBrowser />

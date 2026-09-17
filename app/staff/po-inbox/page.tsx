@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { Panel } from "@bigcommerce/big-design";
-import { colors } from "@bigcommerce/big-design-theme";
+import { Badge, Panel } from "@/components/backbone";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { PageHead, SessionRow, stateLabel } from "../ui";
@@ -57,40 +56,51 @@ export default async function PoInboxPage() {
         <AutoRefresh />
       </PageHead>
 
-      <Panel header="Escalated" badge={{ label: String(escalated.length), variant: "danger" }} marginBottom="medium">
-        {escalated.length ? (
-          escalated.map((s) => (
-            <SessionRow
-              key={s.id}
-              href={`/staff/po-inbox/${encodeURIComponent(s.id)}`}
-              company={s.buyer?.companyName || "(unknown sender)"}
-              sub={`${s.buyer?.email ?? "unknown"} · ${shortWhen(s.updatedAt, nowMs)}`}
-              meta={<span style={{ color: colors.danger }}>{reasonOf(s)}</span>}
-              state="escalated"
-              stateLabel="escalated"
-            />
-          ))
-        ) : (
-          <EmptyState icon="✓" title="Queue is clear">No sessions are waiting for review.</EmptyState>
-        )}
-      </Panel>
+      <div data-density="compact" style={{ display: "flex", flexDirection: "column", gap: "var(--gap-section)" }}>
+        <Panel
+          title="Escalated"
+          padded={false}
+          actions={<Badge tone={escalated.length ? "danger" : "neutral"} mono>{escalated.length}</Badge>}
+        >
+          {escalated.length ? (
+            escalated.map((s) => (
+              <SessionRow
+                key={s.id}
+                href={`/staff/po-inbox/${encodeURIComponent(s.id)}`}
+                company={s.buyer?.companyName || "(unknown sender)"}
+                sub={`${s.buyer?.email ?? "unknown"} · ${shortWhen(s.updatedAt, nowMs)}`}
+                meta={<span style={{ color: "var(--danger-600)" }}>{reasonOf(s)}</span>}
+                state="escalated"
+                stateLabel="escalated"
+                tint="bad"
+              />
+            ))
+          ) : (
+            <div style={{ padding: "var(--panel-pad)" }}>
+              <EmptyState icon="done" title="Queue is clear">No sessions are waiting for review.</EmptyState>
+            </div>
+          )}
+        </Panel>
 
-      <Panel header="Recent">
-        {recent.length ? (
-          recent.map((s) => (
-            <SessionRow
-              key={s.id}
-              href={`/staff/po-inbox/${encodeURIComponent(s.id)}`}
-              company={s.buyer?.companyName || "(unknown sender)"}
-              sub={`${s.buyer?.email ?? "unknown"} · ${poOf(s)} · ${shortWhen(s.updatedAt, nowMs)}`}
-              state={s.state}
-              stateLabel={stateLabel(s.state)}
-            />
-          ))
-        ) : (
-          <EmptyState title="No sessions yet">Processed POs will appear here as they arrive.</EmptyState>
-        )}
-      </Panel>
+        <Panel title="Recent" padded={false}>
+          {recent.length ? (
+            recent.map((s) => (
+              <SessionRow
+                key={s.id}
+                href={`/staff/po-inbox/${encodeURIComponent(s.id)}`}
+                company={s.buyer?.companyName || "(unknown sender)"}
+                sub={`${s.buyer?.email ?? "unknown"} · ${poOf(s)} · ${shortWhen(s.updatedAt, nowMs)}`}
+                state={s.state}
+                stateLabel={stateLabel(s.state)}
+              />
+            ))
+          ) : (
+            <div style={{ padding: "var(--panel-pad)" }}>
+              <EmptyState title="No sessions yet">Processed POs will appear here as they arrive.</EmptyState>
+            </div>
+          )}
+        </Panel>
+      </div>
     </>
   );
 }

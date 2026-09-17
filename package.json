@@ -20,14 +20,10 @@
     "@ai-sdk/anthropic": "^4.0.23",
     "@ai-sdk/google": "^4.0.27",
     "@ai-sdk/openai": "^4.0.23",
-    "@bigcommerce/big-design": "^5.0.0",
-    "@bigcommerce/big-design-icons": "^3.0.0",
-    "@bigcommerce/big-design-theme": "^3.0.0",
     "ai": "^7.0.41",
     "next": "^16.2.12",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "styled-components": "^6.5.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {

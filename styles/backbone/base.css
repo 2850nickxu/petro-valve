@@ -1,0 +1,64 @@
+/* Backbone base layer. The small amount of global CSS the system guarantees so
+   that components and examples do not each re-declare it. Element selectors
+   only — no utility classes, no layout opinions. */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--surface-page);
+  font-family: var(--font-ui);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  text-wrap: pretty;
+}
+
+input, select, button, textarea { font-family: inherit; }
+
+/* Focus is a 2px accent-ring outline at 1px offset, and it is never removed.
+   The ring follows the product accent so it reads as intentional in a themed
+   app; with no theme it is the neutral ink, as before. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* Links take the accent ink. Defined here so an app that has no links yet does
+   not get browser blue the moment someone adds one. */
+a { color: var(--text-link); text-decoration-color: var(--border-strong); text-underline-offset: 2px; }
+a:hover { color: var(--text-link-hover); text-decoration-color: currentColor; }
+
+/* Ordinary quantities align down a column without becoming mono. */
+[data-numeric] { font-variant-numeric: var(--numeric-tabular); }
+
+/* Media is permitted when the media is the content. It is always cropped to
+   its box, never letterboxed, and it always has a neutral ground underneath so
+   a slow or missing image is a surface rather than a hole. */
+img, video { display: block; max-width: 100%; }
+
+/* Motion is functional, so there is very little to turn off — but what exists
+   does turn off. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* Spinners still need to read as "working": keep them turning, slowly. */
+  [data-spinner] {
+    animation-duration: 1600ms !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
+@media print {
+  body { background: #fff; }
+}

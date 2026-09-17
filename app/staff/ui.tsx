@@ -1,89 +1,108 @@
 import type { ReactNode } from "react";
-import { isValidElement } from "react";
 import Link from "next/link";
-import { Badge, Box, Flex, H1, Panel, Small, Text } from "@bigcommerce/big-design";
-import type { Colors } from "@bigcommerce/big-design-theme";
+import { Badge, KpiCard, StatusDot } from "@/components/backbone";
 import { badgeVariant } from "@/lib/ui/badge-variant";
 import { LinkButton } from "@/components/ui/link-button";
 
-// Server-safe presentational primitives shared by the admin screens, built on Big Design.
+// Server-safe presentational primitives shared by the admin screens, built on Backbone.
+// No client hooks here, so async server pages can import them directly.
 
 export function PageHead({ title, sub, children }: { title: ReactNode; sub?: ReactNode; children?: ReactNode }) {
+  // Implemented directly (not via Backbone PageHeader) because some screens pass a rich
+  // ReactNode subtitle, while PageHeader.description is a plain string. Type + spacing come
+  // from tokens, so it reads identically to PageHeader.
   return (
-    <Flex justifyContent="space-between" alignItems="flex-end" flexWrap="wrap" marginBottom="medium">
-      <Box>
-        <H1>{title}</H1>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "space-between",
+        gap: "var(--gap-within)",
+        flexWrap: "wrap",
+      }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+        <h1
+          style={{
+            margin: 0,
+            fontFamily: "var(--font-ui)",
+            fontSize: "var(--text-title-size)",
+            lineHeight: "var(--text-title-line)",
+            fontWeight: "var(--text-title-weight)",
+            letterSpacing: "var(--text-title-tracking)",
+            color: "var(--text-primary)",
+          }}
+        >
+          {title}
+        </h1>
         {sub ? (
-          <Text color="secondary60" marginTop="xxSmall">
+          <div
+            style={{
+              fontSize: "var(--text-body-size)",
+              lineHeight: "var(--text-body-line)",
+              color: "var(--text-secondary)",
+              maxWidth: "68ch",
+            }}
+          >
             {sub}
-          </Text>
+          </div>
         ) : null}
-      </Box>
-      {children ? <Flex alignItems="center">{children}</Flex> : null}
-    </Flex>
+      </div>
+      {children ? <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>{children}</div> : null}
+    </div>
   );
 }
 
+/** A metric in a summary strip. Backbone's KpiCard keeps the value neutral by default;
+ * where a value is itself a signal (a failure count), pass a toned value node. */
 export function Stat({
   label,
   value,
   note,
   tone,
-  compact,
-  hint,
 }: {
   label: string;
   value: ReactNode;
   note?: ReactNode;
   tone?: "ok" | "bad";
+  /** Accepted for source compatibility; density is driven by the surrounding region. */
   compact?: boolean;
   hint?: string;
 }) {
-  const color: keyof Colors = tone === "bad" ? "danger" : tone === "ok" ? "success" : "secondary70";
-  return (
-    <Panel title={hint}>
-      <Text color="secondary60" bold marginBottom="xxSmall">
-        {label}
-      </Text>
-      <Text
-        color={color}
-        style={{ fontSize: compact ? 24 : 28, fontWeight: 600, lineHeight: 1, marginTop: compact ? 8 : undefined }}
-      >
-        {value}
-      </Text>
-      {note ? (
-        <Text color="secondary60" marginTop="xxSmall">
-          {note}
-        </Text>
-      ) : null}
-    </Panel>
-  );
-}
-
-/** Best-effort extraction of a plain-text label from arbitrary chip content — Big
- * Design's Badge only accepts a string `label`, unlike the old chip which took any node. */
-function chipLabel(node: ReactNode): string {
-  if (node == null || typeof node === "boolean") return "";
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(chipLabel).join("");
-  if (isValidElement(node)) return chipLabel((node.props as { children?: ReactNode }).children);
-  return "";
+  const color = tone === "bad" ? "var(--danger-600)" : tone === "ok" ? "var(--success-600)" : undefined;
+  const tonedValue = color ? <span style={{ color }}>{value}</span> : value;
+  return <KpiCard label={label} value={tonedValue} note={typeof note === "string" ? note : undefined} />;
 }
 
 /** State/decision chip. `kind` maps to the session state or decision kind. */
 export function Chip({ kind, children }: { kind?: string; size?: "lg" | "sm"; children?: ReactNode }) {
-  const label = chipLabel(children) || kind || "—";
-  return <Badge label={label} variant={badgeVariant(kind ?? "neutral")} />;
+  return <Badge tone={badgeVariant(kind ?? "neutral")}>{children ?? kind ?? "—"}</Badge>;
 }
 
 export function CardHead({ title, children }: { title: ReactNode; sm?: boolean; children?: ReactNode }) {
   return (
-    <Flex justifyContent="space-between" alignItems="center" flexWrap="wrap" marginBottom="small" style={{ gap: 10 }}>
-      <Text bold marginBottom="none">
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: "var(--space-2-5)",
+        marginBottom: "var(--gap-within)",
+      }}
+    >
+      <span
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: "var(--text-subheading-size)",
+          fontWeight: "var(--text-subheading-weight)",
+          color: "var(--text-primary)",
+        }}
+      >
         {title}
-      </Text>
+      </span>
       {children}
-    </Flex>
+    </div>
   );
 }
 
@@ -101,22 +120,27 @@ export function HealthRow({
   /** Shown as a "fix it" link when the item isn't OK. */
   action?: { label: string; href: string };
 }) {
-  const dot: keyof Colors = ok ? "success" : warn ? "warning" : "danger";
+  const tone: "success" | "warning" | "danger" = ok ? "success" : warn ? "warning" : "danger";
   return (
-    <Flex alignItems="center" flexWrap="wrap" paddingVertical="small" style={{ gap: 10 }}>
-      <Box backgroundColor={dot} borderRadius="circle" style={{ width: 8, height: 8, flex: "none" }} />
-      <Box style={{ flex: "1 1 140px", minWidth: 0 }}>
-        <Text bold marginBottom="none">
-          {name}
-        </Text>
-      </Box>
-      <Small color="secondary60" marginBottom="none">
-        {detail}
-      </Small>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: "var(--space-2-5)",
+        paddingTop: "var(--space-2)",
+        paddingBottom: "var(--space-2)",
+      }}
+    >
+      <StatusDot tone={tone} halo={false} />
+      <span style={{ flex: "1 1 140px", minWidth: 0, fontWeight: "var(--weight-medium)", color: "var(--text-primary)" }}>{name}</span>
+      {detail ? <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>{detail}</span> : null}
       {!ok && action ? (
-        <LinkButton href={action.href} variant="subtle">{action.label}</LinkButton>
+        <LinkButton href={action.href} variant="ghost" size="micro">
+          {action.label}
+        </LinkButton>
       ) : null}
-    </Flex>
+    </div>
   );
 }
 
@@ -138,34 +162,29 @@ export function SessionRow({
   stateLabel?: string;
   tint?: "bad" | "warn";
 }) {
-  const bg: keyof Colors | undefined = tint === "bad" ? "danger10" : tint === "warn" ? "warning10" : undefined;
+  const bg = tint === "bad" ? "var(--danger-tint)" : tint === "warn" ? "var(--warning-tint)" : undefined;
   return (
-    <Link href={href} style={{ textDecoration: "none", color: "inherit" }}>
-      <Flex
-        justifyContent="space-between"
-        alignItems="center"
-        flexWrap="wrap"
-        backgroundColor={bg}
-        padding="medium"
-        style={{ gap: 10 }}
-      >
-        <Box style={{ flex: "1 1 230px", minWidth: 0 }}>
-          <Text bold marginBottom="none">
-            {company}
-          </Text>
-          {sub ? (
-            <Small color="secondary60" marginBottom="none">
-              {sub}
-            </Small>
-          ) : null}
-        </Box>
-        {meta ? (
-          <Small color="secondary60" marginBottom="none">
-            {meta}
-          </Small>
-        ) : null}
-        {state ? <Chip kind={state}>{stateLabelProp ?? state}</Chip> : null}
-      </Flex>
+    <Link
+      href={href}
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: "var(--space-2-5)",
+        padding: "var(--space-3) var(--space-4)",
+        background: bg,
+        textDecoration: "none",
+        color: "inherit",
+        borderRadius: "var(--radius-sm)",
+      }}
+    >
+      <span style={{ flex: "1 1 230px", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+        <span style={{ fontWeight: "var(--weight-medium)", color: "var(--text-primary)" }}>{company}</span>
+        {sub ? <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>{sub}</span> : null}
+      </span>
+      {meta ? <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>{meta}</span> : null}
+      {state ? <Chip kind={state}>{stateLabelProp ?? state}</Chip> : null}
     </Link>
   );
 }

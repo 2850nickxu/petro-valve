@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Box, Button, Flex, Textarea } from "@bigcommerce/big-design";
+import { Button, TextareaField } from "@/components/backbone";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 
@@ -113,26 +113,20 @@ export function SessionActionButtons({ sessionId, summary }: { sessionId: string
   const disabled = busy != null;
 
   return (
-    <Flex flexWrap="wrap" alignItems="center" style={{ gap: 8 }}>
-      <Button variant="secondary" onClick={reprocess} disabled={disabled} isLoading={busy === "reprocess"}>
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+      <Button variant="ghost" onClick={reprocess} disabled={disabled} loading={busy === "reprocess"} icon="sort">
         {busy === "reprocess" ? "Re-evaluating…" : "Reprocess"}
       </Button>
-      <Button
-        variant="secondary"
-        actionType="destructive"
-        onClick={() => runAction("dismiss")}
-        disabled={disabled}
-        isLoading={busy === "dismiss"}
-      >
+      <Button variant="destructive" onClick={() => runAction("dismiss")} disabled={disabled} loading={busy === "dismiss"}>
         {busy === "dismiss" ? "Dismissing…" : "Dismiss"}
       </Button>
-      <Button variant="secondary" onClick={() => runAction("force_quote")} disabled={disabled} isLoading={busy === "force_quote"}>
+      <Button variant="secondary" onClick={() => runAction("force_quote")} disabled={disabled} loading={busy === "force_quote"}>
         {busy === "force_quote" ? "Creating…" : "Force quote"}
       </Button>
-      <Button variant="primary" onClick={() => runAction("force_order")} disabled={disabled} isLoading={busy === "force_order"}>
+      <Button variant="primary" onClick={() => runAction("force_order")} disabled={disabled} loading={busy === "force_order"}>
         {busy === "force_order" ? "Placing…" : "Force order"}
       </Button>
-    </Flex>
+    </div>
   );
 }
 
@@ -164,20 +158,19 @@ export function SessionNote({ sessionId }: { sessionId: string }) {
   }
 
   return (
-    <Box>
-      <Textarea
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2-5)" }}>
+      <TextareaField
+        label="Internal note"
         value={note}
         onChange={(e) => setNote(e.target.value)}
         placeholder="Internal note — recorded in the audit trail. The buyer never sees this."
         rows={3}
-        aria-label="Internal note"
-        style={{ fontSize: 13 }}
       />
-      <Box marginTop="small">
-        <Button variant="secondary" onClick={addNote} disabled={busy} isLoading={busy}>
+      <div>
+        <Button variant="secondary" onClick={addNote} disabled={busy} loading={busy}>
           {busy ? "Adding…" : "Add note"}
         </Button>
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 }

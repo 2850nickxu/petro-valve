@@ -1,0 +1,26 @@
+/* Backbone webfonts — self-hosted.
+   The source kit specified Inter (interface) + Roboto Mono (identifiers/numerics) and
+   shipped no binaries. Rather than load them from the Google CDN at runtime, the two
+   variable-font latin subsets are vendored under public/fonts/backbone/ and declared
+   here as @font-face. No third-party request, works offline, no render-blocking @import. */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('/fonts/backbone/inter-var.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Roboto Mono';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/fonts/backbone/roboto-mono-var.woff2') format('woff2');
+}
+
+:root {
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}

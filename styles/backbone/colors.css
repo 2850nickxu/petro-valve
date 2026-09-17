@@ -1,0 +1,199 @@
+/* Backbone colour.
+
+   Four independent channels, deliberately kept apart:
+     1. Neutral ramp — carries the interface. Optionally warm or cool.
+     2. Signal hues — success / warning / danger / info. Meaning only.
+     3. Product accent — one reviewed colour per application. Identity only.
+     4. Categorical series — chart-only, never applied to UI chrome.
+
+   The accent defaults to the neutral ink, so a system with no product theme
+   looks exactly as it did before and the hierarchy improvements stand on their
+   own. Set a theme with data-accent / data-neutral on <html>. */
+
+:root {
+  /* 1. Neutral ramp (base, pure grey) */
+  --gray-000: #ffffff;
+  --gray-020: #fafafa;
+  --gray-050: #f2f2f2;
+  --gray-100: #e6e6e6;
+  --gray-150: #d9d9d9;
+  --gray-200: #cccccc;
+  --gray-350: #a6a6a6;
+  --gray-400: #999999;
+  --gray-500: #808080;
+  --gray-600: #666666;
+  --gray-700: #4d4d4d;
+  --gray-800: #333333;
+  --gray-900: #1a1a1a;
+  --gray-950: #0d0d0d;
+
+  /* 2. Signal hues */
+  --success-500: #16a34a;
+  --success-600: #15803d;
+  --success-tint: #f0fdf4;
+  --success-line: #bbf7d0;
+  --success-deep: #14532d;
+
+  --warning-500: #d97706;
+  --warning-600: #b45309;
+  --warning-tint: #fffbeb;
+  --warning-line: #fde68a;
+  --warning-deep: #78350f;
+
+  --danger-500: #dc2626;
+  --danger-600: #b91c1c;
+  --danger-tint: #fef2f2;
+  --danger-line: #fecaca;
+  --danger-deep: #7f1d1d;
+
+  --info-500: #0284c7;
+  --info-600: #0369a1;
+  --info-tint: #f0f9ff;
+  --info-line: #bae6fd;
+  --info-deep: #0c4a6e;
+
+  /* 3. Product accent — neutral until a theme is chosen.
+        Paired roles, so every use has a tested foreground. */
+  --accent-solid: var(--gray-900);        /* filled surface: primary button, active pill */
+  --accent-solid-hover: var(--gray-800);
+  --accent-on-solid: var(--gray-000);     /* foreground on --accent-solid */
+  --accent-ink: var(--gray-900);          /* accent as text or icon on a light surface */
+  --accent-ink-hover: var(--gray-700);
+  --accent-surface: var(--gray-050);      /* selected row, active nav fill */
+  --accent-surface-hover: var(--gray-100);
+  --accent-on-surface: var(--gray-900);   /* foreground on --accent-surface */
+  --accent-line: var(--gray-200);         /* accent border */
+  --accent-bar: var(--gray-900);          /* the 2px active-nav / selected-tab rule */
+  --accent-ring: var(--gray-900);         /* focus outline */
+
+  /* 4. Categorical series — charts only. Distinct from accent and from signal. */
+  --cat-1: #31506e;
+  --cat-2: #6a5a8f;
+  --cat-3: #9e5570;
+  --cat-4: #a9743d;
+  --cat-5: #56784c;
+  --cat-6: #4a6f83;
+
+  /* Semantic — surfaces */
+  --surface-page: var(--gray-020);
+  --surface-panel: var(--gray-000);
+  --surface-inset: var(--gray-050);
+  --surface-sunken: var(--gray-050);
+  --surface-hover: var(--gray-020);
+  --surface-selected: var(--accent-surface);
+  --surface-inverse: var(--gray-900);
+  --surface-disabled: var(--gray-050);
+  --surface-media: var(--gray-100);       /* behind a photo / preview while it loads */
+
+  /* Semantic — ink. Three working levels plus metadata.
+     primary = the thing being read. secondary = supporting. metadata =
+     timestamps, IDs, counts of record — present, never competing. */
+  --text-primary: var(--gray-900);
+  --text-secondary: var(--gray-700);
+  --text-tertiary: var(--gray-600);
+  --text-metadata: var(--gray-600);
+  --text-muted: var(--gray-500);
+  --text-disabled: var(--gray-350);
+  --text-inverse: var(--gray-000);
+  --text-link: var(--accent-ink);
+  --text-link-hover: var(--accent-ink-hover);
+
+  /* Semantic — lines */
+  --border-default: var(--gray-100);
+  --border-subtle: var(--gray-050);
+  --border-strong: var(--gray-200);
+  --border-hover: var(--gray-500);
+  --focus-ring: var(--accent-ring);
+
+  /* Semantic — control fills */
+  --control-primary-bg: var(--accent-solid);
+  --control-primary-bg-hover: var(--accent-solid-hover);
+  --control-primary-fg: var(--accent-on-solid);
+  --control-secondary-bg: var(--gray-000);
+  --control-secondary-border: var(--gray-200);
+  --control-ghost-bg-hover: var(--gray-050);
+  --control-filled-bg: var(--gray-050);
+  --control-filled-bg-hover: #e9e9e9;
+
+  /* Semantic — data viz (monochrome default; use --cat-* when a chart needs
+     categorical separation) */
+  --series-1: var(--gray-900);
+  --series-2: var(--gray-350);
+  --series-3: var(--gray-200);
+  --series-grid: var(--gray-050);
+  --series-fail: var(--danger-500);
+  --overlay-scrim: rgba(26, 26, 26, 0.32);
+}
+
+/* ---- Neutral temperature ------------------------------------------------ */
+/* A barely-there tint on the canvas and lines. Never more than this. */
+
+[data-neutral='warm'] {
+  --gray-020: #faf9f7;
+  --gray-050: #f3f1ed;
+  --gray-100: #e8e4de;
+  --gray-150: #dcd8d1;
+  --gray-200: #cec9c1;
+  --gray-600: #6a655e;
+  --gray-700: #514c45;
+  --gray-900: #1c1a18;
+}
+
+[data-neutral='cool'] {
+  --gray-020: #f9fafb;
+  --gray-050: #f1f3f5;
+  --gray-100: #e4e7ec;
+  --gray-150: #d8dce3;
+  --gray-200: #cad0d8;
+  --gray-600: #61666e;
+  --gray-700: #494e56;
+  --gray-900: #181b1f;
+}
+
+/* ---- Product accents ---------------------------------------------------- */
+/* Three reviewed accents plus the neutral default. Not a colour picker. Each
+   ships paired foregrounds; each accent ink clears 4.5:1 on white and on its
+   own surface tint. Primary buttons stay neutral unless the app opts in with
+   <Button variant="accent">. */
+
+[data-accent='indigo'] {
+  --accent-solid: #3d4bb0;
+  --accent-solid-hover: #333f96;
+  --accent-on-solid: #ffffff;
+  --accent-ink: #39459f;
+  --accent-ink-hover: #2c3680;
+  --accent-surface: #f1f2fb;
+  --accent-surface-hover: #e5e7f7;
+  --accent-on-surface: #2c3680;
+  --accent-line: #ccd1f0;
+  --accent-bar: #3d4bb0;
+  --accent-ring: #3d4bb0;
+}
+
+[data-accent='teal'] {
+  --accent-solid: #0f766e;
+  --accent-solid-hover: #115e59;
+  --accent-on-solid: #ffffff;
+  --accent-ink: #0f6f67;
+  --accent-ink-hover: #0c564f;
+  --accent-surface: #eff9f7;
+  --accent-surface-hover: #ddf1ee;
+  --accent-on-surface: #0c564f;
+  --accent-line: #bfe3de;
+  --accent-bar: #0f766e;
+  --accent-ring: #0f766e;
+}
+
+[data-accent='plum'] {
+  --accent-solid: #6d3f8a;
+  --accent-solid-hover: #5b3474;
+  --accent-on-solid: #ffffff;
+  --accent-ink: #673a83;
+  --accent-ink-hover: #4f2c64;
+  --accent-surface: #f8f3fb;
+  --accent-surface-hover: #f0e6f5;
+  --accent-on-surface: #4f2c64;
+  --accent-line: #e0cfea;
+  --accent-bar: #6d3f8a;
+  --accent-ring: #6d3f8a;
+}
