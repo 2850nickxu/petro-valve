@@ -21,42 +21,54 @@ interface Scenario {
 
 const SCENARIOS: Scenario[] = [
   {
-    label: "Clean terms order",
-    from: "buyer@acme.com",
+    label: "Order on account",
+    from: "t.nguyen@pacific-elec.com",
     subject: "New purchase order",
     body: `PO Number: PO-5567
 Please pay on account, net 30.
 
-SKU: WIDGET-100   Qty: 10   $9.84
-SKU: BOLT-250     Qty: 40`,
+SKU: COR-MCT-15ML Qty: 1
+SKU: EPP-TIP-200F Qty: 5`,
   },
   {
-    label: "Credit card → quote",
-    from: "buyer@acme.com",
-    subject: "Purchase order — card payment",
-    body: `PO Number: PO-5568
-Please charge our credit card on file.
+    label: "Card payment → quote",
+    from: "a.mitchell@westernpower.com",
+    subject: "New purchase order",
+    body: `PO Number: PO-1624
+Please pay using card
 
-SKU: WIDGET-100   Qty: 10   $9.84
-SKU: BOLT-250     Qty: 40`,
+Sloan Check Valves 1" Sweat
+SKU: ANS-GLV-NIT-XL   Qty: 5
+
+Delta Gate Valves 3/8" FlowGuard
+SKU: SKF-BRG-6205-2RS     Qty: 15`,
   },
   {
-    label: "Unknown sender → reject",
-    from: "stranger@example.com",
-    subject: "Purchase order",
-    body: `PO Number: PO-9001
+    label: "Wrong SKU",
+    from: "t.nguyen@pacific-elec.com",
+    subject: "New purchase order",
+    body: `PO Number: PO-5570
 Please pay on account, net 30.
 
-SKU: WIDGET-100   Qty: 5   $9.84`,
+SKU: WRONG-SKU   Qty: 10`,
   },
   {
-    label: "Broken SKU → clarify",
-    from: "buyer@acme.com",
-    subject: "Purchase order with new items",
-    body: `PO Number: PO-5569
-Please pay on account, net 30.
+    label: "Low inventory, wrong price",
+    from: "t.nguyen@pacific-elec.com",
+    subject: "New purchase order",
+    body: `PO Number: PO-5572
+Please pay on account, net 60.
 
-SKU: DOES-NOT-EXIST-999   Qty: 5   $19.99`,
+SKU: SW-12-2-NM-250   Qty: 1000   $1`,
+  },
+  {
+    label: "Unknown sender",
+    from: "unknown@unknowncompany.com",
+    subject: "New purchase order",
+    body: `PO Number: PO-1625
+Please pay using card on file
+
+SKU: MECHAN-SAFETY-00064   Qty: 50   $149.44`,
   },
 ];
 
@@ -145,7 +157,7 @@ const CODE_BLOCK: CSSProperties = {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function Simulator({
-  defaultFrom = "buyer@acme.com",
+  defaultFrom = SCENARIOS[0].from,
   sandbox = false,
   sandboxEmails = false,
 }: {
@@ -155,8 +167,7 @@ export function Simulator({
 }) {
   const toast = useToast();
 
-  const initialScenario = defaultFrom === SCENARIOS[0].from ? SCENARIOS[0].label : CUSTOM_LABEL;
-  const [scenario, setScenario] = useState<string>(initialScenario);
+  const [scenario, setScenario] = useState<string>(CUSTOM_LABEL);
   const [from, setFrom] = useState(defaultFrom);
   const [subject, setSubject] = useState(SCENARIOS[0].subject);
   const [bodyText, setBodyText] = useState(SCENARIOS[0].body);
@@ -281,7 +292,7 @@ export function Simulator({
             {loading ? "Running…" : "Run pipeline"}
           </Button>
           <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
-            Try &ldquo;pay by credit card&rdquo; for a quote, or an unknown sender for a reject.
+            Pick a scenario, or edit any field to try your own PO.
           </span>
         </div>
 
