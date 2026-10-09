@@ -91,17 +91,24 @@ describe("GoogleChannel", () => {
   });
 
   it("sends a threaded reply", async () => {
-    const mock = installMockFetch([{ method: "POST", url: "/messages/send", body: { id: "sent-1" } }]);
+    const mock = installMockFetch([{ method: "POST", url: "/messages/send", body: { id: "sent-1", threadId: "thr-m1" } }]);
     const out = await channel.sendReply(
       { threadId: "thr-m1", to: "buyer@acme.com", rfcMessageId: "<m1@mail>", references: "<r0@mail>", subject: "Re: New PO" },
       { subject: "Re: New PO", text: "Your order is placed." },
     );
-    expect(out.messageId).toBe("sent-1");
+    expect(out).toEqual({ messageId: "sent-1", threadId: "thr-m1" });
     const body = mock.calls.find((c) => c.url.includes("/messages/send"))!.body as { raw: string; threadId: string };
     expect(body.threadId).toBe("thr-m1");
     const decoded = base64UrlDecode(body.raw).toString("utf8");
     expect(decoded).toContain("In-Reply-To: <m1@mail>");
     expect(decoded).toContain("To: buyer@acme.com");
+  });
+
+  it("throws when Gmail rejects the send", async () => {
+    installMockFetch([{ method: "POST", url: "/messages/send", status: 400, body: { error: { message: "Invalid To header" } } }]);
+    await expect(
+      channel.sendReply({ threadId: "thr-m1", to: "buyer@acme.com", subject: "Re: New PO" }, { subject: "Re: New PO", text: "hi" }),
+    ).rejects.toThrow("Gmail send failed (400): Invalid To header");
   });
 
   it("loop-guards its own address and auto-replies", () => {

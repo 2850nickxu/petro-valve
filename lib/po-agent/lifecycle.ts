@@ -1,8 +1,9 @@
 import type { PoAgentConfig } from "./config";
 import type { PoStore } from "./store";
-import type { EmailChannel, ThreadRef } from "./channel/types";
+import type { EmailChannel } from "./channel/types";
 import type { PoSession } from "./types";
 import { draftNudge, draftExpiry } from "./ai/respond";
+import { replyThread, sendRecordedReply } from "./messages";
 
 // Session lifecycle sweep (§7.7): one nudge after N days of buyer silence, then expiry
 // after M days. Piggybacks on the poll cron. Idempotent — safe to run repeatedly.
@@ -14,6 +15,8 @@ export interface LifecycleDeps {
   store: PoStore;
   channel: EmailChannel;
   now: () => string;
+  /** Monitored mailbox, recorded as the sender of nudges/expiry notices. */
+  mailbox?: string;
 }
 
 export interface SweepResult {
@@ -25,10 +28,6 @@ const WAITING_STATES: PoSession["state"][] = ["clarifying", "awaiting_confirmati
 
 function ageMs(nowIso: string, updatedAtIso: string): number {
   return (Date.parse(nowIso) || 0) - (Date.parse(updatedAtIso) || 0);
-}
-
-function threadOf(session: PoSession): ThreadRef {
-  return { threadId: session.threadId, to: session.buyer?.email, subject: "Re: your purchase order" };
 }
 
 export async function sweepLifecycle(deps: LifecycleDeps): Promise<SweepResult> {
@@ -45,9 +44,12 @@ export async function sweepLifecycle(deps: LifecycleDeps): Promise<SweepResult> 
     }
 
     const age = ageMs(now, session.updatedAt);
+    const thread = replyThread(session, session.buyer?.email ?? session.inbound?.from);
+    const send = (kind: "reminder" | "expiry", text: string) =>
+      sendRecordedReply(deps.channel, session, thread, { subject: thread.subject!, text }, { kind, from: deps.mailbox }, () => now);
 
     if (age >= deps.config.sessionExpiryDays * DAY_MS) {
-      await deps.channel.sendReply(threadOf(session), { subject: "Re: your purchase order", text: draftExpiry() });
+      await send("expiry", draftExpiry());
       session.state = "expired";
       session.updatedAt = now;
       session.audit.push({ at: now, event: "expired" });
@@ -58,10 +60,7 @@ export async function sweepLifecycle(deps: LifecycleDeps): Promise<SweepResult> 
     }
 
     if (!session.remindedAt && age >= deps.config.reminderDays * DAY_MS) {
-      await deps.channel.sendReply(threadOf(session), {
-        subject: "Re: your purchase order",
-        text: draftNudge(session.validation ?? []),
-      });
+      await send("reminder", draftNudge(session.validation ?? []));
       session.remindedAt = now;
       session.updatedAt = now;
       session.audit.push({ at: now, event: "reminded" });

@@ -10,7 +10,7 @@ import type { PoAgentConfig } from "./config";
 import type { PoStore } from "./store";
 import { sessionId as makeSessionId } from "./store";
 import type { EmailChannel, InboundMessage, Extractor, ThreadRef } from "./channel/types";
-import type { Buyer, PoSession, PoSessionState, ResolvedLine, ExtractedPo, Decision, ValidationIssue } from "./types";
+import type { Buyer, PoSession, PoSessionState, ResolvedLine, ExtractedPo, Decision, ValidationIssue, MessagePurpose } from "./types";
 import { identify, type IdentifyResult } from "./core/identify";
 import { resolveChannel } from "./core/channel";
 import { resolveLines, submittableLines } from "./core/resolve";
@@ -25,8 +25,9 @@ import {
 } from "./core/decide";
 import { submitOrder } from "./core/submit-order";
 import { submitQuote } from "./core/submit-quote";
-import { fanOutEscalation, type MailSender } from "./escalate";
+import { fanOutEscalation, type EscalateDeps, type MailSender } from "./escalate";
 import { forwardBelowContractPo } from "./escalate/forward";
+import { capText, recordInbound, recordedMailer, reSubject, sendRecordedReply } from "./messages";
 import {
   draftRejection,
   draftClarification,
@@ -68,15 +69,13 @@ function createSession(id: string, channel: EmailChannel["id"], threadId: string
     state: "new",
     clarificationRounds: 0,
     audit: [],
+    messages: [],
     messageIds: [],
     createdAt: ts,
     updatedAt: ts,
   };
 }
 
-function reSubject(subject: string): string {
-  return /^re:/i.test(subject) ? subject : `Re: ${subject || "your purchase order"}`;
-}
 function ym(iso: string): string {
   return `${iso.slice(0, 4)}${iso.slice(5, 7)}`;
 }
@@ -99,6 +98,19 @@ interface ActContext {
   decision: Decision;
   priorState: PoSessionState;
   ts: string;
+  run: number;
+}
+
+/** Escalation fan-out deps whose rep-inbox email is logged on the session. */
+function escalateDeps(deps: PipelineDeps, session: PoSession, run: number, now: () => string): EscalateDeps {
+  return {
+    config: deps.config,
+    store: deps.store,
+    sendMail: deps.sendMail
+      ? recordedMailer(deps.sendMail, session, { kind: "escalation_email", from: deps.mailbox, run, captured: deps.channel.id === "simulator" }, now)
+      : undefined,
+    now,
+  };
 }
 
 export interface EvaluateDeps {
@@ -223,18 +235,22 @@ export async function processInbound(
   // Captured before this run overwrites them: what we last asked the buyer about.
   const priorValidation = session.validation ?? [];
   if (!session.messageIds.includes(message.messageId)) session.messageIds.push(message.messageId);
+  // Every message on the thread goes in the log; its position numbers this run.
+  const run = recordInbound(session, message, now(), deps.mailbox).run ?? 1;
   // Retain the original inbound once (bounded) — powers the "original email" view and
   // future full re-runs. Later messages on the thread don't overwrite it.
   if (!session.inbound) {
     session.inbound = {
       from: message.from,
       subject: message.subject,
-      bodyText: message.bodyText.length > 32_000 ? `${message.bodyText.slice(0, 32_000)}…` : message.bodyText,
+      bodyText: capText(message.bodyText),
       receivedAt: message.receivedAt,
     };
   }
 
   const audit = (event: string, detail?: unknown) => session.audit.push({ at: now(), event, detail });
+  const reply = (purpose: MessagePurpose, text: string) =>
+    sendRecordedReply(deps.channel, session, threadOf(message), { subject: reSubject(message.subject), text }, { kind: "auto_reply", purpose, from: deps.mailbox, run }, now);
   const persist = async () => {
     if (opts.dryRun || !deps.store) return;
     session.updatedAt = now();
@@ -274,8 +290,8 @@ export async function processInbound(
       session.validation = [{ kind: "unknown_sender", message: "unknown_sender", blocking: true }];
       session.decision = { kind: "reject", reasons: ["unknown_sender"] };
       if (!opts.dryRun) {
-        const r = await deps.channel.sendReply(threadOf(message), { subject: reSubject(message.subject), text: draftRejection() });
-        session.result = { confirmationMessageId: r.messageId };
+        const sent = await reply("rejection", draftRejection());
+        session.result = { confirmationMessageId: sent.providerMessageId };
       }
       session.state = opts.dryRun ? "validating" : "rejected";
       await persist();
@@ -285,9 +301,7 @@ export async function processInbound(
     // Non-PO mail on a fresh thread ⇒ triage once, don't churn a session.
     if (looksLikeNonPo(extracted) && priorState === "new") {
       audit("triaged");
-      if (!opts.dryRun) {
-        await deps.channel.sendReply(threadOf(message), { subject: reSubject(message.subject), text: draftTriage() });
-      }
+      if (!opts.dryRun) await reply("triage", draftTriage());
       session.state = opts.dryRun ? "validating" : "rejected";
       await persist();
       return session;
@@ -326,7 +340,7 @@ export async function processInbound(
     if (opts.dryRun) {
       session.state = "validating";
     } else {
-      const actCtx: ActContext = { buyer, channelId: channel.channelId, resolved, extracted, credit, quoteConfig, decision, priorState, ts: now() };
+      const actCtx: ActContext = { buyer, channelId: channel.channelId, resolved, extracted, credit, quoteConfig, decision, priorState, ts: now(), run };
       await actOnDecision(deps, session, message, actCtx);
       if (deps.store && session.state === "escalated") await deps.store.bumpCounter(ym(now()), "escalations");
     }
@@ -339,7 +353,7 @@ export async function processInbound(
       session.escalation = {
         reasons: ["internal_error"],
         at: now(),
-        notified: await fanOutEscalation({ config: deps.config, store: deps.store, sendMail: deps.sendMail, now }, session, ["internal_error"]),
+        notified: await fanOutEscalation(escalateDeps(deps, session, run, now), session, ["internal_error"]),
       };
       await deps.store.bumpCounter(ym(now()), "escalations");
     }
@@ -370,31 +384,36 @@ async function actOnDecision(
   const thread = threadOf(message);
   const store = deps.store;
   const decision = ctx.decision;
+  const reply = (purpose: MessagePurpose, text: string) =>
+    sendRecordedReply(deps.channel, session, thread, { subject: thread.subject!, text }, { kind: "auto_reply", purpose, from: deps.mailbox, run: ctx.run }, now);
+  const escalate = (reasons: string[]) => fanOutEscalation(escalateDeps(deps, session, ctx.run, now), session, reasons);
 
   if (decision.kind === "reject") {
-    const r = await deps.channel.sendReply(thread, { subject: thread.subject!, text: draftRejection() });
-    session.result = { confirmationMessageId: r.messageId };
+    const sent = await reply("rejection", draftRejection());
+    session.result = { confirmationMessageId: sent.providerMessageId };
     session.state = "rejected";
     return;
   }
 
   if (decision.kind === "clarify") {
     session.clarificationRounds += 1;
-    const r = await deps.channel.sendReply(thread, { subject: thread.subject!, text: draftClarification(session.validation ?? []) });
-    session.result = { confirmationMessageId: r.messageId };
+    const sent = await reply("clarification", draftClarification(session.validation ?? []));
+    session.result = { confirmationMessageId: sent.providerMessageId };
     session.state = "clarifying";
     if (store) await store.enqueue("awaiting", session.id, Date.parse(ctx.ts) || 0);
     return;
   }
 
   if (decision.kind === "escalate") {
-    await deps.channel.sendReply(thread, { subject: thread.subject!, text: draftEscalationNotice() });
-    const notified = await fanOutEscalation({ config: deps.config, store, sendMail: deps.sendMail, now }, session, decision.reasons);
-    const forwarded = await forwardBelowContractPo(
-      { ctx: deps.ctx, config: deps.config, sendEmail: (to, s, t) => deps.channel.sendEmail(to, s, t) },
+    await reply("escalation_notice", draftEscalationNotice());
+    const notified = await escalate(decision.reasons);
+    const sendEmail = recordedMailer(
+      (to, s, t) => deps.channel.sendEmail(to, s, t),
       session,
-      message,
+      { kind: "below_contract_forward", from: deps.mailbox, run: ctx.run, captured: deps.channel.id === "simulator" },
+      now,
     );
+    const forwarded = await forwardBelowContractPo({ ctx: deps.ctx, config: deps.config, sendEmail }, session, message);
     if (forwarded.length) session.audit.push({ at: now(), event: "forwarded_below_contract", detail: { to: forwarded.length } });
     session.escalation = { reasons: decision.reasons, at: ctx.ts, notified, ...(forwarded.length ? { forwarded } : {}) };
     session.state = "escalated";
@@ -415,7 +434,7 @@ async function actOnDecision(
         session.escalation = {
           reasons: ["daily_cap"],
           at: ctx.ts,
-          notified: await fanOutEscalation({ config: deps.config, store, sendMail: deps.sendMail, now }, session, ["daily_cap"]),
+          notified: await escalate(["daily_cap"]),
         };
         session.state = "escalated";
         return;
@@ -426,11 +445,8 @@ async function actOnDecision(
       // First-order confirmation gate (§7.8) — a spoofing backstop; order path only.
       const isConfirmReply = ctx.priorState === "awaiting_confirmation" && /\bconfirm\b/i.test(message.bodyText);
       if (deps.config.firstOrderConfirm && store && !isConfirmReply && !(await store.isTrusted(ctx.buyer.email))) {
-        const r = await deps.channel.sendReply(thread, {
-          subject: thread.subject!,
-          text: draftFirstOrderConfirm(ctx.resolved, money(estimatedSubtotal(ctx.resolved))),
-        });
-        session.result = { confirmationMessageId: r.messageId };
+        const sent = await reply("first_order_confirm", draftFirstOrderConfirm(ctx.resolved, money(estimatedSubtotal(ctx.resolved))));
+        session.result = { confirmationMessageId: sent.providerMessageId };
         session.state = "awaiting_confirmation";
         await store.enqueue("awaiting", session.id, Date.parse(ctx.ts) || 0);
         return;
@@ -446,16 +462,16 @@ async function actOnDecision(
         sandbox: deps.sandbox,
       });
       if (!res.ok) {
-        session.escalation = { reasons: [`submit_failed:${res.reason}`], at: ctx.ts, notified: await fanOutEscalation({ config: deps.config, store, sendMail: deps.sendMail, now }, session, [`submit_failed:${res.reason}`]) };
+        session.escalation = { reasons: [`submit_failed:${res.reason}`], at: ctx.ts, notified: await escalate([`submit_failed:${res.reason}`]) };
         session.state = "escalated";
         return;
       }
       session.result = { orderId: res.orderId };
-      const r = await deps.channel.sendReply(thread, {
-        subject: thread.subject!,
-        text: draftOrderConfirmation({ orderId: res.orderId, poNumber: ctx.extracted.poNumber ?? undefined, resolved: ctx.resolved, totals: res.totals }),
-      });
-      session.result.confirmationMessageId = r.messageId;
+      const sent = await reply(
+        "order_confirmation",
+        draftOrderConfirmation({ orderId: res.orderId, poNumber: ctx.extracted.poNumber ?? undefined, resolved: ctx.resolved, totals: res.totals }),
+      );
+      session.result.confirmationMessageId = sent.providerMessageId;
       session.state = "completed_order";
       if (store) {
         await store.setTrusted(ctx.buyer.email);
@@ -472,16 +488,16 @@ async function actOnDecision(
         sandbox: deps.sandbox,
       });
       if (!res.ok) {
-        session.escalation = { reasons: [`submit_failed:${res.reason}`], at: ctx.ts, notified: await fanOutEscalation({ config: deps.config, store, sendMail: deps.sendMail, now }, session, [`submit_failed:${res.reason}`]) };
+        session.escalation = { reasons: [`submit_failed:${res.reason}`], at: ctx.ts, notified: await escalate([`submit_failed:${res.reason}`]) };
         session.state = "escalated";
         return;
       }
       session.result = { quoteId: res.quoteId, quoteNumber: res.quoteNumber, quoteUrl: res.quoteUrl, checkoutUrl: res.checkoutUrl };
-      const r = await deps.channel.sendReply(thread, {
-        subject: thread.subject!,
-        text: draftQuoteConfirmation({ quoteNumber: res.quoteNumber ?? String(res.quoteId), resolved: ctx.resolved, checkoutUrl: res.checkoutUrl, quoteUrl: res.quoteUrl }),
-      });
-      session.result.confirmationMessageId = r.messageId;
+      const sent = await reply(
+        "quote_confirmation",
+        draftQuoteConfirmation({ quoteNumber: res.quoteNumber ?? String(res.quoteId), resolved: ctx.resolved, checkoutUrl: res.checkoutUrl, quoteUrl: res.quoteUrl }),
+      );
+      session.result.confirmationMessageId = sent.providerMessageId;
       session.state = "completed_quote";
       if (store) await store.bumpCounter(ym(ctx.ts), "quotes");
     }

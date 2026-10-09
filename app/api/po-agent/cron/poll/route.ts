@@ -22,7 +22,7 @@ export async function GET(req: Request) {
   if (!rt.ok) return NextResponse.json({ error: rt.error }, { status: 503 });
   const store = rt.deps.store!;
 
-  const sweep = await sweepLifecycle({ config, store, channel: rt.channel, now: () => new Date().toISOString() });
+  const sweep = await sweepLifecycle({ config, store, channel: rt.channel, mailbox: rt.deps.mailbox, now: () => new Date().toISOString() });
 
   const lastPushAt = await store.getLastPushAt();
   const pushHealthy = lastPushAt != null && Date.now() - Date.parse(lastPushAt) < PUSH_HEALTHY_MS;

@@ -175,6 +175,64 @@ export interface InboundSnapshot {
   receivedAt?: string;
 }
 
+/** What a session message is. Inbound is the buyer writing in; the rest are sends. */
+export type MessageKind =
+  | "inbound"
+  | "auto_reply"
+  | "staff_reply"
+  | "reminder"
+  | "expiry"
+  | "escalation_email"
+  | "below_contract_forward";
+
+/** Which reply template an agent auto-reply came from. */
+export type MessagePurpose =
+  | "rejection"
+  | "triage"
+  | "clarification"
+  | "escalation_notice"
+  | "first_order_confirm"
+  | "order_confirmation"
+  | "quote_confirmation";
+
+/** "captured" = a simulator sandbox send that was suppressed and never left the app. */
+export type MessageStatus = "received" | "sent" | "failed" | "captured";
+
+export interface MessageAttachment {
+  filename: string;
+  mediaType: string;
+  size: number;
+}
+
+/** One email on the session, inbound or outbound, with the exact body received or sent. */
+export interface SessionMessage {
+  /** Ordinal within the session ("m1", "m2", …) — the log is append-only. */
+  id: string;
+  at: string;
+  direction: "in" | "out";
+  /** "buyer" = on the customer's thread; "internal" = rep/sales notifications, never sent to the buyer. */
+  audience: "buyer" | "internal";
+  kind: MessageKind;
+  purpose?: MessagePurpose;
+  status: MessageStatus;
+  from?: string;
+  to?: string;
+  subject: string;
+  text: string;
+  attachments?: MessageAttachment[];
+  /** Pipeline run this belongs to: run N is triggered by the Nth inbound message. */
+  run?: number;
+  /** Staff identity for operator-sent messages. */
+  actor?: string;
+  /** Why a send failed. */
+  error?: string;
+  providerMessageId?: string;
+  providerThreadId?: string;
+  /** RFC-2822 Message-ID / References headers, kept so later replies thread correctly. */
+  rfcMessageId?: string;
+  references?: string;
+}
+
 export interface SessionSummary {
   id: string;
   company: string;
@@ -207,6 +265,8 @@ export interface PoSession {
   result?: PoResult;
   escalation?: Escalation;
   audit: AuditEntry[];
+  /** Every inbound and outbound email, oldest first. Absent on sessions saved before the log existed. */
+  messages?: SessionMessage[];
   messageIds: string[];
   createdAt: string;
   updatedAt: string;

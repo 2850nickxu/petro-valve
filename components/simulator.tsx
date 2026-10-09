@@ -8,7 +8,8 @@ import { Timeline, type StatusTone } from "@/components/ui/detail-widgets";
 import { badgeVariant } from "@/lib/ui/badge-variant";
 import { summarizeOutcome } from "@/lib/po-agent/summary";
 import { formatMoney } from "@/components/ui/money";
-import type { DecisionKind, ValidationIssueKind } from "@/lib/po-agent/types";
+import { reSubject } from "@/lib/po-agent/messages";
+import type { DecisionKind, SessionMessage, ValidationIssueKind } from "@/lib/po-agent/types";
 
 // ── Scenario library ──────────────────────────────────────────────────────────
 
@@ -86,6 +87,8 @@ type SimResult = {
   emailsSent?: boolean;
   captured?: Array<{ to?: string; subject?: string; text?: string }>;
   session?: {
+    threadId?: string;
+    messages?: Array<Pick<SessionMessage, "direction">>;
     state: string;
     decision?: { kind: DecisionKind; reasons: string[] };
     escalation?: { reasons: string[] };
@@ -171,6 +174,8 @@ export function Simulator({
   const [from, setFrom] = useState(defaultFrom);
   const [subject, setSubject] = useState(SCENARIOS[0].subject);
   const [bodyText, setBodyText] = useState(SCENARIOS[0].body);
+  // Set ⇒ the next run is a buyer reply on this sandbox thread (joins its session).
+  const [replyThreadId, setReplyThreadId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SimResult | null>(null);
@@ -181,6 +186,7 @@ export function Simulator({
     if (label === CUSTOM_LABEL) return; // leave the form as-is
     const s = SCENARIOS.find((sc) => sc.label === label);
     if (!s) return;
+    setReplyThreadId(null); // a scenario is a fresh PO, not a reply
     setFrom(s.from);
     setSubject(s.subject);
     setBodyText(s.body);
@@ -188,6 +194,13 @@ export function Simulator({
 
   function handleFormEdit() {
     setScenario(CUSTOM_LABEL);
+  }
+
+  function replyOnThread(threadId: string) {
+    setReplyThreadId(threadId);
+    setScenario(CUSTOM_LABEL);
+    setSubject(reSubject(subject));
+    setBodyText("");
   }
 
   async function run() {
@@ -198,7 +211,7 @@ export function Simulator({
       const res = await fetch("/api/po-agent/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from, subject, bodyText }),
+        body: JSON.stringify({ from, subject, bodyText, ...(replyThreadId ? { threadId: replyThreadId } : {}) }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -229,6 +242,8 @@ export function Simulator({
   const decisionKind = s?.decision?.kind ?? "";
   const decisionTone = decisionKind ? badgeVariant(decisionKind) : "info";
   const currency = s?.extracted?.currency;
+  const messagesIn = s?.messages?.filter((m) => m.direction === "in").length ?? 0;
+  const messagesOut = (s?.messages?.length ?? 0) - messagesIn;
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "var(--gap-group)", alignItems: "start" }}>
@@ -286,6 +301,15 @@ export function Simulator({
           }}
           rows={7}
         />
+
+        {replyThreadId && (
+          <Banner kind="info" title="Replying as the buyer">
+            <span>
+              This run is sent on thread <span style={{ fontFamily: "var(--font-mono)" }}>{replyThreadId}</span> and joins that session.{" "}
+              <Button variant="ghost" size="micro" onClick={() => setReplyThreadId(null)}>Start a new thread</Button>
+            </span>
+          </Banner>
+        )}
 
         <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <Button variant="primary" onClick={run} loading={loading} icon="arrow-right">
@@ -353,6 +377,16 @@ export function Simulator({
                     <li key={i}>{r}</li>
                   ))}
                 </ul>
+              )}
+              {result?.sandbox && s.threadId && (
+                <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+                  <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
+                    Messages on this session: {messagesIn} in · {messagesOut} out
+                  </span>
+                  <Button variant="secondary" size="micro" onClick={() => replyOnThread(s.threadId!)}>
+                    Reply as the buyer on this thread
+                  </Button>
+                </div>
               )}
             </Panel>
 

@@ -21,6 +21,10 @@ import type { MailSender } from "@/lib/po-agent/escalate";
 // an actual quote/order in the connected store (tagged "[PO agent sandbox]"). Emails are
 // suppressed and captured unless PO_AGENT_SIMULATOR_SEND_EMAILS is also on. The public /demo
 // (unauthenticated) can never submit — it always dry-runs.
+//
+// Pass the `threadId` of an earlier sandbox run to send the message as a buyer reply on that
+// thread: it joins the existing session instead of starting a new one. Only simulator thread
+// ids ("sim-…") are accepted, so this can never attach to a real mailbox thread.
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -31,10 +35,15 @@ export async function POST(req: Request) {
     subject?: string;
     bodyText?: string;
     mailbox?: string;
+    threadId?: string;
   };
   const from = (body.from ?? "").trim();
   if (!from) {
     return NextResponse.json({ error: "Provide a sender email address (from)." }, { status: 400 });
+  }
+  const threadId = body.threadId?.trim() || undefined;
+  if (threadId && !/^sim-[A-Za-z0-9-]+$/.test(threadId)) {
+    return NextResponse.json({ error: "threadId must be a simulator thread id (sim-…)." }, { status: 400 });
   }
 
   const jar = await cookies();
@@ -67,6 +76,7 @@ export async function POST(req: Request) {
     subject: body.subject ?? "",
     bodyText: body.bodyText ?? "",
     messageId: `sim-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    threadId,
   });
   const extract = resolveExtractor(env);
   const ctx = await resolveRequestStoreContext();

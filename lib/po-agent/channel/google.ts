@@ -173,7 +173,7 @@ export class GoogleChannel implements EmailChannel {
     return json.data ? base64UrlDecode(json.data) : Buffer.alloc(0);
   }
 
-  async sendReply(thread: ThreadRef, reply: OutboundReply): Promise<{ messageId: string }> {
+  async sendReply(thread: ThreadRef, reply: OutboundReply): Promise<{ messageId: string; threadId?: string }> {
     if (!thread.to) throw new Error("GoogleChannel.sendReply: missing recipient (thread.to)");
     const token = await this.token();
     const raw = buildReplyRaw({
@@ -184,11 +184,14 @@ export class GoogleChannel implements EmailChannel {
       inReplyTo: thread.rfcMessageId,
       references: thread.references,
     });
-    const { json } = await this.gmail<{ id: string }>(token, `/messages/send`, {
+    const { ok, status, json } = await this.gmail<{ id?: string; threadId?: string; error?: { message?: string } }>(token, `/messages/send`, {
       method: "POST",
       body: JSON.stringify({ raw, threadId: thread.threadId }),
     });
-    return { messageId: json.id };
+    if (!ok || !json.id) {
+      throw new Error(`Gmail send failed (${status})${json.error?.message ? `: ${json.error.message}` : ""}`);
+    }
+    return { messageId: json.id, threadId: json.threadId };
   }
 
   /** Send a NEW email (not a thread reply) — used for rep-inbox escalation. */

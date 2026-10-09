@@ -44,7 +44,8 @@ export interface EmailChannel {
   fetchNewMessages(sinceWatermark: string | null): Promise<InboundMessage[]>;
   getMessage(messageId: string): Promise<InboundMessage>;
   getAttachment(messageId: string, attachmentId: string): Promise<Buffer>;
-  sendReply(thread: ThreadRef, reply: OutboundReply): Promise<{ messageId: string }>;
+  /** Throws when the provider rejects the send. */
+  sendReply(thread: ThreadRef, reply: OutboundReply): Promise<{ messageId: string; threadId?: string }>;
   /** Send a NEW email (not a thread reply) — for rep-inbox escalation. */
   sendEmail(to: string, subject: string, text: string): Promise<boolean>;
   markProcessed(messageId: string): Promise<void>;

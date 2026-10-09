@@ -166,12 +166,15 @@ export class MicrosoftChannel implements EmailChannel {
   }
 
   async sendReply(thread: ThreadRef, reply: OutboundReply): Promise<{ messageId: string }> {
+    if (!thread.inReplyToMessageId) throw new Error("MicrosoftChannel.sendReply: no message to reply to (thread.inReplyToMessageId)");
     const token = await this.token();
-    // Graph /reply threads automatically; the comment becomes the reply body.
-    await this.graph(token, `/messages/${thread.inReplyToMessageId}/reply`, {
+    // Graph /reply threads automatically; the comment becomes the reply body. It returns
+    // 202 with no body, so there is no id for the sent message.
+    const { ok, status } = await this.graph(token, `/messages/${thread.inReplyToMessageId}/reply`, {
       method: "POST",
       body: JSON.stringify({ comment: reply.text }),
     });
+    if (!ok) throw new Error(`Graph reply failed (${status})`);
     return { messageId: `graph-reply-${thread.inReplyToMessageId}` };
   }
 

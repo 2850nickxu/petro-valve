@@ -5,11 +5,11 @@ import { createPoStore } from "@/lib/po-agent/store";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
 import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
 import { resolveChannelAdapter } from "@/lib/po-agent/runtime";
-import type { ThreadRef } from "@/lib/po-agent/channel/types";
+import { replyThread, sendRecordedReply } from "@/lib/po-agent/messages";
 
 // Staff reply-on-thread (gated by middleware). Sends an operator-authored message to the
 // buyer on the SAME email thread as the original PO, from the monitored mailbox, and
-// records it in the audit trail.
+// records it in the message log and the audit trail. A failed send is logged too.
 //
 // The text is supplied verbatim by the operator — the model is not in this path, so no
 // generated prose or invented figures can reach a buyer. Sending is code-driven and the
@@ -47,41 +47,35 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
   const adapter = resolveChannelAdapter(env);
   if ("error" in adapter) return NextResponse.json({ error: adapter.error }, { status: 503 });
 
-  const subject = session.inbound?.subject
-    ? /^re:/i.test(session.inbound.subject)
-      ? session.inbound.subject
-      : `Re: ${session.inbound.subject}`
-    : "Re: your purchase order";
-
   // Reply against the newest message we've seen on the thread so clients nest it correctly.
-  const thread: ThreadRef = {
-    threadId: session.threadId,
-    inReplyToMessageId: session.messageIds[session.messageIds.length - 1],
-    to,
-    subject,
-  };
+  const thread = replyThread(session, to);
+  const actor = body.actor?.trim() || "staff";
+  const now = () => new Date().toISOString();
 
-  let messageId: string;
-  try {
-    const sent = await adapter.channel.sendReply(thread, { subject, text });
-    messageId = sent.messageId;
-  } catch (err) {
-    return NextResponse.json(
-      { error: `Send failed: ${err instanceof Error ? err.message : String(err)}` },
-      { status: 502 },
-    );
+  const sent = await sendRecordedReply(
+    adapter.channel,
+    session,
+    thread,
+    { subject: thread.subject!, text },
+    { kind: "staff_reply", from: adapter.mailbox || undefined, actor },
+    now,
+  );
+  session.updatedAt = now();
+
+  if (sent.status === "failed") {
+    await store.saveSession(session);
+    return NextResponse.json({ error: `Send failed: ${sent.error}` }, { status: 502 });
   }
 
-  const actor = body.actor?.trim() || "staff";
+  const messageId = sent.providerMessageId;
   const preview = text.length > 52 ? `${text.slice(0, 52)}…` : text;
   session.audit.push({
-    at: new Date().toISOString(),
+    at: now(),
     event: "replied",
     actor,
     note: text,
     detail: { to, messageId, preview, via: adapter.mailbox || adapter.channel.id },
   });
-  session.updatedAt = new Date().toISOString();
   await store.saveSession(session);
 
   return NextResponse.json({ ok: true, messageId, state: session.state });

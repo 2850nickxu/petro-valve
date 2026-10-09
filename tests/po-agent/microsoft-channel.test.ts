@@ -69,6 +69,13 @@ describe("MicrosoftChannel", () => {
     expect((mock.calls[0].body as { comment: string }).comment).toBe("Your order is placed.");
   });
 
+  it("throws when Graph rejects the reply or there is nothing to reply to", async () => {
+    installMockFetch([{ method: "POST", url: "/messages/gm1/reply", status: 403, body: {} }]);
+    const reply = { subject: "Re: New PO", text: "hi" };
+    await expect(channel.sendReply({ threadId: "conv-gm1", inReplyToMessageId: "gm1", to: "buyer@acme.com" }, reply)).rejects.toThrow("403");
+    await expect(channel.sendReply({ threadId: "conv-gm1", to: "buyer@acme.com" }, reply)).rejects.toThrow("inReplyToMessageId");
+  });
+
   it("loop-guards its own mailbox", () => {
     expect(channel.isLoopMessage({ messageId: "1", threadId: "t", from: "poc@silk.com", subject: "", bodyText: "", attachments: [] })).toBe(true);
     expect(channel.isLoopMessage({ messageId: "1", threadId: "t", from: "b@x.com", subject: "", bodyText: "", attachments: [] })).toBe(false);
