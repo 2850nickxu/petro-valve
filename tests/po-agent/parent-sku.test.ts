@@ -147,6 +147,59 @@ describe("parent SKU + price difference (the PO-5567 case)", () => {
     expect(session.audit.map((a) => a.event)).toContain("price_review_requested");
   });
 
+  it("writes each run's decision steps, tagged with the run the inbound email started", async () => {
+    installMockFetch([...catalog(), ...termsReads(), ...quoteWrites()]);
+    const channel = new SimulatorChannel();
+    const deps = makeDeps({ channel, store: createPoStore(createMockRedis()) });
+
+    const first = channel.inject({ from: "buyer@acme.com", subject: "New PO", bodyText: PO, messageId: "m1" });
+    await processInbound(deps, first, {});
+    const reply = channel.inject({
+      from: "buyer@acme.com",
+      subject: "Re: New PO",
+      threadId: first.threadId,
+      messageId: "m2",
+      bodyText: `${PO.replace("EA-EXEM-SR  ", "EA-EXEM-SR-4FT  ")}\n\nQUOTE please — have the sales team review the pricing.`,
+    });
+    const session = await processInbound(deps, reply, {});
+
+    const run = (n: number) => session.audit.filter((a) => a.run === n).map((a) => a.event);
+    expect(run(1)).toEqual(["received", "identified", "extracted", "resolved", "priced", "validated", "decided", "outbound"]);
+    expect(run(2)).toEqual([
+      "received", "identified", "extracted", "price_review_requested",
+      "resolved", "priced", "validated", "decided", "submitted", "outbound",
+    ]);
+    for (const a of session.audit) {
+      expect(a.stage).toBeDefined();
+      expect(a.summary).toMatch(/\S/);
+      expect(a.summary).not.toMatch(/undefined|NaN/);
+    }
+
+    // Run 1's price step keeps the numbers as read, even though run 2 overwrote the resolution.
+    const priced = session.audit.find((a) => a.run === 1 && a.event === "priced")!;
+    expect(priced.setting).toEqual({ key: "priceTolerancePct", label: "Price tolerance", value: "1%" });
+    expect(priced.outcome).toBe("flagged");
+    expect(priced.summary).toContain("Line 1: PO $9.84 vs store $11.20 (−12.1%), outside the 1% price tolerance.");
+    expect((priced.detail as { lines: unknown[] }).lines[0]).toMatchObject({ line: 1, stated: 9.84, store: 11.2, diffPct: -12.1, withinTolerance: false });
+
+    const resolved = session.audit.find((a) => a.run === 1 && a.event === "resolved")!;
+    expect(resolved.summary).toBe("1 of 2 lines can be ordered. Matched by exact SKU: line 1. Parent SKU, version needed: line 2.");
+
+    const decided = session.audit.find((a) => a.run === 1 && a.event === "decided")!;
+    expect(decided.outcome).toBe("clarify");
+    expect(decided.summary).toContain("Round 1 of 2.");
+
+    // Each outbound step points at the logged message it describes, in the same run.
+    for (const step of session.audit.filter((a) => a.event === "outbound")) {
+      const id = (step.detail as { messageId: string }).messageId;
+      const msg = session.messages!.find((m) => m.id === id)!;
+      expect(msg.direction).toBe("out");
+      expect(msg.run).toBe(step.run);
+    }
+    expect(session.audit.find((a) => a.run === 2 && a.event === "price_review_requested")?.outcome).toBe("resolved_by_buyer");
+    expect(session.audit.find((a) => a.run === 2 && a.event === "received")?.summary).toBe("buyer@acme.com replied on the same thread.");
+  });
+
   it("does not treat 'please quote' on the ORIGINAL PO as an answer to a price question", async () => {
     installMockFetch([...catalog(), ...termsReads()]);
     const channel = new SimulatorChannel();

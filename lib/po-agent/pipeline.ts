@@ -10,10 +10,10 @@ import type { PoAgentConfig } from "./config";
 import type { PoStore } from "./store";
 import { sessionId as makeSessionId } from "./store";
 import type { EmailChannel, InboundMessage, Extractor, ThreadRef } from "./channel/types";
-import type { Buyer, PoSession, PoSessionState, ResolvedLine, ExtractedPo, Decision, ValidationIssue, MessagePurpose } from "./types";
+import type { Buyer, PoSession, PoSessionState, ResolvedLine, ExtractedPo, Decision, ValidationIssue, MessagePurpose, DecisionStage, SessionMessage } from "./types";
 import { identify, type IdentifyResult } from "./core/identify";
 import { resolveChannel } from "./core/channel";
-import { resolveLines, submittableLines } from "./core/resolve";
+import { resolveLines } from "./core/resolve";
 import { priceLines, estimatedSubtotal } from "./core/price";
 import { validate } from "./core/validate";
 import {
@@ -28,6 +28,23 @@ import { submitQuote } from "./core/submit-quote";
 import { fanOutEscalation, type EscalateDeps, type MailSender } from "./escalate";
 import { forwardBelowContractPo } from "./escalate/forward";
 import { capText, recordInbound, recordedMailer, reSubject, sendRecordedReply } from "./messages";
+import {
+  type DecisionStep,
+  type EvaluateChecks,
+  receivedStep,
+  reopenedStep,
+  identifiedStep,
+  extractedStep,
+  triagedStep,
+  priceAnswerStep,
+  evaluationSteps,
+  decidedStep,
+  outboundStep,
+  forwardedStep,
+  submittedStep,
+  heldStep,
+  errorStep,
+} from "./decision-steps";
 import {
   draftRejection,
   draftClarification,
@@ -101,13 +118,29 @@ interface ActContext {
   run: number;
 }
 
+/** Append a decision step to the session's audit trail, tagged with its run. */
+function pushStep(session: PoSession, at: string, run: number, step: DecisionStep): void {
+  session.audit.push({ at, ...step, run });
+}
+
+/** Every email the pipeline sends gets an outbound step linked to its message-log entry. */
+function outboundRecorder(session: PoSession, run: number): (entry: SessionMessage) => void {
+  return (entry) => pushStep(session, entry.at, run, outboundStep(entry));
+}
+
 /** Escalation fan-out deps whose rep-inbox email is logged on the session. */
 function escalateDeps(deps: PipelineDeps, session: PoSession, run: number, now: () => string): EscalateDeps {
   return {
     config: deps.config,
     store: deps.store,
     sendMail: deps.sendMail
-      ? recordedMailer(deps.sendMail, session, { kind: "escalation_email", from: deps.mailbox, run, captured: deps.channel.id === "simulator" }, now)
+      ? recordedMailer(
+          deps.sendMail,
+          session,
+          { kind: "escalation_email", from: deps.mailbox, run, captured: deps.channel.id === "simulator" },
+          now,
+          outboundRecorder(session, run),
+        )
       : undefined,
     now,
   };
@@ -137,6 +170,8 @@ export interface EvaluateResult {
   decision: Decision;
   credit: B2BCreditConfig | null;
   quoteConfig: QuoteConfig;
+  /** The account-level checks behind validate and decide, for the decision trail. */
+  checks: EvaluateChecks;
 }
 
 /**
@@ -210,7 +245,18 @@ export async function evaluate(deps: EvaluateDeps, input: EvaluateInput): Promis
     priceAccepted: input.priceAccepted,
   });
 
-  return { resolved, issues, decision, credit, quoteConfig };
+  const checks: EvaluateChecks = {
+    payOnAccount: { valid: payAssess.valid, reasons: payAssess.reasons, methodAvailable, creditEnabled: credit?.creditEnabled ?? false },
+    availableCredit: credit?.limitPurchases ? credit.availableCredit : null,
+    canOrder,
+    quoteEnabled,
+    hasShipTo,
+    multiCurrency,
+    currency: extracted.currency,
+    estimatedTotal: estTotal,
+  };
+
+  return { resolved, issues, decision, credit, quoteConfig, checks };
 }
 
 export async function processInbound(
@@ -236,7 +282,8 @@ export async function processInbound(
   const priorValidation = session.validation ?? [];
   if (!session.messageIds.includes(message.messageId)) session.messageIds.push(message.messageId);
   // Every message on the thread goes in the log; its position numbers this run.
-  const run = recordInbound(session, message, now(), deps.mailbox).run ?? 1;
+  const inboundMsg = recordInbound(session, message, now(), deps.mailbox);
+  const run = inboundMsg.run ?? 1;
   // Retain the original inbound once (bounded) — powers the "original email" view and
   // future full re-runs. Later messages on the thread don't overwrite it.
   if (!session.inbound) {
@@ -248,21 +295,27 @@ export async function processInbound(
     };
   }
 
-  const audit = (event: string, detail?: unknown) => session.audit.push({ at: now(), event, detail });
-  const reply = (purpose: MessagePurpose, text: string) =>
-    sendRecordedReply(deps.channel, session, threadOf(message), { subject: reSubject(message.subject), text }, { kind: "auto_reply", purpose, from: deps.mailbox, run }, now);
+  const step = (s: DecisionStep) => pushStep(session, now(), run, s);
+  const reply = async (purpose: MessagePurpose, text: string) => {
+    const sent = await sendRecordedReply(deps.channel, session, threadOf(message), { subject: reSubject(message.subject), text }, { kind: "auto_reply", purpose, from: deps.mailbox, run }, now);
+    pushStep(session, sent.at, run, outboundStep(sent));
+    return sent;
+  };
   const persist = async () => {
     if (opts.dryRun || !deps.store) return;
     session.updatedAt = now();
     await deps.store.saveSession(session);
   };
 
-  if (priorState === "expired") audit("reopened");
+  step(receivedStep(inboundMsg));
+  if (priorState === "expired") step(reopenedStep());
 
+  // The stage in progress, so an error step says where the run broke.
+  let stage: DecisionStage = "identify";
   try {
     const idres = await identify(deps.ctx, message.from);
     session.buyer = idres.buyer ?? undefined;
-    audit("identified", { found: Boolean(idres.buyer), companyApproved: idres.companyApproved });
+    step(identifiedStep(idres, message.from));
     if (!opts.dryRun && deps.store) await deps.store.bumpCounter(ym(now()), "received");
 
     const channel = resolveChannel({
@@ -273,6 +326,7 @@ export async function processInbound(
     });
     session.channelId = channel.channelId;
 
+    stage = "extract";
     const prior = session.extracted;
     const extraction = await deps.extract(message, {
       priorExtraction: prior,
@@ -280,7 +334,7 @@ export async function processInbound(
     });
     const extracted = extraction.extracted;
     session.extracted = extracted;
-    audit("extracted", { lines: extracted.lines.length, confidence: extracted.confidence, paymentIntent: extracted.paymentIntent });
+    step(extractedStep(extracted, inboundMsg, Boolean(prior)));
     if (!opts.dryRun && deps.store && extraction.usage) {
       await deps.store.recordTokens(ym(now()), extraction.usage.model, extraction.usage.inputTokens, extraction.usage.outputTokens);
     }
@@ -289,6 +343,7 @@ export async function processInbound(
     if (!idres.buyer) {
       session.validation = [{ kind: "unknown_sender", message: "unknown_sender", blocking: true }];
       session.decision = { kind: "reject", reasons: ["unknown_sender"] };
+      step(decidedStep(session.decision, [], deps.config, session.clarificationRounds));
       if (!opts.dryRun) {
         const sent = await reply("rejection", draftRejection());
         session.result = { confirmationMessageId: sent.providerMessageId };
@@ -300,7 +355,7 @@ export async function processInbound(
 
     // Non-PO mail on a fresh thread ⇒ triage once, don't churn a session.
     if (looksLikeNonPo(extracted) && priorState === "new") {
-      audit("triaged");
+      step(triagedStep());
       if (!opts.dryRun) await reply("triage", draftTriage());
       session.state = opts.dryRun ? "validating" : "rejected";
       await persist();
@@ -315,10 +370,11 @@ export async function processInbound(
       priorState === "clarifying" && priorValidation.some((v) => v.kind === "price_mismatch");
     const priceReviewRequested = answeringPrice && requestsPriceReview(message.bodyText);
     const priceAccepted = answeringPrice && acceptsContractPrice(message.bodyText);
-    if (priceReviewRequested) audit("price_review_requested");
-    if (priceAccepted) audit("contract_price_accepted");
+    if (priceReviewRequested) step(priceAnswerStep("review"));
+    if (priceAccepted) step(priceAnswerStep("accept"));
 
-    const { resolved, issues, decision, credit, quoteConfig } = await evaluate(
+    stage = "resolve";
+    const evaluated = await evaluate(
       { ctx: deps.ctx, config: deps.config },
       {
         idres,
@@ -331,15 +387,17 @@ export async function processInbound(
         priceAccepted,
       },
     );
+    const { resolved, issues, decision, credit, quoteConfig } = evaluated;
     session.resolution = resolved;
-    audit("resolved", { submittable: submittableLines(resolved).length, total: resolved.length });
     session.validation = issues;
     session.decision = decision;
-    audit("decided", { kind: decision.kind, reasons: decision.reasons });
+    const readAt = now();
+    for (const s of evaluationSteps(evaluated, deps.config, { clarificationRounds: session.clarificationRounds, readAt })) step(s);
 
     if (opts.dryRun) {
       session.state = "validating";
     } else {
+      stage = "decide";
       const actCtx: ActContext = { buyer, channelId: channel.channelId, resolved, extracted, credit, quoteConfig, decision, priorState, ts: now(), run };
       await actOnDecision(deps, session, message, actCtx);
       if (deps.store && session.state === "escalated") await deps.store.bumpCounter(ym(now()), "escalations");
@@ -348,7 +406,7 @@ export async function processInbound(
     await persist();
     return session;
   } catch (err) {
-    audit("error", { message: err instanceof Error ? err.message : String(err) });
+    step(errorStep(stage, err instanceof Error ? err.message : String(err)));
     if (!opts.dryRun && deps.store) {
       session.escalation = {
         reasons: ["internal_error"],
@@ -384,8 +442,12 @@ async function actOnDecision(
   const thread = threadOf(message);
   const store = deps.store;
   const decision = ctx.decision;
-  const reply = (purpose: MessagePurpose, text: string) =>
-    sendRecordedReply(deps.channel, session, thread, { subject: thread.subject!, text }, { kind: "auto_reply", purpose, from: deps.mailbox, run: ctx.run }, now);
+  const step = (s: DecisionStep) => pushStep(session, now(), ctx.run, s);
+  const reply = async (purpose: MessagePurpose, text: string) => {
+    const sent = await sendRecordedReply(deps.channel, session, thread, { subject: thread.subject!, text }, { kind: "auto_reply", purpose, from: deps.mailbox, run: ctx.run }, now);
+    pushStep(session, sent.at, ctx.run, outboundStep(sent));
+    return sent;
+  };
   const escalate = (reasons: string[]) => fanOutEscalation(escalateDeps(deps, session, ctx.run, now), session, reasons);
 
   if (decision.kind === "reject") {
@@ -412,9 +474,10 @@ async function actOnDecision(
       session,
       { kind: "below_contract_forward", from: deps.mailbox, run: ctx.run, captured: deps.channel.id === "simulator" },
       now,
+      outboundRecorder(session, ctx.run),
     );
     const forwarded = await forwardBelowContractPo({ ctx: deps.ctx, config: deps.config, sendEmail }, session, message);
-    if (forwarded.length) session.audit.push({ at: now(), event: "forwarded_below_contract", detail: { to: forwarded.length } });
+    if (forwarded.length) step(forwardedStep(forwarded));
     session.escalation = { reasons: decision.reasons, at: ctx.ts, notified, ...(forwarded.length ? { forwarded } : {}) };
     session.state = "escalated";
     return;
@@ -431,6 +494,7 @@ async function actOnDecision(
     if (deps.config.dailySubmitCap != null && store) {
       const count = await store.bumpDailyCap(ymd(ctx.ts), "submits");
       if (count > deps.config.dailySubmitCap) {
+        step(heldStep("daily_cap", deps.config));
         session.escalation = {
           reasons: ["daily_cap"],
           at: ctx.ts,
@@ -445,6 +509,7 @@ async function actOnDecision(
       // First-order confirmation gate (§7.8) — a spoofing backstop; order path only.
       const isConfirmReply = ctx.priorState === "awaiting_confirmation" && /\bconfirm\b/i.test(message.bodyText);
       if (deps.config.firstOrderConfirm && store && !isConfirmReply && !(await store.isTrusted(ctx.buyer.email))) {
+        step(heldStep("first_order_confirm", deps.config));
         const sent = await reply("first_order_confirm", draftFirstOrderConfirm(ctx.resolved, money(estimatedSubtotal(ctx.resolved))));
         session.result = { confirmationMessageId: sent.providerMessageId };
         session.state = "awaiting_confirmation";
@@ -462,10 +527,12 @@ async function actOnDecision(
         sandbox: deps.sandbox,
       });
       if (!res.ok) {
+        step(submittedStep({ kind: "order", ok: false, reason: res.reason }));
         session.escalation = { reasons: [`submit_failed:${res.reason}`], at: ctx.ts, notified: await escalate([`submit_failed:${res.reason}`]) };
         session.state = "escalated";
         return;
       }
+      step(submittedStep({ kind: "order", ok: true, orderId: res.orderId, grandTotal: res.totals.grandTotal }));
       session.result = { orderId: res.orderId };
       const sent = await reply(
         "order_confirmation",
@@ -488,10 +555,12 @@ async function actOnDecision(
         sandbox: deps.sandbox,
       });
       if (!res.ok) {
+        step(submittedStep({ kind: "quote", ok: false, reason: res.reason }));
         session.escalation = { reasons: [`submit_failed:${res.reason}`], at: ctx.ts, notified: await escalate([`submit_failed:${res.reason}`]) };
         session.state = "escalated";
         return;
       }
+      step(submittedStep({ kind: "quote", ok: true, quoteId: res.quoteId, quoteNumber: res.quoteNumber, checkoutUrl: res.checkoutUrl }));
       session.result = { quoteId: res.quoteId, quoteNumber: res.quoteNumber, quoteUrl: res.quoteUrl, checkoutUrl: res.checkoutUrl };
       const sent = await reply(
         "quote_confirmation",

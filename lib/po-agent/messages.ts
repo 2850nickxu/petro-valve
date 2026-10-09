@@ -48,6 +48,11 @@ function log(session: PoSession): SessionMessage[] {
   return session.messages;
 }
 
+/** The latest pipeline run — what a staff or lifecycle action acts on. */
+export function currentRun(session: PoSession): number {
+  return Math.max(1, log(session).filter((m) => m.direction === "in").length);
+}
+
 function append(session: PoSession, msg: Omit<SessionMessage, "id">): SessionMessage {
   const messages = log(session);
   const entry: SessionMessage = { id: `m${messages.length + 1}`, ...msg };
@@ -138,12 +143,14 @@ export async function sendRecordedReply(
 }
 
 /** Wrap a MailSender so every internal email it sends (rep escalation, below-contract
- * forward) is logged on the session. The wrapped sender never throws. */
+ * forward) is logged on the session. The wrapped sender never throws. `onRecord` sees each
+ * logged entry, so the pipeline can write its outbound decision step. */
 export function recordedMailer(
   send: MailSender,
   session: PoSession,
   meta: { kind: MessageKind; from?: string; run?: number; captured: boolean },
   now: () => string,
+  onRecord?: (entry: SessionMessage) => void,
 ): MailSender {
   return async (to, subject, text) => {
     let ok = false;
@@ -168,6 +175,7 @@ export function recordedMailer(
       ...(error ? { error } : {}),
     });
     if (!ok) sendFailed(session, entry);
+    onRecord?.(entry);
     return ok;
   };
 }

@@ -106,7 +106,7 @@ type SimResult = {
       line: { rawText: string; quantity: number | null };
     }>;
     result?: { orderId?: number; quoteId?: number; quoteNumber?: string; checkoutUrl?: string; quoteUrl?: string };
-    audit?: Array<{ at: string; event: string; detail?: unknown }>;
+    audit?: Array<{ at: string; event: string; detail?: unknown; summary?: string }>;
   };
 };
 
@@ -501,7 +501,7 @@ export function Simulator({
                     key: i,
                     tone: stepTone(a.event, a.detail),
                     title: a.event,
-                    detail: stepDetail(a.detail),
+                    detail: a.summary ?? stepDetail(a.detail),
                   }))}
                 />
               </Panel>

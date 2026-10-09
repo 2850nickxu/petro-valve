@@ -5,6 +5,8 @@ import { resolveRequestStoreContext } from "@/lib/bc-app/request-context";
 import { submitOrder } from "@/lib/po-agent/core/submit-order";
 import { submitQuote } from "@/lib/po-agent/core/submit-quote";
 import { getQuoteConfigs, getQuoteExpiryDays } from "@/lib/bc/quote-config";
+import { currentRun } from "@/lib/po-agent/messages";
+import { dismissedStep, forcedStep, noteStep } from "@/lib/po-agent/decision-steps";
 
 // Staff review-queue actions (gated by middleware). Dismiss is Redis-only; force order/
 // quote re-run the submission against the stored session's resolution.
@@ -28,14 +30,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
   // Append-only note — no state change, stays in the queue.
   if (action === "add_note") {
     if (!trimmedNote) return NextResponse.json({ error: "note is required" }, { status: 400 });
-    session.audit.push({ at: now(), event: "note", note: trimmedNote, actor: by });
+    session.audit.push({ at: now(), ...noteStep(by), run: currentRun(session), note: trimmedNote, actor: by });
     await store.saveSession(session);
     return NextResponse.json({ ok: true, state: session.state });
   }
 
   if (action === "dismiss") {
     session.state = "rejected";
-    session.audit.push({ at: now(), event: "dismissed", note: trimmedNote, actor: by });
+    session.audit.push({ at: now(), ...dismissedStep(by), run: currentRun(session), note: trimmedNote, actor: by });
     await store.dequeue("escalated", id);
     await store.saveSession(session);
     return NextResponse.json({ ok: true, state: session.state });
@@ -75,7 +77,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
       session.result = { quoteId: res.quoteId, quoteNumber: res.quoteNumber, checkoutUrl: res.checkoutUrl, quoteUrl: res.quoteUrl };
     }
 
-    session.audit.push({ at: now(), event: `forced_${action}`, note: trimmedNote, actor: by });
+    session.audit.push({ at: now(), ...forcedStep(by, action, session.result ?? {}), run: currentRun(session), note: trimmedNote, actor: by });
     await store.dequeue("escalated", id);
     await store.saveSession(session);
     return NextResponse.json({ ok: true, state: session.state, result: session.result });

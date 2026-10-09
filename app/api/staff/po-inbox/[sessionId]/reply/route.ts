@@ -5,7 +5,8 @@ import { createPoStore } from "@/lib/po-agent/store";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
 import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
 import { resolveChannelAdapter } from "@/lib/po-agent/runtime";
-import { replyThread, sendRecordedReply } from "@/lib/po-agent/messages";
+import { currentRun, replyThread, sendRecordedReply } from "@/lib/po-agent/messages";
+import { repliedStep } from "@/lib/po-agent/decision-steps";
 
 // Staff reply-on-thread (gated by middleware). Sends an operator-authored message to the
 // buyer on the SAME email thread as the original PO, from the monitored mailbox, and
@@ -71,7 +72,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
   const preview = text.length > 52 ? `${text.slice(0, 52)}…` : text;
   session.audit.push({
     at: now(),
-    event: "replied",
+    ...repliedStep(actor, sent),
+    run: currentRun(session),
     actor,
     note: text,
     detail: { to, messageId, preview, via: adapter.mailbox || adapter.channel.id },

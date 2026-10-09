@@ -243,7 +243,9 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
     tone: auditTone(a.event),
     title: a.event,
     tag: a.actor,
-    detail: a.note ? (a.note.length > 90 ? `${a.note.slice(0, 90)}…` : a.note) : a.detail != null ? JSON.stringify(a.detail) : undefined,
+    detail: a.note
+      ? a.note.length > 90 ? `${a.note.slice(0, 90)}…` : a.note
+      : a.summary ?? (a.detail != null ? JSON.stringify(a.detail) : undefined),
     time: a.at.slice(11, 16),
   }));
 

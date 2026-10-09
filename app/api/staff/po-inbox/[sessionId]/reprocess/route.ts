@@ -9,6 +9,8 @@ import { resolveRequestStoreContext } from "@/lib/bc-app/request-context";
 import { identify } from "@/lib/po-agent/core/identify";
 import { resolveChannel } from "@/lib/po-agent/core/channel";
 import { evaluate } from "@/lib/po-agent/pipeline";
+import { currentRun } from "@/lib/po-agent/messages";
+import { evaluationSteps, reprocessedStep } from "@/lib/po-agent/decision-steps";
 
 // Staff re-evaluation: re-run the deterministic stages (resolve → price → validate → decide)
 // from the stored extraction against current store state — for when a config/pricing fix
@@ -53,7 +55,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
     buyer: idres.buyer,
   });
 
-  const { resolved, issues, decision } = await evaluate(
+  const evaluated = await evaluate(
     { ctx, config },
     {
       idres,
@@ -65,11 +67,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
     },
   );
 
+  const { resolved, issues, decision } = evaluated;
+
   session.buyer = idres.buyer;
   session.resolution = resolved;
   session.validation = issues;
   session.decision = decision;
-  session.audit.push({ at: now, event: "reprocessed", detail: { kind: decision.kind, reasons: decision.reasons }, actor: actor ?? "staff" });
+  // The re-run's own resolve → decide steps follow the human step, under the latest run.
+  const run = currentRun(session);
+  const by = actor ?? "staff";
+  session.audit.push({ at: now, ...reprocessedStep(by, decision), run, actor: by });
+  for (const step of evaluationSteps(evaluated, config, { clarificationRounds: session.clarificationRounds, readAt: now })) {
+    session.audit.push({ at: now, ...step, run });
+  }
   await store.saveSession(session);
 
   return NextResponse.json({ ok: true, state: session.state, decision });

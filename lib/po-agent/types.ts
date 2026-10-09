@@ -156,6 +156,57 @@ export interface Escalation {
   forwarded?: string[];
 }
 
+/** Where a decision step came from: a pipeline stage, a person, or the reminder sweep. */
+export type DecisionStage =
+  | "received"
+  | "identify"
+  | "extract"
+  | "resolve"
+  | "price"
+  | "validate"
+  | "decide"
+  | "outbound"
+  | "human"
+  | "lifecycle";
+
+/** A step's result, as a fixed vocabulary the UI maps to a badge. */
+export type StepOutcome =
+  | "known_account"
+  | "unknown_sender"
+  | "confidence_high"
+  | "confidence_medium"
+  | "confidence_low"
+  | "ok"
+  | "flagged"
+  | "clarify"
+  | "order"
+  | "quote"
+  | "rejected"
+  | "needs_review"
+  | "sent"
+  | "failed"
+  | "resolved_by_buyer"
+  | "error";
+
+/** The setting that drove a step, with its value at the time. */
+export interface StepSetting {
+  key: string;
+  label: string;
+  value: string;
+}
+
+/** A piece of evidence a step read. `value` is stored as read, so a later catalog change
+ * doesn't alter the record. */
+export interface SourceRef {
+  system: "bigcommerce" | "email" | "settings";
+  type: "customer" | "company" | "product" | "price" | "message" | "attachment" | "setting" | "order" | "quote";
+  /** Record id, session message id ("m2") or setting key. */
+  id?: string;
+  label: string;
+  value?: string | number;
+  readAt?: string;
+}
+
 export interface AuditEntry {
   at: string;
   event: string;
@@ -164,6 +215,15 @@ export interface AuditEntry {
   note?: string;
   /** Who took the action — staff identity when known, else "staff". */
   actor?: string;
+  /** Pipeline run (same numbering as SessionMessage.run). Staff and lifecycle events take
+   * the latest run. Absent on events saved before decision steps existed. */
+  run?: number;
+  stage?: DecisionStage;
+  /** Plain-language explanation, built by a code template from `detail` — never by the model. */
+  summary?: string;
+  outcome?: StepOutcome;
+  setting?: StepSetting;
+  sources?: SourceRef[];
 }
 
 /** Raw inbound email retained on the session so operators can read the original PO and

@@ -3,7 +3,8 @@ import type { PoStore } from "./store";
 import type { EmailChannel } from "./channel/types";
 import type { PoSession } from "./types";
 import { draftNudge, draftExpiry } from "./ai/respond";
-import { replyThread, sendRecordedReply } from "./messages";
+import { currentRun, replyThread, sendRecordedReply } from "./messages";
+import { expiredStep, remindedStep } from "./decision-steps";
 
 // Session lifecycle sweep (§7.7): one nudge after N days of buyer silence, then expiry
 // after M days. Piggybacks on the poll cron. Idempotent — safe to run repeatedly.
@@ -52,7 +53,7 @@ export async function sweepLifecycle(deps: LifecycleDeps): Promise<SweepResult> 
       await send("expiry", draftExpiry());
       session.state = "expired";
       session.updatedAt = now;
-      session.audit.push({ at: now, event: "expired" });
+      session.audit.push({ at: now, ...expiredStep(deps.config), run: currentRun(session) });
       await deps.store.saveSession(session);
       await deps.store.dequeue("awaiting", id);
       expired.push(id);
@@ -63,7 +64,7 @@ export async function sweepLifecycle(deps: LifecycleDeps): Promise<SweepResult> 
       await send("reminder", draftNudge(session.validation ?? []));
       session.remindedAt = now;
       session.updatedAt = now;
-      session.audit.push({ at: now, event: "reminded" });
+      session.audit.push({ at: now, ...remindedStep(deps.config), run: currentRun(session) });
       await deps.store.saveSession(session);
       reminded.push(id);
     }

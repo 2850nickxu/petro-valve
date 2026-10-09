@@ -55,8 +55,20 @@ describe("vertical slice (dry-run)", () => {
     // no submission, no reply
     expect(cartPosts(mock)).toBe(0);
     expect(channel.sent).toHaveLength(0);
-    // audit trail is present
-    expect(session.audit.map((a) => a.event)).toEqual(["identified", "extracted", "resolved", "decided"]);
+    // One decision step per stage, all in run 1, each with a plain-language summary.
+    expect(session.audit.map((a) => a.event)).toEqual([
+      "received", "identified", "extracted", "resolved", "priced", "validated", "decided",
+    ]);
+    expect(session.audit.map((a) => a.stage)).toEqual([
+      "received", "identify", "extract", "resolve", "price", "validate", "decide",
+    ]);
+    for (const a of session.audit) {
+      expect(a.run).toBe(1);
+      expect(a.summary).toMatch(/\S/);
+    }
+    // Existing detail keys are kept for current readers.
+    expect(session.audit.find((a) => a.event === "resolved")?.detail).toMatchObject({ submittable: 2, total: 2 });
+    expect(session.audit.find((a) => a.event === "decided")?.detail).toMatchObject({ kind: "order", reasons: ["pay_on_account"] });
   });
 });
 
@@ -75,6 +87,13 @@ describe("auto-submit order", () => {
     expect(channel.sent).toHaveLength(1);
     expect(channel.sent[0].reply.text).toContain("Order #: 9001");
     expect(channel.sent[0].reply.text).toContain("PO-5567");
+
+    // The trail records the submission and the confirmation email it sent.
+    const tail = session.audit.slice(-3);
+    expect(tail.map((a) => a.event)).toEqual(["decided", "submitted", "outbound"]);
+    expect(tail[1]).toMatchObject({ outcome: "order", detail: { orderId: 9001 } });
+    expect(tail[1].summary).toMatch(/^Placed order #9001 on account, total \$\d+\.\d{2}\.$/);
+    expect(tail[2]).toMatchObject({ outcome: "sent", detail: { messageId: "m2", purpose: "order_confirmation" } });
   });
 
   it("is idempotent under duplicate delivery (one order)", async () => {
@@ -121,5 +140,11 @@ describe("unknown sender", () => {
     expect(session.decision?.kind).toBe("reject");
     expect(channel.sent).toHaveLength(1);
     expect(channel.sent[0].reply.text).toContain("couldn't match your email");
+    // The reject path now records its decision, not just the reply.
+    expect(session.audit.map((a) => a.event)).toEqual(["received", "identified", "extracted", "decided", "outbound"]);
+    expect(session.audit.find((a) => a.event === "decided")).toMatchObject({
+      outcome: "rejected",
+      summary: "Reject: sender not matched to a store account.",
+    });
   });
 });
