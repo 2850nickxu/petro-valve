@@ -39,6 +39,12 @@ export function createMockRedis(): MockRedis {
         const e = store.get(args[0]);
         return e && e.type === "string" ? e.v : null;
       }
+      case "GETDEL": {
+        const e = store.get(args[0]);
+        if (!e || e.type !== "string") return null;
+        store.delete(args[0]);
+        return e.v;
+      }
       case "DEL": {
         let n = 0;
         for (const k of args) if (store.delete(k)) n++;

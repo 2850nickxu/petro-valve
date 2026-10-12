@@ -1,11 +1,10 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
 import type { CSSProperties } from "react";
 import { Panel } from "@/components/backbone";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { activeStoreSource } from "@/lib/bc-app/request-context";
-import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
+import { sessionStoreHash } from "@/lib/bc-app/request-context";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
 import { adminStatus } from "@/lib/po-agent/admin-status";
 import { adminLinks } from "@/lib/bc/admin-links";
@@ -156,7 +155,7 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
     );
   }
 
-  const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
+  const hash = await sessionStoreHash();
   const status = adminStatus(await effectiveEnv(hash ?? undefined));
   const links = adminLinks((await activeStoreSource()).storeHash);
   const currency = session.extracted?.currency;

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
-import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
+import { sessionStoreHash } from "@/lib/bc-app/request-context";
 import { appPage } from "@/lib/bc-app/html";
 
 // Begin the in-app Gmail OAuth consent (replaces the local consent script). Uses the
@@ -19,7 +18,7 @@ const SCOPES = [
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
+  const hash = await sessionStoreHash();
   const env = await effectiveEnv(hash ?? undefined);
   const clientId = env.GOOGLE_PO_CLIENT_ID;
   if (!clientId) {

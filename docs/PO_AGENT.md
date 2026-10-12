@@ -65,6 +65,10 @@ Copy `.env.example` → `.env.local`. Key groups:
 - **Channel** — `PO_AGENT_CHANNEL=google|microsoft` + the channel creds (below).
 - **Escalation** — `PO_AGENT_ESCALATION_EMAIL`, `PO_AGENT_SLACK_WEBHOOK_URL`.
 - **Staff gate** — `PO_AGENT_STAFF_SECRET` (required in production for `/staff`).
+  Vercel **previews** don't need it: sign in on production, open Settings → Store →
+  Preview access, create a single-use code (10 min), and enter it on the preview's
+  `/preview-login` page. The preview session (12 h, Redis-backed `poa_preview` cookie) is
+  bound to the same store. Codes are only accepted where `VERCEL_ENV=preview`.
 - **Tuning** — clarification cap, price tolerance, first-order confirm, daily cap, etc.
 
 Resolve the store's pay-on-account payment code: `GET /api/v3/io/payments` on the sandbox

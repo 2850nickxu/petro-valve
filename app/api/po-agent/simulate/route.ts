@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getPoAgentConfig } from "@/lib/po-agent/config";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
-import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
-import { resolveRequestStoreContext } from "@/lib/bc-app/request-context";
+import { previewGrant, resolveRequestStoreContext, sessionStoreHash } from "@/lib/bc-app/request-context";
 import { isStaffAuthorized, staffSecret } from "@/lib/po-agent/staff-auth";
 import { resolveExtractor } from "@/lib/po-agent/ai/extractor";
 import { resolveChannelAdapter } from "@/lib/po-agent/runtime";
@@ -47,16 +46,18 @@ export async function POST(req: Request) {
   }
 
   const jar = await cookies();
-  const hash = verifiedStoreHash(jar.get("poa_app")?.value);
+  const hash = await sessionStoreHash();
   const env = await effectiveEnv(hash ?? undefined);
   const config = getPoAgentConfig(env);
 
-  // Staff gate: a valid signed app-session (poa_app) OR the staff secret (poa_staff cookie /
-  // ?token / Basic). Only staff may trigger real sandbox submissions; /demo stays dry-run.
+  // Staff gate: a valid signed app-session (poa_app), a preview sign-in session, OR the staff
+  // secret (poa_staff cookie / ?token / Basic). Only staff may trigger real sandbox
+  // submissions; /demo stays dry-run.
   const url = new URL(req.url);
   const authz = req.headers.get("authorization") ?? "";
   const staffAuthed =
     Boolean(hash) ||
+    Boolean(await previewGrant()) ||
     isStaffAuthorized(
       {
         token: url.searchParams.get("token"),

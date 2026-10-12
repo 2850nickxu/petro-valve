@@ -1,7 +1,7 @@
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { Badge } from "@/components/backbone";
 import { SETTINGS_FIELDS, settingsView, type SettingsScope } from "@/lib/po-agent/settings-store";
-import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
+import { sessionStoreHash } from "@/lib/bc-app/request-context";
 import { listStoreInstalls } from "@/lib/bc-app/store-tokens";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
 import { getPoAgentConfig } from "@/lib/po-agent/config";
@@ -13,7 +13,7 @@ import { PageHead } from "../ui";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
+  const hash = await sessionStoreHash();
   const scope: SettingsScope = hash ? `store:${hash}` : "global";
   const env = await effectiveEnv(hash ?? undefined);
   const config = getPoAgentConfig(env);

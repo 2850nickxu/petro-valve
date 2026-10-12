@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { getPoAgentConfig } from "@/lib/po-agent/config";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
-import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
+import { sessionStoreHash } from "@/lib/bc-app/request-context";
 import { resolveRequestStoreContext } from "@/lib/bc-app/request-context";
 import { identify } from "@/lib/po-agent/core/identify";
 import { resolveChannel } from "@/lib/po-agent/core/channel";
@@ -39,8 +38,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
   const { actor } = (await req.json().catch(() => ({}))) as { actor?: string };
   const now = new Date().toISOString();
 
-  const jar = await cookies();
-  const hash = verifiedStoreHash(jar.get("poa_app")?.value);
+  const hash = await sessionStoreHash();
   const config = getPoAgentConfig(await effectiveEnv(hash ?? undefined));
 
   // Re-identify + re-resolve channel so entitlements/approval reflect current store state.

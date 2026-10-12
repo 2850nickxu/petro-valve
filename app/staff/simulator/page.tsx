@@ -1,14 +1,13 @@
-import { cookies } from "next/headers";
 import { getPoAgentConfig } from "@/lib/po-agent/config";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
-import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
+import { sessionStoreHash } from "@/lib/bc-app/request-context";
 import { Simulator } from "@/components/simulator";
 import { PageHead } from "../ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function SimulatorPage() {
-  const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
+  const hash = await sessionStoreHash();
   const config = getPoAgentConfig(await effectiveEnv(hash ?? undefined));
 
   return (

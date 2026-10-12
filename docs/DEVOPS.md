@@ -108,6 +108,7 @@ too.
 Vercel is connected to the GitHub repo:
 
 - push any branch → **preview** deployment (its URL shows as a PR check),
+  sign into its `/staff` with a code from production Settings → Store → Preview access,
 - merge to `main` → **production** deployment (`https://offline-po-app.vercel.app`).
 
 The pipeline never calls `vercel deploy`; it just moves git refs and lets

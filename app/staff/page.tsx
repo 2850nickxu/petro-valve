@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
 import { KpiRow, Panel } from "@/components/backbone";
 import { LinkButton } from "@/components/ui/link-button";
 import { getRedis } from "@/lib/redis";
@@ -7,7 +6,7 @@ import { createPoStore } from "@/lib/po-agent/store";
 import { computeMetrics, currentYyyymm } from "@/lib/po-agent/metrics";
 import { adminStatus } from "@/lib/po-agent/admin-status";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
-import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
+import { sessionStoreHash } from "@/lib/bc-app/request-context";
 import { activeStoreSource } from "@/lib/bc-app/request-context";
 import { PageHead, Stat, HealthRow, SessionRow, stateLabel } from "./ui";
 import { Banner, EmptyState } from "@/components/ui/states";
@@ -46,7 +45,7 @@ function shortWhen(iso: string, nowMs: number): string {
 }
 
 export default async function Dashboard() {
-  const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
+  const hash = await sessionStoreHash();
   const status = adminStatus(await effectiveEnv(hash ?? undefined)); // reflects saved settings
   const active = await activeStoreSource();
   const redis = getRedis();

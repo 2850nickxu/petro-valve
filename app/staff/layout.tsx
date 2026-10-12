@@ -1,16 +1,15 @@
 import type { ReactNode } from "react";
-import { cookies } from "next/headers";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { adminStatus, isOperational } from "@/lib/po-agent/admin-status";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
-import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
+import { sessionStoreHash } from "@/lib/bc-app/request-context";
 import { AppShell, type ShellStatus } from "./shell";
 
 export const dynamic = "force-dynamic";
 
 export default async function StaffLayout({ children }: { children: ReactNode }) {
-  const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
+  const hash = await sessionStoreHash();
   const status = adminStatus(await effectiveEnv(hash ?? undefined));
 
   let escalated = 0;

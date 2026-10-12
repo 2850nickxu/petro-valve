@@ -1,6 +1,5 @@
-import { cookies } from "next/headers";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
-import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
+import { sessionStoreHash } from "@/lib/bc-app/request-context";
 import { saveSettings, type SettingsScope } from "@/lib/po-agent/settings-store";
 import { appPage } from "@/lib/bc-app/html";
 
@@ -12,7 +11,7 @@ export const runtime = "nodejs";
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
-  const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
+  const hash = await sessionStoreHash();
   const env = await effectiveEnv(hash ?? undefined);
   const clientId = env.GOOGLE_PO_CLIENT_ID;
   const clientSecret = env.GOOGLE_PO_CLIENT_SECRET;

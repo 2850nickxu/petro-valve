@@ -14,6 +14,7 @@ import {
 } from "@/components/backbone";
 import { useToast } from "@/components/ui/toast";
 import { GmailConnect } from "@/components/gmail-connect";
+import { PreviewAccess } from "@/components/preview-access";
 
 export interface FieldDef {
   key: string;
@@ -468,7 +469,12 @@ export function SettingsForm({
       </TabPanel>
 
       {/* ── Store ── */}
-      <TabPanel value="store" activeValue={tab} idPrefix="settings">
+      <TabPanel
+        value="store"
+        activeValue={tab}
+        idPrefix="settings"
+        style={{ display: "flex", flexDirection: "column", gap: "var(--gap-section)" }}
+      >
         <Panel title="Store" actions={healthBadge} bodyStyle={{ gap: "var(--gap-group)" }}>
           <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-secondary)", lineHeight: 1.6 }}>
             Installing the app supplies its own per-store OAuth token automatically. These fields are the manual
@@ -517,6 +523,7 @@ export function SettingsForm({
 
           {saveBar("Test store")}
         </Panel>
+        <PreviewAccess />
       </TabPanel>
     </>
   );

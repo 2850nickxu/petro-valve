@@ -1,10 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isStaffAuthorized, staffSecret } from "@/lib/po-agent/staff-auth";
+import { PREVIEW_COOKIE, isPreviewDeployment, loadPreviewSession } from "@/lib/po-agent/preview-access";
+import { getRedis } from "@/lib/redis";
 
 // Gate /staff/** and /api/staff/** behind PO_AGENT_STAFF_SECRET (?token= / Basic / cookie).
 // A valid installed-app session cookie (poa_app, signed with the BC app client secret) also
-// authorizes — so the admin opens inside the BigCommerce control-panel iframe. Open in
-// local dev when no secret is set; closed in production.
+// authorizes — so the admin opens inside the BigCommerce control-panel iframe. On Vercel
+// previews only, a preview sign-in session (poa_preview, minted from a production code) also
+// authorizes. Open in local dev when no secret is set; closed in production.
 
 export const config = {
   matcher: ["/staff/:path*", "/api/staff/:path*", "/app-panel/:path*", "/api/gmail-oauth/:path*"],
@@ -38,6 +41,20 @@ export async function middleware(req: NextRequest) {
   const appOk = await verifyAppSession(req.cookies.get("poa_app")?.value, process.env.BC_APP_CLIENT_SECRET);
 
   if (!appOk && !isStaffAuthorized({ token, cookie, basic }, secret, devOpen)) {
+    if (isPreviewDeployment()) {
+      // Previews can't get the BC app session or the staff secret — accept a preview
+      // sign-in session instead, and send page visits to the code-entry page.
+      const redis = getRedis();
+      if (redis && (await loadPreviewSession(redis, req.cookies.get(PREVIEW_COOKIE)?.value))) {
+        return NextResponse.next();
+      }
+      if (req.method === "GET" && !req.nextUrl.pathname.startsWith("/api/")) {
+        const login = new URL("/preview-login", req.url);
+        login.searchParams.set("next", req.nextUrl.pathname + req.nextUrl.search);
+        return NextResponse.redirect(login);
+      }
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
     return new NextResponse("Unauthorized", {
       status: 401,
       headers: { "WWW-Authenticate": 'Basic realm="PO agent staff"' },

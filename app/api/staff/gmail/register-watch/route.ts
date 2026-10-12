@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { buildRuntime } from "@/lib/po-agent/runtime";
-import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
+import { sessionStoreHash } from "@/lib/bc-app/request-context";
 
 // Register/renew the Gmail users.watch subscription using the configured channel + Pub/Sub
 // topic (gated by middleware).
@@ -10,7 +9,7 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export async function POST() {
-  const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
+  const hash = await sessionStoreHash();
   const rt = await buildRuntime(process.env, hash ?? undefined);
   if (!rt.ok) return NextResponse.json({ error: rt.error }, { status: 503 });
   try {

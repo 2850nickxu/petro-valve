@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { saveSettings, EDITABLE_KEYS, type SettingsScope } from "@/lib/po-agent/settings-store";
-import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
+import { sessionStoreHash } from "@/lib/bc-app/request-context";
 
 // Persist admin-entered settings (gated by middleware). Scope = the installed store when
 // opened via the app, else global (single-store deployment).
@@ -13,7 +12,7 @@ export async function POST(req: Request) {
   const record: Record<string, string> = {};
   for (const k of EDITABLE_KEYS) if (k in body) record[k] = String(body[k] ?? "");
 
-  const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
+  const hash = await sessionStoreHash();
   const scope: SettingsScope = hash ? `store:${hash}` : "global";
 
   const ok = await saveSettings(scope, record);

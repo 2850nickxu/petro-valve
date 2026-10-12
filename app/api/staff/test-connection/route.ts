@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { generateText } from "ai";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { currentYyyymm } from "@/lib/po-agent/metrics";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
-import { verifiedStoreHash, resolveStoreContextForHash } from "@/lib/bc-app/resolve-context";
+import { resolveStoreContextForHash } from "@/lib/bc-app/resolve-context";
+import { sessionStoreHash } from "@/lib/bc-app/request-context";
 import { bcFetch } from "@/lib/bc/bc-client";
 import { poModel } from "@/lib/po-agent/ai/registry";
 import { postSlack } from "@/lib/po-agent/escalate/slack";
@@ -22,7 +22,7 @@ const done = (ok: boolean, detail: string) => NextResponse.json({ ok, detail });
 
 export async function POST(req: Request) {
   const { target, values } = (await req.json().catch(() => ({}))) as { target?: string; values?: Record<string, string> };
-  const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
+  const hash = await sessionStoreHash();
   // Only overlay non-empty form values: a blank field (e.g. an unchanged secret shown as
   // "configured — leave blank to keep") must fall back to the saved/effective env, not
   // clobber it with "" — which would strip the key and 401 the provider.

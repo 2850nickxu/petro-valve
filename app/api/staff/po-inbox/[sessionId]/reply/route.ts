@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
-import { verifiedStoreHash } from "@/lib/bc-app/resolve-context";
+import { sessionStoreHash } from "@/lib/bc-app/request-context";
 import { resolveChannelAdapter } from "@/lib/po-agent/runtime";
 import { currentRun, replyThread, sendRecordedReply } from "@/lib/po-agent/messages";
 import { repliedStep } from "@/lib/po-agent/decision-steps";
@@ -43,7 +42,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
     return NextResponse.json({ error: "This session has no known buyer address to reply to." }, { status: 400 });
   }
 
-  const hash = verifiedStoreHash((await cookies()).get("poa_app")?.value);
+  const hash = await sessionStoreHash();
   const env = await effectiveEnv(hash ?? undefined);
   const adapter = resolveChannelAdapter(env);
   if ("error" in adapter) return NextResponse.json({ error: adapter.error }, { status: 503 });
