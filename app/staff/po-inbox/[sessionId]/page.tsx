@@ -37,7 +37,7 @@ const CALLOUT_TONE: Record<DecisionKind | "pending", CalloutTone> = {
 
 /** Row tint + issue colour follow the worst issue on the line. */
 function lineSeverity(l: ResolvedLine): { tint?: "bad" | "warn"; color: string } {
-  const bad = ["line_unresolved", "line_parent_sku", "line_blocked_by_assortment", "price_mismatch"];
+  const bad = ["line_unresolved", "line_parent_sku", "line_blocked_by_assortment", "line_sku_description_conflict", "price_mismatch"];
   const warn = ["line_inventory_short", "line_qty_bounds", "missing_quantity"];
   if (l.issues.some((i) => bad.includes(i))) return { tint: "bad", color: "var(--danger-600)" };
   if (l.issues.some((i) => warn.includes(i))) return { tint: "warn", color: "var(--warning-600)" };
@@ -61,6 +61,7 @@ function issueLabel(l: ResolvedLine): string {
       if (kind === "line_inventory_short" && l.inventoryLevel != null) {
         return `inventory short (${l.inventoryLevel} on hand)`;
       }
+      if (kind === "line_sku_description_conflict") return "SKU/description conflict";
       if (kind === "line_parent_sku") {
         const n = l.variantChoiceCount ?? l.variantChoices?.length ?? 0;
         return n ? `parent SKU (${n} versions)` : "parent SKU";
@@ -301,6 +302,11 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
                   <span style={{ fontSize: 13, fontWeight: 600, ...num }}>{l.matchedSku ?? l.line.sku ?? "— no match —"}</span>
                   <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-muted)", ...num }}>read from: “{l.line.rawText.trim()}”</span>
                   {l.productName ? <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-muted)" }}>{l.productName}</span> : null}
+                  {l.descriptionConflict ? (
+                    <span style={{ fontSize: "var(--text-caption-size)", color: "var(--danger-600)" }}>
+                      Buyer described it as “{l.line.description}”: {l.descriptionConflict}.
+                    </span>
+                  ) : null}
                   {l.parentSku && l.variantChoices?.length ? (
                     <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-muted)", ...num }}>
                       choose one: {l.variantChoices.slice(0, 4).map((c) => c.sku).join(", ")}

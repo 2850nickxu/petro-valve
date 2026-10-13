@@ -58,6 +58,7 @@ export type ValidationIssueKind =
   | "line_blocked_by_assortment"
   | "line_qty_bounds"
   | "line_inventory_short"
+  | "line_sku_description_conflict"
   | "price_mismatch"
   | "missing_quantity"
   | "missing_ship_to"
@@ -104,6 +105,8 @@ export interface ResolvedLine {
   variantChoiceCount?: number;
   issues: ValidationIssueKind[];
   note?: string;
+  /** Why the buyer's description contradicts the product their SKU matched (validate). */
+  descriptionConflict?: string;
 }
 
 export interface Buyer {

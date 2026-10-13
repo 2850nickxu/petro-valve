@@ -87,6 +87,21 @@ export function replyTemplates(session: PoSession): ReplyTemplate[] {
     });
   }
 
+  // 2b. SKU/description conflicts → quote both sides and ask which one they meant.
+  const conflicting = lines.filter((l) => l.issues.includes("line_sku_description_conflict"));
+  if (conflicting.length) {
+    const detail = conflicting
+      .map((l) => `  · ${ref(l)} is our ${l.productName ?? "catalog item"}, but your PO describes it as “${l.line.description ?? l.line.rawText.trim()}”`)
+      .join("\n");
+    out.push({
+      id: "ask_which_product",
+      label: conflicting.length > 1 ? "Ask which products they meant" : "Ask which product they meant",
+      text:
+        `Thanks for the PO — before we place it, the part number and description don't match:\n\n${detail}\n\n` +
+        `Could you confirm which product you need? A corrected part number is perfect.`,
+    });
+  }
+
   // 3. Price mismatches → state both numbers, then offer the two real choices.
   const mismatched = lines.filter((l) => l.issues.includes("price_mismatch"));
   if (mismatched.length) {

@@ -29,6 +29,29 @@ const QTY_X_RE = /\b([0-9]+)\s*(?:x|×|units?|pcs?|ea)\b/i;
 const PRICE_RE = /\$\s*([0-9]+(?:\.[0-9]{1,2})?)/;
 const SKU_MARKER_RE = /\b(sku|item|part\s*(?:no|number|#)?)\b/i;
 
+/** What's left of an item line once the SKU, quantity, price and markers are removed —
+ * the buyer's own description, when there is one. */
+function inlineDescription(line: string, sku: string): string | null {
+  const rest = line
+    .replace(sku, " ")
+    .replace(new RegExp(QTY_MARKED_RE.source, "gi"), " ")
+    .replace(new RegExp(QTY_X_RE.source, "gi"), " ")
+    .replace(new RegExp(PRICE_RE.source, "g"), " ")
+    .replace(new RegExp(SKU_MARKER_RE.source, "gi"), " ")
+    .replace(/[\s:|,;#\-–—]+/g, " ")
+    .trim();
+  return /[a-z]{3}/i.test(rest) ? rest : null;
+}
+
+/** A plain-text line directly above an item line ("Sloan Check Valves 1\" Sweat") is that
+ * item's description — unless it's a PO number, payment wording or another SKU. */
+function describesNextLine(line: string): boolean {
+  const t = line.trim();
+  if (!/[a-z]{3}/i.test(t) || SKU_RE.test(t)) return false;
+  if (detectPoNumber(t) || detectPaymentIntent(t) !== "unspecified") return false;
+  return !/[:?]$/.test(t);
+}
+
 function parseLine(line: string): PoLineItem | null {
   // Skip PO-number lines to avoid capturing the PO id as a SKU.
   if (/\bP\.?O\.?\s*(?:#|no\.?|number)/i.test(line) && !SKU_MARKER_RE.test(line)) return null;
@@ -48,7 +71,7 @@ function parseLine(line: string): PoLineItem | null {
   return {
     rawText: line.trim(),
     sku: skuMatch[1].toUpperCase(),
-    description: null,
+    description: inlineDescription(line, skuMatch[1]),
     quantity: quantity && quantity > 0 ? quantity : null,
     statedUnitPrice,
     statedTotal: null,
@@ -64,9 +87,14 @@ export interface HeuristicInput {
 export function heuristicExtract(input: HeuristicInput): ExtractedPo {
   const combined = [input.subject, input.bodyText, input.extraText].filter(Boolean).join("\n");
   const lines: PoLineItem[] = [];
+  let prev: { text: string; item: boolean } | null = null;
   for (const raw of combined.split(/\r?\n/)) {
     const item = parseLine(raw);
-    if (item) lines.push(item);
+    if (item) {
+      if (!item.description && prev && !prev.item && describesNextLine(prev.text)) item.description = prev.text.trim();
+      lines.push(item);
+    }
+    prev = raw.trim() ? { text: raw, item: Boolean(item) } : null;
   }
 
   const currency = /\$|\bUSD\b/i.test(combined) ? "USD" : null;

@@ -106,6 +106,7 @@ const REASON: Record<string, string> = {
   line_blocked_by_assortment: "not in the company's assortment",
   line_qty_bounds: "quantity outside order limits",
   line_inventory_short: "not enough stock",
+  line_sku_description_conflict: "SKU and description disagree",
   price_mismatch: "PO price outside tolerance",
   missing_quantity: "missing quantity",
   missing_ship_to: "no ship-to address",
@@ -399,6 +400,22 @@ const VALIDATE_LINE_KINDS: ValidationIssueKind[] = ["line_inventory_short", "lin
 export function validatedStep(issues: ValidationIssue[], resolved: ResolvedLine[], checks: EvaluateChecks): DecisionStep {
   const parts: string[] = [];
 
+  // SKU/description conflicts lead, with both sides quoted — they're the check most
+  // likely to change what gets shipped.
+  const conflicts: string[] = [];
+  const sources: SourceRef[] = [];
+  resolved.forEach((r, i) => {
+    if (!r.issues.includes("line_sku_description_conflict")) return;
+    conflicts.push(
+      `Line ${i + 1}: SKU ${r.matchedSku} is "${clip(r.productName ?? "", 60)}", but the buyer wrote "${clip(r.line.description ?? "", 60)}"${r.descriptionConflict ? ` (${r.descriptionConflict})` : ""}.`,
+    );
+    if (r.productId != null) {
+      sources.push({ system: "bigcommerce", type: "product", id: String(r.productId), label: `Product · ${r.matchedSku}`, value: r.productName });
+    }
+  });
+  if (conflicts.length > 3) conflicts.splice(3, conflicts.length - 3, `${plural(conflicts.length - 3, "more SKU/description conflict")}.`);
+  parts.push(...conflicts);
+
   resolved.forEach((r, i) => {
     const n = i + 1;
     if (r.issues.includes("line_inventory_short")) {
@@ -449,6 +466,7 @@ export function validatedStep(issues: ValidationIssue[], resolved: ResolvedLine[
     stage: "validate",
     outcome: blocking.length ? "flagged" : "ok",
     summary: parts.join(" "),
+    ...(sources.length ? { sources: sources.slice(0, LINE_CAP) } : {}),
     detail: {
       blocking: blocking.length,
       issues: issues.map((i) => ({
@@ -465,6 +483,7 @@ export function validatedStep(issues: ValidationIssue[], resolved: ResolvedLine[
         minQty: r.minQty,
         maxQty: r.maxQty,
         issues: r.issues,
+        ...(r.descriptionConflict ? { descriptionConflict: r.descriptionConflict } : {}),
       })),
       checks,
     },

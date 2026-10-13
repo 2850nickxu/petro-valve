@@ -38,11 +38,19 @@ SKU: EPP-TIP-200F Qty: 5`,
     body: `PO Number: PO-1624
 Please pay using card
 
-Sloan Check Valves 1" Sweat
 SKU: ANS-GLV-NIT-XL   Qty: 5
-
-Delta Gate Valves 3/8" FlowGuard
 SKU: SKF-BRG-6205-2RS     Qty: 15`,
+  },
+  {
+    // The description names a different product than the SKU matches — held for review.
+    label: "SKU and description disagree",
+    from: "t.nguyen@pacific-elec.com",
+    subject: "New purchase order",
+    body: `PO Number: PO-5574
+Please pay on account, net 30.
+
+Sloan Check Valves 1" Sweat
+SKU: ANS-GLV-NIT-XL   Qty: 5`,
   },
   {
     label: "Wrong SKU",

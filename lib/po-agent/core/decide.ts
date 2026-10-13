@@ -12,6 +12,9 @@ export const ISSUE_CATEGORY: Record<ValidationIssueKind, IssueCategory> = {
   channel_access_denied: "escalate",
   daily_cap: "escalate",
   internal_error: "escalate",
+  // The buyer's own words contradict the product their SKU matched: a person decides which
+  // they meant, rather than the agent guessing or asking about a match it can't explain.
+  line_sku_description_conflict: "escalate",
   channel_ambiguous: "clarify",
   line_unresolved: "clarify",
   line_parent_sku: "clarify",

@@ -16,6 +16,7 @@ import { resolveChannel } from "./core/channel";
 import { resolveLines } from "./core/resolve";
 import { priceLines, estimatedSubtotal } from "./core/price";
 import { validate } from "./core/validate";
+import { checkSkuDescription } from "./core/sku-description";
 import {
   decide,
   assessPayOnAccount,
@@ -204,6 +205,7 @@ export async function evaluate(deps: EvaluateDeps, input: EvaluateInput): Promis
     tolerancePct: deps.config.priceTolerancePct,
     currencyCode: extracted.currency ?? undefined,
   });
+  resolved = checkSkuDescription(resolved);
 
   const estTotal = estimatedSubtotal(resolved);
   const methodAvailable = hasEnabledPaymentCode(methods, deps.config.poPaymentCodes);
