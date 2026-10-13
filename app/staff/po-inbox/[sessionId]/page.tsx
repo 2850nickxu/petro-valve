@@ -17,16 +17,10 @@ import { Banner } from "@/components/ui/states";
 import { Disclosure } from "@/components/ui/section";
 import { formatMoney } from "@/components/ui/money";
 import { ReplyBox } from "@/components/reply-box";
-import {
-  AiCard,
-  Callout,
-  KeyValue,
-  Timeline,
-  type CalloutTone,
-  type KeyValueRow,
-  type StatusTone,
-  type TimelineItem,
-} from "@/components/ui/detail-widgets";
+import { AiCard, Callout, KeyValue, type CalloutTone, type KeyValueRow } from "@/components/ui/detail-widgets";
+import { SessionThread } from "@/components/session-thread";
+import { DecisionTrail } from "@/components/decision-trail";
+import { conversationThread, decisionTrail } from "@/lib/po-agent/session-view";
 import { SessionActionButtons, SessionNote, type ActionSummary } from "./actions";
 import type { DecisionKind, PoSession, ResolvedLine } from "@/lib/po-agent/types";
 
@@ -74,31 +68,6 @@ function issueLabel(l: ResolvedLine): string {
       return kind;
     })
     .join(", ");
-}
-
-const AUDIT_TONE: Record<string, StatusTone> = {
-  received: "sage",
-  identified: "sage",
-  extracted: "sage",
-  resolved: "warn",
-  decided: "sky",
-  clarified: "warn",
-  reminded: "warn",
-  triaged: "sage",
-  replied: "sky",
-  note: "sky",
-  reopened: "sage",
-  escalated: "bad",
-  error: "bad",
-  expired: "sage",
-  dismissed: "bad",
-  forced_order: "ok",
-  forced_quote: "ok",
-  forwarded_below_contract: "warn",
-};
-
-function auditTone(event: string): StatusTone {
-  return AUDIT_TONE[event] ?? "sage";
 }
 
 function poOf(session: PoSession): string | undefined {
@@ -237,16 +206,9 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
     if (extracted.buyerNote) aiRows.push({ key: "buyerNote", label: "buyerNote", value: `“${extracted.buyerNote}”` });
   }
 
-  const auditItems: TimelineItem[] = [...session.audit].reverse().map((a, i) => ({
-    key: i,
-    tone: auditTone(a.event),
-    title: a.event,
-    tag: a.actor,
-    detail: a.note
-      ? a.note.length > 90 ? `${a.note.slice(0, 90)}…` : a.note
-      : a.summary ?? (a.detail != null ? JSON.stringify(a.detail) : undefined),
-    time: a.at.slice(11, 16),
-  }));
+  const thread = conversationThread(session);
+  const trail = decisionTrail(session);
+  const stepCount = session.audit.length;
 
   const metaLine = (
     <span style={{ display: "inline-flex", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
@@ -259,7 +221,7 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap-section)", maxWidth: 920 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap-section)", maxWidth: 1240 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
         <Link href="/staff/po-inbox" style={backLink}>← Inbox</Link>
         <PageHead title={session.buyer?.companyName || "(unknown sender)"} sub={metaLine}>
@@ -298,6 +260,18 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
           <KeyValue rows={resultRows} />
         </Panel>
       )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 440px), 1fr))", gap: "var(--gap-group)", alignItems: "start" }}>
+        <Panel title="Conversation" meta="Every email on this thread, oldest first. Times in UTC.">
+          <SessionThread entries={thread} footer={<SessionNote sessionId={id} />} />
+        </Panel>
+        <Panel
+          title="Decision trail"
+          meta={<span style={num}>What the agent did, what it looked at, and why · {stepCount} step{stepCount === 1 ? "" : "s"}</span>}
+        >
+          <DecisionTrail runs={trail} links={links} currency={currency ?? undefined} />
+        </Panel>
+      </div>
 
       <Panel
         title="Lines"
@@ -351,61 +325,33 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
           {extracted ? <KeyValue variant="lines" rows={aiRows} /> : <span style={{ color: "var(--text-secondary)" }}>Nothing extracted for this session.</span>}
         </AiCard>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap-group)" }}>
-          <Panel title="Buyer">
-            {session.buyer ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12.5 }}>
-                <span>
-                  B2B user <span style={num}>#{session.buyer.b2bUserId}</span>
-                  {session.buyer.companyRoleName ? ` · ${session.buyer.companyRoleName}` : ""}
-                </span>
-                <span>
-                  Customer <span style={num}>#{session.buyer.customerId}</span>
-                  {session.buyer.customerGroupId != null ? <> · group <span style={num}>#{session.buyer.customerGroupId}</span></> : null}
-                  {links && (
-                    <> · <a href={links.customer(session.buyer.customerId)} target="_blank" rel="noreferrer">view</a></>
-                  )}
-                </span>
-                <span>
-                  {session.buyer.channelList?.length ? (
-                    <>Channels <span style={num}>{session.buyer.channelList.join(", ")}</span></>
-                  ) : (
-                    <>Channel <span style={num}>{session.channelId ?? "default"}</span></>
-                  )}
-                </span>
-              </div>
-            ) : (
-              <span style={{ color: "var(--text-secondary)" }}>No B2B user matched this sender.</span>
-            )}
-          </Panel>
-
-          <Panel title="Audit trail">
-            <Timeline items={auditItems} />
-          </Panel>
-
-          <Panel title="Internal note">
-            <SessionNote sessionId={id} />
-          </Panel>
-        </div>
+        <Panel title="Buyer">
+          {session.buyer ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12.5 }}>
+              <span>
+                B2B user <span style={num}>#{session.buyer.b2bUserId}</span>
+                {session.buyer.companyRoleName ? ` · ${session.buyer.companyRoleName}` : ""}
+              </span>
+              <span>
+                Customer <span style={num}>#{session.buyer.customerId}</span>
+                {session.buyer.customerGroupId != null ? <> · group <span style={num}>#{session.buyer.customerGroupId}</span></> : null}
+                {links && (
+                  <> · <a href={links.customer(session.buyer.customerId)} target="_blank" rel="noreferrer">view</a></>
+                )}
+              </span>
+              <span>
+                {session.buyer.channelList?.length ? (
+                  <>Channels <span style={num}>{session.buyer.channelList.join(", ")}</span></>
+                ) : (
+                  <>Channel <span style={num}>{session.channelId ?? "default"}</span></>
+                )}
+              </span>
+            </div>
+          ) : (
+            <span style={{ color: "var(--text-secondary)" }}>No B2B user matched this sender.</span>
+          )}
+        </Panel>
       </div>
-
-      <Panel title="Original email">
-        {session.inbound ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2-5)" }}>
-            <KeyValue
-              rows={[
-                { key: "from", label: "From", value: <span style={num}>{session.inbound.from}</span> },
-                { key: "subject", label: "Subject", value: session.inbound.subject || "—" },
-              ]}
-            />
-            <pre style={RAW_BLOCK}>{session.inbound.bodyText || "(empty body)"}</pre>
-          </div>
-        ) : (
-          <span style={{ color: "var(--text-secondary)" }}>
-            Original email not stored for this session (it predates capture, or was a simulator run).
-          </span>
-        )}
-      </Panel>
 
       <Disclosure title="Raw extraction (JSON)">
         <pre style={RAW_BLOCK}>{JSON.stringify(session.extracted, null, 2)}</pre>

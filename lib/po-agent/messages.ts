@@ -23,28 +23,32 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** The session's log, created on first use. Sessions saved before the log existed get
- * their retained original email back-filled as the first entry. */
+/** The session's messages without touching it: the stored log, or — for sessions saved
+ * before the log existed — the retained original email as the first entry. */
+export function sessionMessages(session: PoSession): SessionMessage[] {
+  if (session.messages) return session.messages;
+  if (!session.inbound) return [];
+  return [
+    {
+      id: "m1",
+      at: session.inbound.receivedAt ?? session.createdAt,
+      direction: "in",
+      audience: "buyer",
+      kind: "inbound",
+      status: "received",
+      from: session.inbound.from,
+      subject: session.inbound.subject,
+      text: session.inbound.bodyText,
+      run: 1,
+      providerMessageId: session.messageIds[0],
+      providerThreadId: session.threadId,
+    },
+  ];
+}
+
+/** The session's log, created on first use (back-filled as in sessionMessages). */
 function log(session: PoSession): SessionMessage[] {
-  if (!session.messages) {
-    session.messages = [];
-    if (session.inbound) {
-      session.messages.push({
-        id: "m1",
-        at: session.inbound.receivedAt ?? session.createdAt,
-        direction: "in",
-        audience: "buyer",
-        kind: "inbound",
-        status: "received",
-        from: session.inbound.from,
-        subject: session.inbound.subject,
-        text: session.inbound.bodyText,
-        run: 1,
-        providerMessageId: session.messageIds[0],
-        providerThreadId: session.threadId,
-      });
-    }
-  }
+  if (!session.messages) session.messages = sessionMessages(session);
   return session.messages;
 }
 
