@@ -296,6 +296,8 @@ export interface SessionMessage {
   references?: string;
 }
 
+/** One row of the session search index. Fields after `updatedAt` arrived with summary
+ * version 2; older index entries lack them until the search back-fills them. */
 export interface SessionSummary {
   id: string;
   company: string;
@@ -305,6 +307,18 @@ export interface SessionSummary {
   decision?: DecisionKind;
   createdAt: string;
   updatedAt: string;
+  /** Summary format version (see session-summary.ts). */
+  v?: number;
+  /** One sentence on how the session stands: the latest decision or person action. */
+  why?: string;
+  /** Lines with no open issue, out of the lines read from the PO. */
+  linesReady?: number;
+  linesTotal?: number;
+  /** Emails from the customer, and emails sent to them (internal emails excluded). */
+  messagesIn?: number;
+  messagesOut?: number;
+  /** SKUs on the PO, for search. */
+  skus?: string[];
 }
 
 export interface PoSession {

@@ -1,35 +1,80 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
-import { Button, Panel, SearchInput, SegmentedControl, Spinner } from "@/components/backbone";
-import { SessionRow, stateLabel } from "@/app/staff/ui";
+import { useRouter } from "next/navigation";
+import { Button, DataTable, Panel, SearchInput, Spinner, TabPanel, Tabs, type Column } from "@/components/backbone";
+import { Chip, stateLabel } from "@/app/staff/ui";
 import { EmptyState } from "@/components/ui/states";
+import { stamp } from "@/lib/po-agent/session-view";
 import type { SessionSummary, PoSessionState } from "@/lib/po-agent/types";
 
-// Session search. The design collapses the raw state list into four intent-based filters;
-// each maps to the concrete states the store can return. "All" sends no state filter.
+// Session search: one tab per session state (with counts), and a row per session that
+// says who the customer is, how far the PO got and why — without opening it.
 
-type FilterId = "all" | "escalated" | "open" | "completed";
+type TabId = "all" | PoSessionState;
 
-const FILTERS: Array<{ id: FilterId; label: string; states: PoSessionState[] }> = [
-  { id: "all", label: "All", states: [] },
-  { id: "escalated", label: "Escalated", states: ["escalated"] },
-  { id: "open", label: "In progress", states: ["clarifying", "awaiting_confirmation"] },
-  { id: "completed", label: "Completed", states: ["completed_order", "completed_quote"] },
+/** Tab order follows the work: what needs a person first, finished and closed last. */
+const TABS: Array<{ id: TabId; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "escalated", label: "Escalated" },
+  { id: "clarifying", label: "Clarifying" },
+  { id: "awaiting_confirmation", label: "Awaiting confirm" },
+  { id: "completed_quote", label: "Quote sent" },
+  { id: "completed_order", label: "Order placed" },
+  { id: "rejected", label: "Rejected" },
+  { id: "expired", label: "Expired" },
 ];
 
 interface SearchResult {
   total: number;
   items: SessionSummary[];
+  counts: Partial<Record<PoSessionState, number>>;
   page: number;
   pageSize: number;
 }
 
 const PAGE_SIZE = 25;
 
+function href(id: string): string {
+  return `/staff/po-inbox/${encodeURIComponent(id)}`;
+}
+
+/** "3 of 4" lines with nothing open; "—" before any lines were read. */
+function linesCell(s: SessionSummary): string {
+  if (s.linesTotal == null || s.linesTotal === 0) return "—";
+  return `${s.linesReady ?? 0} of ${s.linesTotal}`;
+}
+
+function messagesCell(s: SessionSummary): string {
+  if (s.messagesIn == null) return "—";
+  return `${s.messagesIn} in · ${s.messagesOut ?? 0} out`;
+}
+
+const COLUMNS: Column[] = [
+  {
+    key: "email",
+    label: "Customer",
+    primary: true,
+    render: (s: SessionSummary) => (
+      <Link href={href(s.id)} onClick={(e) => e.stopPropagation()} style={{ color: "inherit", textDecoration: "none" }}>
+        {s.email || "Unknown sender"}
+      </Link>
+    ),
+  },
+  { key: "company", label: "Company", muted: true, render: (s: SessionSummary) => s.company || "No matching account" },
+  { key: "poNumber", label: "PO", mono: true, render: (s: SessionSummary) => s.poNumber || "—" },
+  { key: "lines", label: "Lines ready", numeric: true, align: "right", render: linesCell },
+  { key: "state", label: "Outcome", render: (s: SessionSummary) => <Chip kind={s.state}>{stateLabel(s.state)}</Chip> },
+  { key: "why", label: "Why", wrap: true, width: "34%", render: (s: SessionSummary) => s.why ?? "—" },
+  { key: "messages", label: "Messages", numeric: true, render: messagesCell },
+  { key: "updatedAt", label: "Last activity (UTC)", numeric: true, render: (s: SessionSummary) => stamp(s.updatedAt) },
+];
+
 export function SessionsBrowser() {
+  const router = useRouter();
   const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<FilterId>("all");
+  const [tab, setTab] = useState<TabId>("all");
   const [page, setPage] = useState(0);
   const [data, setData] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -44,46 +89,25 @@ export function SessionsBrowser() {
     debounceRef.current = setTimeout(() => setDebouncedQ(value), 300);
   }
 
-  function handleFilter(next: FilterId) {
-    setFilter(next);
+  function handleTab(next: string) {
+    setTab(next as TabId);
     setPage(0);
   }
 
   useEffect(() => {
     let cancelled = false;
-    const active = FILTERS.find((f) => f.id === filter)!;
-
-    // The search endpoint takes a single state. For multi-state filters we ask for each
-    // and merge, so "In progress" and "Completed" behave like the design's chips.
-    const queries = active.states.length ? active.states : [null];
-    const requests = queries.map((state) => {
-      const params = new URLSearchParams();
-      if (debouncedQ) params.set("q", debouncedQ);
-      if (state) params.set("state", state);
-      params.set("page", "0");
-      // Over-fetch when merging so client-side paging stays correct.
-      params.set("pageSize", String(active.states.length > 1 ? 200 : PAGE_SIZE));
-      if (active.states.length <= 1) params.set("page", String(page));
-      return fetch(`/api/staff/sessions/search?${params.toString()}`).then((r) => r.json() as Promise<SearchResult>);
-    });
+    const params = new URLSearchParams();
+    if (debouncedQ) params.set("q", debouncedQ);
+    if (tab !== "all") params.set("state", tab);
+    params.set("page", String(page));
+    params.set("pageSize", String(PAGE_SIZE));
 
     setLoading(true);
-    Promise.all(requests)
-      .then((results) => {
+    fetch(`/api/staff/sessions/search?${params.toString()}`)
+      .then((r) => r.json() as Promise<SearchResult>)
+      .then((result) => {
         if (cancelled) return;
-        if (active.states.length > 1) {
-          const merged = results
-            .flatMap((r) => r.items)
-            .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-          setData({
-            total: merged.length,
-            items: merged.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
-            page,
-            pageSize: PAGE_SIZE,
-          });
-        } else {
-          setData(results[0]);
-        }
+        setData(result);
         setLoading(false);
       })
       .catch(() => {
@@ -93,10 +117,12 @@ export function SessionsBrowser() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedQ, filter, page]);
+  }, [debouncedQ, tab, page]);
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
+  const counts = data?.counts ?? {};
+  const allCount = Object.values(counts).reduce((a, b) => a + (b ?? 0), 0);
   const startItem = total === 0 ? 0 : page * PAGE_SIZE + 1;
   const endItem = Math.min(page * PAGE_SIZE + items.length, total);
   const hasPrev = page > 0;
@@ -104,45 +130,44 @@ export function SessionsBrowser() {
 
   return (
     <Panel padded={false}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, padding: "var(--panel-pad)", borderBottom: "var(--border-w) solid var(--border-subtle)" }}>
+      <div style={{ padding: "var(--panel-pad)", paddingBottom: "var(--space-3)" }}>
         <SearchInput
           value={q}
           onChange={(e) => handleQChange(e.target.value)}
-          placeholder="Search company, buyer, PO number"
+          placeholder="Search customer email, company, PO number or SKU"
           label="Search sessions"
-          width={320}
-        />
-        <SegmentedControl
-          label="Filter by status"
-          options={FILTERS.map((f) => ({ value: f.id, label: f.label }))}
-          value={filter}
-          onChange={(v) => handleFilter(v as FilterId)}
+          width="min(100%, 400px)"
         />
       </div>
 
-      <div data-density="compact">
-        {loading ? (
-          <div style={{ padding: "var(--panel-pad)" }}>
-            <Spinner label="Searching…" />
-          </div>
-        ) : items.length === 0 ? (
-          <div style={{ padding: "var(--panel-pad)" }}>
-            <EmptyState title="No matching sessions">Try a different search or filter.</EmptyState>
-          </div>
-        ) : (
-          items.map((item) => (
-            <SessionRow
-              key={item.id}
-              href={`/staff/po-inbox/${encodeURIComponent(item.id)}`}
-              customer={item.email || "Unknown sender"}
-              sub={`${item.company || "No matching account"} · ${item.poNumber || "no PO number"} · ${item.updatedAt.slice(0, 16).replace("T", " ")}`}
-              meta={item.decision ?? "—"}
-              state={item.state}
-              stateLabel={stateLabel(item.state)}
+      <Tabs
+        label="Sessions by outcome"
+        idPrefix="sessions"
+        value={tab}
+        onChange={handleTab}
+        tabs={TABS.map((t) => ({ value: t.id, label: t.label, count: data ? (t.id === "all" ? allCount : counts[t.id] ?? 0) : undefined }))}
+        style={{ overflowX: "auto", padding: "0 var(--panel-pad)" }}
+      />
+
+      <TabPanel value={tab} activeValue={tab} idPrefix="sessions">
+        <div data-density="compact">
+          {loading && !data ? (
+            <div style={{ padding: "var(--panel-pad)" }}>
+              <Spinner label="Searching…" />
+            </div>
+          ) : (
+            <DataTable
+              caption="Sessions, newest activity first"
+              columns={COLUMNS}
+              rows={items}
+              minWidth={1080}
+              onRowClick={(s: SessionSummary) => router.push(href(s.id))}
+              emptyState={<EmptyState title="No matching sessions">Try a different search or tab.</EmptyState>}
+              style={{ opacity: loading ? 0.6 : 1 }}
             />
-          ))
-        )}
-      </div>
+          )}
+        </div>
+      </TabPanel>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, padding: "var(--panel-pad)", borderTop: "var(--border-w) solid var(--border-subtle)" }}>
         <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)", fontVariantNumeric: "tabular-nums" }}>

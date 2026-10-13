@@ -125,7 +125,7 @@ export interface TrailRun {
 const LEGACY_DETAIL_CAP = 160;
 
 /** Person-step summaries written before the Sales agent label say "Staff …". */
-function personSummary(summary: string): string {
+export function personSummary(summary: string): string {
   return summary.startsWith("Staff ") ? `Sales agent ${summary.slice("Staff ".length)}` : summary;
 }
 

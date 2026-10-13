@@ -5,6 +5,7 @@ import type { PoSessionState } from "@/lib/po-agent/types";
 
 // Search sessions via the HSET summary index.
 // GET /api/staff/sessions/search?q=&state=&from=YYYY-MM-DD&to=YYYY-MM-DD&page=0&pageSize=25
+// q matches customer email, company, PO number or SKU. `counts` = matches per state.
 
 export const runtime = "nodejs";
 
@@ -26,11 +27,11 @@ export async function GET(req: Request) {
 
   const redis = getRedis();
   if (!redis) {
-    return NextResponse.json({ total: 0, items: [], page, pageSize });
+    return NextResponse.json({ total: 0, items: [], counts: {}, page, pageSize });
   }
 
   const store = createPoStore(redis);
-  const { total, items } = await store.searchSessions({
+  const { total, items, counts } = await store.searchSessions({
     text: q,
     state,
     from: Number.isFinite(from) ? from : undefined,
@@ -39,5 +40,5 @@ export async function GET(req: Request) {
     limit: pageSize,
   });
 
-  return NextResponse.json({ total, items, page, pageSize });
+  return NextResponse.json({ total, items, counts, page, pageSize });
 }

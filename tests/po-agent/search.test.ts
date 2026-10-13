@@ -223,3 +223,55 @@ describe("searchSessions — summary index", () => {
     expect(items[0].state).toBe("escalated");
   });
 });
+
+describe("searchSessions — Sessions list support", () => {
+  it("counts matches per state, ignoring the state filter, for the tab counts", async () => {
+    const store = await seedStore();
+    const all = await store.searchSessions({});
+    expect(all.counts).toEqual({ completed_order: 1, completed_quote: 1, escalated: 1, rejected: 1 });
+
+    const escalated = await store.searchSessions({ state: "escalated" });
+    expect(escalated.total).toBe(1);
+    expect(escalated.counts).toEqual(all.counts);
+
+    const acme = await store.searchSessions({ text: "acme" });
+    expect(acme.counts).toEqual({ completed_order: 1 });
+  });
+
+  it("finds a session by a SKU on its PO", async () => {
+    const redis = createMockRedis();
+    const store = createPoStore(redis);
+    await store.saveSession(
+      makeSession({
+        id: "simulator:sku",
+        resolution: [
+          { line: { rawText: "x", sku: "ANS-GLV-NIT-XL", description: null, quantity: 5, statedUnitPrice: null, statedTotal: null }, matchedSku: "ANS-GLV-NIT-XL", productId: 1, issues: [] },
+        ],
+      }),
+    );
+    const { items } = await store.searchSessions({ text: "glv-nit" });
+    expect(items.map((s) => s.id)).toEqual(["simulator:sku"]);
+  });
+
+  it("rebuilds index rows written before the current summary format, and prunes rows whose session expired", async () => {
+    const redis = createMockRedis();
+    const store = createPoStore(redis);
+    await store.saveSession(SESSION_C);
+
+    // Simulate rows written by the old code: no version, no list fields.
+    const oldRow = (s: PoSession) =>
+      JSON.stringify({ id: s.id, company: s.buyer?.companyName ?? "", email: s.buyer?.email ?? "", poNumber: s.extracted?.poNumber ?? "", state: s.state, createdAt: s.createdAt, updatedAt: s.updatedAt });
+    await redis.cmd(["HSET", "poa:index:search", SESSION_C.id, oldRow(SESSION_C), "simulator:gone", oldRow({ ...SESSION_A, id: "simulator:gone" })]);
+
+    const { items, counts } = await store.searchSessions({});
+    expect(items.map((s) => s.id)).toEqual([SESSION_C.id]); // the session-less row is dropped
+    expect(counts).toEqual({ escalated: 1 });
+    expect(items[0]).toMatchObject({ v: 2, linesTotal: 0, messagesIn: 0, messagesOut: 0 });
+    expect(items[0].why).toBeTruthy();
+
+    // Written back, so the next search reads the new format straight from the index.
+    const row = await redis.cmd<string[]>(["HGETALL", "poa:index:search"]);
+    expect(row).toHaveLength(2);
+    expect(JSON.parse(row[1])).toMatchObject({ id: SESSION_C.id, v: 2 });
+  });
+});

@@ -7,6 +7,7 @@
 
 import { getRedis, type Redis } from "@/lib/redis";
 import type { PoSession, PoSessionState, SessionSummary } from "./types";
+import { SUMMARY_VERSION, summaryOf } from "./session-summary";
 
 const SESSION_TTL_SEC = 60 * 60 * 24 * 30; // 30 days
 const MSG_TTL_SEC = 60 * 60 * 24 * 14; // 14 days
@@ -41,18 +42,16 @@ export interface SessionSearchQuery {
   limit?: number;
 }
 
-function summaryOf(s: PoSession): SessionSummary {
-  return {
-    id: s.id,
-    company: s.buyer?.companyName ?? "",
-    email: s.buyer?.email ?? "",
-    poNumber: s.extracted?.poNumber ?? "",
-    state: s.state,
-    decision: s.decision?.kind,
-    createdAt: s.createdAt,
-    updatedAt: s.updatedAt,
-  };
+export interface SessionSearchResult {
+  /** Matches for the whole query, before paging. */
+  total: number;
+  items: SessionSummary[];
+  /** Matches per state for the same text and date filters, ignoring `state` — tab counts. */
+  counts: Partial<Record<PoSessionState, number>>;
 }
+
+/** How many sessions to re-summarise per Redis round trip when back-filling. */
+const BACKFILL_BATCH = 100;
 
 export interface PoStore {
   /** Claim a message for processing. True ⇒ newly claimed; false ⇒ already seen (skip). */
@@ -77,7 +76,7 @@ export interface PoStore {
   loadSessions(ids: string[]): Promise<PoSession[]>;
   recordTokens(yyyymm: string, model: string, input: number, output: number): Promise<void>;
   getTokenUsage(yyyymm: string): Promise<Record<string, number>>;
-  searchSessions(query: SessionSearchQuery): Promise<{ total: number; items: SessionSummary[] }>;
+  searchSessions(query: SessionSearchQuery): Promise<SessionSearchResult>;
 }
 
 function queueKey(queue: "escalated" | "recent" | "awaiting"): string {
@@ -207,7 +206,7 @@ export function createPoStore(redis: Redis): PoStore {
       const flat = await redis.cmd<string[]>(["HGETALL", keys.indexSearch]);
       const cutoff = Date.now() - SESSION_TTL_SEC * 1000;
 
-      const summaries: SessionSummary[] = [];
+      let summaries: SessionSummary[] = [];
       const stale: string[] = [];
 
       for (let i = 0; i + 1 < flat.length; i += 2) {
@@ -227,18 +226,46 @@ export function createPoStore(redis: Redis): PoStore {
         summaries.push(summary);
       }
 
+      // Index rows written before the current summary format are rebuilt from their
+      // sessions once, so older sessions get the newer list columns without a migration.
+      const outdated = summaries.filter((s) => (s.v ?? 1) < SUMMARY_VERSION);
+      for (let i = 0; i < outdated.length; i += BACKFILL_BATCH) {
+        const batch = outdated.slice(i, i + BACKFILL_BATCH);
+        const raws = await redis.pipeline<string | null>(batch.map((s) => ["GET", keys.session(s.id)]));
+        const fields: string[] = [];
+        batch.forEach((old, j) => {
+          const raw = raws[j];
+          if (!raw) {
+            stale.push(old.id); // the session itself expired: the row only leads to "not found"
+            return;
+          }
+          try {
+            const fresh = summaryOf(JSON.parse(raw) as PoSession);
+            Object.assign(old, fresh);
+            fields.push(fresh.id, JSON.stringify(fresh));
+          } catch {
+            /* unreadable session; keep the old row */
+          }
+        });
+        if (fields.length) redis.cmd(["HSET", keys.indexSearch, ...fields]).catch(() => {});
+      }
+      if (stale.length) {
+        const gone = new Set(stale);
+        summaries = summaries.filter((s) => !gone.has(s.id));
+      }
+
       // Best-effort pruning of stale entries.
       if (stale.length > 0) {
         redis.cmd(["HDEL", keys.indexSearch, ...stale]).catch(() => {});
         redis.cmd(["ZREM", keys.queueRecent, ...stale]).catch(() => {});
       }
 
-      // Apply filters.
+      // Apply filters. Text and dates first, so the per-state counts describe what the
+      // search would show under each tab.
       const text = query.text?.toLowerCase();
-      const filtered = summaries.filter((s) => {
-        if (query.state && s.state !== query.state) return false;
+      const matching = summaries.filter((s) => {
         if (text) {
-          const haystack = `${s.company} ${s.email} ${s.poNumber}`.toLowerCase();
+          const haystack = `${s.company} ${s.email} ${s.poNumber} ${(s.skus ?? []).join(" ")}`.toLowerCase();
           if (!haystack.includes(text)) return false;
         }
         const updatedMs = Date.parse(s.updatedAt);
@@ -246,13 +273,16 @@ export function createPoStore(redis: Redis): PoStore {
         if (query.to !== undefined && updatedMs > query.to) return false;
         return true;
       });
+      const counts: Partial<Record<PoSessionState, number>> = {};
+      for (const s of matching) counts[s.state] = (counts[s.state] ?? 0) + 1;
+      const filtered = query.state ? matching.filter((s) => s.state === query.state) : matching;
 
       // Sort by updatedAt descending.
       filtered.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 
       const offset = query.offset ?? 0;
       const limit = query.limit ?? 25;
-      return { total: filtered.length, items: filtered.slice(offset, offset + limit) };
+      return { total: filtered.length, items: filtered.slice(offset, offset + limit), counts };
     },
   };
 }
