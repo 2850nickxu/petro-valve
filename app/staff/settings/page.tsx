@@ -1,7 +1,8 @@
 import { headers } from "next/headers";
 import { Badge } from "@/components/backbone";
-import { SETTINGS_FIELDS, settingsView, type SettingsScope } from "@/lib/po-agent/settings-store";
-import { sessionStoreHash } from "@/lib/bc-app/request-context";
+import { SETTINGS_FIELDS, hiddenSettingKeys, settingsView, type SettingsScope } from "@/lib/po-agent/settings-store";
+import { currentAdminView, sessionStoreHash } from "@/lib/bc-app/request-context";
+import { canSeeAiModel } from "@/lib/po-agent/admin-view";
 import { listStoreInstalls } from "@/lib/bc-app/store-tokens";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
 import { getPoAgentConfig } from "@/lib/po-agent/config";
@@ -19,11 +20,16 @@ export default async function SettingsPage() {
   const config = getPoAgentConfig(env);
   const status = adminStatus(env);
 
-  const [view, installs, active] = await Promise.all([
+  const [savedView, installs, active, adminView] = await Promise.all([
     settingsView(scope),
     listStoreInstalls(),
     activeStoreSource(),
+    currentAdminView(),
   ]);
+  // The customer view never receives AI model fields or values — not just hidden tabs.
+  const hidden = hiddenSettingKeys(adminView);
+  const fields = SETTINGS_FIELDS.filter((f) => !hidden.has(f.key));
+  const view = Object.fromEntries(Object.entries(savedView).filter(([k]) => !hidden.has(k)));
   const host = (await headers()).get("host") ?? "localhost:3000";
   const origin = `https://${host}`;
 
@@ -61,8 +67,9 @@ export default async function SettingsPage() {
       />
 
       <SettingsForm
-        fields={SETTINGS_FIELDS}
+        fields={fields}
         view={view}
+        showAi={canSeeAiModel(adminView)}
         defaults={defaults}
         health={health}
         origin={origin}

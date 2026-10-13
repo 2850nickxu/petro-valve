@@ -1,4 +1,5 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { VIEW_COOKIE, VIEW_HEADER, parseView, type AdminView } from "@/lib/po-agent/admin-view";
 import type { StoreContext } from "@/lib/bc/store-context";
 import { tryGetStoreContext } from "@/lib/bc/store-context";
 import { getRedis } from "@/lib/redis";
@@ -43,4 +44,12 @@ export async function activeStoreSource(): Promise<{ storeHash?: string; source:
   if (hash && (await storeContextForInstall(hash))) return { storeHash: hash, source: "install" };
   const env = tryGetStoreContext();
   return env ? { storeHash: env.storeHash, source: "env" } : { source: "none" };
+}
+
+/** The admin view on this request: what middleware just selected (a dashboard visit), else
+ * the remembered choice, else Silk. See lib/po-agent/admin-view.ts. */
+export async function currentAdminView(): Promise<AdminView> {
+  const picked = (await headers()).get(VIEW_HEADER);
+  if (picked) return parseView(picked);
+  return parseView((await cookies()).get(VIEW_COOKIE)?.value);
 }

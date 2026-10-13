@@ -1,5 +1,6 @@
 import { getRedis } from "@/lib/redis";
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from "node:crypto";
+import { canSeeSettingGroup, type AdminView } from "./admin-view";
 
 // Persisted, UI-editable configuration. Stored in Redis per scope ("global" or
 // "store:{hash}"); secret values are encrypted at rest (AES-256-GCM). The effective
@@ -126,4 +127,9 @@ export async function settingsView(scope: SettingsScope): Promise<Record<string,
     out[f.key] = { value: f.secret ? "" : (raw[f.key] ?? ""), set: present, secret: Boolean(f.secret) };
   }
   return out;
+}
+
+/** Setting keys hidden from an admin view (the customer view doesn't see the AI model). */
+export function hiddenSettingKeys(view: AdminView): Set<string> {
+  return new Set(SETTINGS_FIELDS.filter((f) => !canSeeSettingGroup(view, f.group)).map((f) => f.key));
 }

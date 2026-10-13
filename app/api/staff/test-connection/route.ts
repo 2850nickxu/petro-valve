@@ -5,7 +5,8 @@ import { createPoStore } from "@/lib/po-agent/store";
 import { currentYyyymm } from "@/lib/po-agent/metrics";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
 import { resolveStoreContextForHash } from "@/lib/bc-app/resolve-context";
-import { sessionStoreHash } from "@/lib/bc-app/request-context";
+import { currentAdminView, sessionStoreHash } from "@/lib/bc-app/request-context";
+import { canSeeAiModel } from "@/lib/po-agent/admin-view";
 import { bcFetch } from "@/lib/bc/bc-client";
 import { poModel } from "@/lib/po-agent/ai/registry";
 import { postSlack } from "@/lib/po-agent/escalate/slack";
@@ -38,6 +39,7 @@ export async function POST(req: Request) {
         return done(true, `Connected to “${store.name ?? ctx.storeHash}”.`);
       }
       case "ai": {
+        if (!canSeeAiModel(await currentAdminView())) return NextResponse.json({ ok: false, detail: "Not available in this view." }, { status: 403 });
         const model = env.PO_AGENT_MODEL;
         if (!model) return done(false, "Set a model (provider:model-id).");
         const result = await generateText({ model: poModel(model, env), prompt: "Reply with the single word: ok", maxOutputTokens: 8 });

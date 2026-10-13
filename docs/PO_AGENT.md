@@ -69,6 +69,11 @@ Copy `.env.example` → `.env.local`. Key groups:
   Preview access, create a single-use code (10 min), and enter it on the preview's
   `/preview-login` page. The preview session (12 h, Redis-backed `poa_preview` cookie) is
   bound to the same store. Codes are only accepted where `VERCEL_ENV=preview`.
+- **Admin views** — `/staff/admin` is the Silk admin view (everything); `/staff/customer`
+  is the customer admin view: no Token usage page, no AI model settings, no model names.
+  The toggle on the dashboard switches between them and the choice is remembered
+  (`poa_view` cookie); `/staff` opens the last one picked. While testing, anyone signed
+  in can switch — the hiding is enforced server-side, but it is not access control yet.
 - **Tuning** — clarification cap, price tolerance, first-order confirm, daily cap, etc.
 
 Resolve the store's pay-on-account payment code: `GET /api/v3/io/payments` on the sandbox

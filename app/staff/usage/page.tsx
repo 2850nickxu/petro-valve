@@ -7,6 +7,9 @@ import { parseTokenUsage, usageTotals, type ModelUsage } from "@/lib/po-agent/to
 import { PageHead, Stat } from "../ui";
 import { Banner, EmptyState } from "@/components/ui/states";
 import { LinkButton } from "@/components/ui/link-button";
+import { redirect } from "next/navigation";
+import { currentAdminView } from "@/lib/bc-app/request-context";
+import { VIEW_HOME, canSeeUsage } from "@/lib/po-agent/admin-view";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +43,9 @@ function formatYm(ym: string): string {
 }
 
 export default async function UsagePage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+  // Token usage is Silk-only: the customer view never renders it, even by direct URL.
+  if (!canSeeUsage(await currentAdminView())) redirect(VIEW_HOME.customer);
+
   const sp = await searchParams;
   const now = new Date().toISOString();
   const thisMonth = currentYyyymm(now);

@@ -171,6 +171,7 @@ export function SettingsForm({
   health,
   origin,
   installs,
+  showAi = true,
 }: {
   fields: FieldDef[];
   view: View;
@@ -178,6 +179,8 @@ export function SettingsForm({
   health: SettingsHealth;
   origin: string;
   installs: Array<{ storeHash: string; ownerEmail?: string; installedAt: string }>;
+  /** False in the customer admin view: no AI model tab. */
+  showAi?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -341,7 +344,7 @@ export function SettingsForm({
       <Tabs
         label="Settings sections"
         idPrefix="settings"
-        tabs={TABS.map((t) => ({ value: t.id, label: t.label }))}
+        tabs={TABS.filter((t) => showAi || t.id !== "ai").map((t) => ({ value: t.id, label: t.label }))}
         value={tab}
         onChange={(v) => setTab(v as TabId)}
       />
@@ -390,22 +393,24 @@ export function SettingsForm({
         </Panel>
       </TabPanel>
 
-      {/* ── AI model ── */}
-      <TabPanel value="ai" activeValue={tab} idPrefix="settings">
-        <Panel title="AI model" actions={healthBadge} bodyStyle={{ gap: "var(--gap-group)" }}>
-          <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-            Bring your own model as <code>provider:model-id</code>. Omit it entirely and the built-in heuristic
-            extractor runs free of charge — an LLM is much better on messy PDFs.
-          </span>
-          <div style={GRID_TWO}>
-            {field("PO_AGENT_MODEL")}
-            {field("ANTHROPIC_API_KEY")}
-            {field("OPENAI_API_KEY")}
-            {field("GOOGLE_GENERATIVE_AI_API_KEY")}
-          </div>
-          {saveBar("Test & save")}
-        </Panel>
-      </TabPanel>
+      {/* ── AI model (Silk view only) ── */}
+      {showAi ? (
+        <TabPanel value="ai" activeValue={tab} idPrefix="settings">
+          <Panel title="AI model" actions={healthBadge} bodyStyle={{ gap: "var(--gap-group)" }}>
+            <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              Bring your own model as <code>provider:model-id</code>. Omit it entirely and the built-in heuristic
+              extractor runs free of charge — an LLM is much better on messy PDFs.
+            </span>
+            <div style={GRID_TWO}>
+              {field("PO_AGENT_MODEL")}
+              {field("ANTHROPIC_API_KEY")}
+              {field("OPENAI_API_KEY")}
+              {field("GOOGLE_GENERATIVE_AI_API_KEY")}
+            </div>
+            {saveBar("Test & save")}
+          </Panel>
+        </TabPanel>
+      ) : null}
 
       {/* ── Email channel ── */}
       <TabPanel value="channel" activeValue={tab} idPrefix="settings">

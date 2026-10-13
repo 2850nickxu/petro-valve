@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Badge, Icon, PageBody, SidebarNav, StatusDot, type IconName } from "@/components/backbone";
 import { LinkButton } from "@/components/ui/link-button";
+import { VIEW_HOME, VIEW_LABEL, canSeeUsage, type AdminView } from "@/lib/po-agent/admin-view";
 import styles from "./shell.module.css";
 
 // The admin chrome, built on Backbone's fixed frame: a 232px sticky sidebar and a 48px
@@ -33,20 +34,23 @@ interface NavRow {
   trailing?: ReactNode;
 }
 
-/** Longest nav id the current path falls under. `/staff` is the index (exact match only) so
- * a session-detail page still highlights Inbox. */
+/** Longest nav id the current path falls under, so a session-detail page (under
+ * /staff/po-inbox) still highlights Inbox. */
 function activeNavId(path: string, ids: string[]): string | undefined {
-  const matches = ids.filter((id) => (id === "/staff" ? path === "/staff" : path.startsWith(id)));
+  const matches = ids.filter((id) => path.startsWith(id));
   return matches.sort((a, b) => b.length - a.length)[0];
 }
 
 export function AppShell({
   escalated,
   status,
+  view,
   children,
 }: {
   escalated: number;
   status: ShellStatus;
+  /** Silk sees everything; the customer view drops Token usage. */
+  view: AdminView;
   children: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -65,7 +69,7 @@ export function AppShell({
   }, [menuOpen]);
 
   const sections: Array<{ label?: string; items: NavRow[] }> = [
-    { label: "Overview", items: [{ id: "/staff", label: "Dashboard", icon: "home" }] },
+    { label: "Overview", items: [{ id: VIEW_HOME[view], label: "Dashboard", icon: "home" }] },
     {
       label: "Work",
       items: [
@@ -83,7 +87,7 @@ export function AppShell({
       label: "Admin",
       items: [
         { id: "/staff/settings", label: "Settings", icon: "settings" },
-        { id: "/staff/usage", label: "Token usage", icon: "compare" },
+        ...(canSeeUsage(view) ? [{ id: "/staff/usage", label: "Token usage", icon: "compare" as const }] : []),
       ],
     },
   ];
@@ -144,6 +148,8 @@ export function AppShell({
           <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>
             PO Agent
           </span>
+          {/* Which view this is, so a screenshot shared with the customer is never ambiguous. */}
+          <Badge tone={view === "silk" ? "inverse" : "neutral"}>{VIEW_LABEL[view]}</Badge>
 
           <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "var(--space-3)", minWidth: 0 }}>
             <StatusDot tone={STATUS_TONE[status.tone]} label={status.label} halo={status.tone === "ok"} />
