@@ -10,6 +10,7 @@ import { resolveChannel } from "@/lib/po-agent/core/channel";
 import { evaluate } from "@/lib/po-agent/pipeline";
 import { currentRun } from "@/lib/po-agent/messages";
 import { evaluationSteps, reprocessedStep } from "@/lib/po-agent/decision-steps";
+import { SALES_AGENT } from "@/lib/po-agent/people";
 
 // Staff re-evaluation: re-run the deterministic stages (resolve → price → validate → decide)
 // from the stored extraction against current store state — for when a config/pricing fix
@@ -73,7 +74,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
   session.decision = decision;
   // The re-run's own resolve → decide steps follow the human step, under the latest run.
   const run = currentRun(session);
-  const by = actor ?? "staff";
+  const by = actor?.trim() || SALES_AGENT;
   session.audit.push({ at: now, ...reprocessedStep(by, decision), run, actor: by });
   for (const step of evaluationSteps(evaluated, config, { clarificationRounds: session.clarificationRounds, readAt: now })) {
     session.audit.push({ at: now, ...step, run });

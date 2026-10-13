@@ -216,7 +216,7 @@ export interface AuditEntry {
   detail?: unknown;
   /** Free-text note attached by a staff operator (force/dismiss/add-note). */
   note?: string;
-  /** Who took the action — staff identity when known, else "staff". */
+  /** Who took the action: "Sales agent" (older sessions stored "staff"). See people.ts. */
   actor?: string;
   /** Pipeline run (same numbering as SessionMessage.run). Staff and lifecycle events take
    * the latest run. Absent on events saved before decision steps existed. */
@@ -285,7 +285,7 @@ export interface SessionMessage {
   attachments?: MessageAttachment[];
   /** Pipeline run this belongs to: run N is triggered by the Nth inbound message. */
   run?: number;
-  /** Staff identity for operator-sent messages. */
+  /** Who sent an operator message: "Sales agent" (older sessions stored "staff"). */
   actor?: string;
   /** Why a send failed. */
   error?: string;

@@ -9,7 +9,10 @@ import { badgeVariant } from "@/lib/ui/badge-variant";
 import { summarizeOutcome } from "@/lib/po-agent/summary";
 import { formatMoney } from "@/components/ui/money";
 import { reSubject } from "@/lib/po-agent/messages";
-import type { DecisionKind, SessionMessage, ValidationIssueKind } from "@/lib/po-agent/types";
+import type { DecisionKind, SessionMessage, StepOutcome, ValidationIssueKind } from "@/lib/po-agent/types";
+import { OUTCOME } from "@/lib/po-agent/session-view";
+import { customerEmail } from "@/lib/po-agent/people";
+import { lineSeverity } from "@/lib/ui/line-severity";
 
 // ── Scenario library ──────────────────────────────────────────────────────────
 
@@ -101,6 +104,7 @@ type SimResult = {
     decision?: { kind: DecisionKind; reasons: string[] };
     escalation?: { reasons: string[] };
     buyer?: { companyName?: string; email?: string };
+    inbound?: { from?: string };
     extracted?: { currency?: string | null };
     validation?: Array<{ kind: ValidationIssueKind; message: string; lineRef?: string; blocking: boolean }>;
     resolution?: Array<{
@@ -114,7 +118,7 @@ type SimResult = {
       line: { rawText: string; quantity: number | null };
     }>;
     result?: { orderId?: number; quoteId?: number; quoteNumber?: string; checkoutUrl?: string; quoteUrl?: string };
-    audit?: Array<{ at: string; event: string; detail?: unknown; summary?: string }>;
+    audit?: Array<{ at: string; event: string; detail?: unknown; summary?: string; outcome?: StepOutcome }>;
   };
 };
 
@@ -133,7 +137,12 @@ const STEP_TONE: Record<string, StatusTone> = {
   escalated: "bad",
 };
 
-function stepTone(event: string, detail?: unknown): StatusTone {
+/** A step's recorded outcome wins (a flagged Validate is amber, not green); older steps
+ * without one fall back to the event name. */
+function stepTone(event: string, detail?: unknown, outcome?: StepOutcome): StatusTone {
+  const t = outcome ? OUTCOME[outcome].tone : undefined;
+  if (t === "danger") return "bad";
+  if (t === "warning") return "warn";
   if (STEP_TONE[event]) return STEP_TONE[event];
   return typeof detail === "string" && detail.includes("error") ? "bad" : "ok";
 }
@@ -376,8 +385,8 @@ export function Simulator({
                 {s.decision?.reasons.join(" · ") || outcome?.headline}
               </span>
               <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
-                {s.buyer?.companyName ?? "unidentified sender"}
-                {s.buyer?.email ? ` · ${s.buyer.email}` : ""}
+                {customerEmail(s)}
+                {` · ${s.buyer?.companyName ?? "No matching account"}`}
               </span>
               {outcome && outcome.reasons.length > 0 && (
                 <ul style={{ margin: 0, paddingLeft: 18, fontSize: "var(--text-caption-size)" }}>
@@ -443,8 +452,9 @@ export function Simulator({
             {s.resolution && s.resolution.length > 0 && (
               <Panel title="Lines" padded={false}>
                 {s.resolution.map((r, i) => {
-                  const bad = r.issues.some((x) => x === "line_unresolved" || x === "line_parent_sku" || x === "price_mismatch");
-                  const warn = !bad && r.issues.length > 0;
+                  const sev = lineSeverity(r.issues);
+                  const bad = sev === "bad";
+                  const warn = sev === "warn";
                   const rowBg = bad ? "var(--danger-tint)" : warn ? "var(--warning-tint)" : undefined;
                   const issueColor = bad ? "var(--danger-600)" : warn ? "var(--warning-600)" : "var(--success-600)";
                   return (
@@ -507,7 +517,7 @@ export function Simulator({
                 <Timeline
                   items={s.audit.map((a, i) => ({
                     key: i,
-                    tone: stepTone(a.event, a.detail),
+                    tone: stepTone(a.event, a.detail, a.outcome),
                     title: a.event,
                     detail: a.summary ?? stepDetail(a.detail),
                   }))}

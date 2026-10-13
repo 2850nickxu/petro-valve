@@ -316,7 +316,10 @@ describe("acting on the decision", () => {
 
 describe("people and the reminder sweep", () => {
   it("names who acted", () => {
-    expect(noteStep("staff").summary).toBe("Staff added an internal note.");
+    // No per-user logins: a person acting in the app is the "Sales agent" (legacy "staff" too).
+    expect(noteStep("staff").summary).toBe("Sales agent added an internal note.");
+    expect(noteStep(undefined).summary).toBe("Sales agent added an internal note.");
+    expect(noteStep("Sales agent").summary).toBe("Sales agent added an internal note.");
     expect(forcedStep("Grant", "force_order", { orderId: 77 })).toMatchObject({
       event: "forced_force_order",
       stage: "human",

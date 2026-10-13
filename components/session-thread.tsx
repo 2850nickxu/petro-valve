@@ -3,6 +3,7 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Badge, Button, SegmentedControl } from "@/components/backbone";
 import { messageLabel, stamp, type ThreadEntry } from "@/lib/po-agent/session-view";
+import { actorLabel } from "@/lib/po-agent/people";
 import type { SessionMessage } from "@/lib/po-agent/types";
 
 // The conversation on one session, oldest first: what the customer wrote, what the agent
@@ -80,13 +81,11 @@ function Attachments({ files }: { files: NonNullable<SessionMessage["attachments
   );
 }
 
-/** Who sent an outbound email and how: "Agent · sent automatically", "Staff · sent by …". */
+/** Who sent an outbound email and how: "PO agent · sent automatically" for the pipeline,
+ * "Sales agent · sent by hand" for a person replying from the app. */
 function sender(m: SessionMessage): string {
-  if (m.kind === "staff_reply") {
-    const who = m.actor && m.actor !== "staff" ? m.actor : "Staff";
-    return `${who} · sent by hand`;
-  }
-  return "Agent · sent automatically";
+  if (m.kind === "staff_reply") return `${actorLabel(m.actor)} · sent by hand`;
+  return "PO agent · sent automatically";
 }
 
 function StatusBadge({ m }: { m: SessionMessage }) {
@@ -130,7 +129,7 @@ function Message({ e }: { e: Extract<ThreadEntry, { kind: "message" }> }) {
     >
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap", justifyContent: customer || internal ? "flex-start" : "flex-end" }}>
         <span style={{ ...caption, fontWeight: 600, color: "var(--text-primary)" }}>
-          {customer ? m.from ?? "Customer" : internal ? `Internal · ${messageLabel(m).toLowerCase()}` : sender(m)}
+          {customer ? m.from ?? "Unknown sender" : internal ? `Internal · ${messageLabel(m).toLowerCase()}` : sender(m)}
         </span>
         <span style={{ ...caption, ...num }}>
           {m.to ? `to ${m.to} · ` : ""}
@@ -154,7 +153,7 @@ function Message({ e }: { e: Extract<ThreadEntry, { kind: "message" }> }) {
 }
 
 function Note({ e }: { e: Extract<ThreadEntry, { kind: "note" }> }) {
-  const who = e.actor && e.actor !== "staff" ? e.actor : "Staff";
+  const who = actorLabel(e.actor);
   return (
     <div
       style={{
@@ -204,7 +203,7 @@ export function SessionThread({ entries, footer }: { entries: ThreadEntry[]; foo
         options={[
           { value: "all", label: `All ${count("all")}` },
           { value: "customer", label: `Customer ${count("customer")}` },
-          { value: "agent", label: `Agent ${count("agent")}` },
+          { value: "agent", label: `Replies ${count("agent")}` },
           { value: "internal", label: `Internal ${count("internal")}` },
         ]}
         style={{ alignSelf: "flex-start" }}

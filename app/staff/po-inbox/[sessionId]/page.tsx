@@ -23,6 +23,8 @@ import { DecisionTrail } from "@/components/decision-trail";
 import { conversationThread, decisionTrail } from "@/lib/po-agent/session-view";
 import { SessionActionButtons, SessionNote, type ActionSummary } from "./actions";
 import type { DecisionKind, PoSession, ResolvedLine } from "@/lib/po-agent/types";
+import { customerEmail } from "@/lib/po-agent/people";
+import { lineSeverity } from "@/lib/ui/line-severity";
 
 export const dynamic = "force-dynamic";
 
@@ -35,12 +37,11 @@ const CALLOUT_TONE: Record<DecisionKind | "pending", CalloutTone> = {
   pending: "info",
 };
 
-/** Row tint + issue colour follow the worst issue on the line. */
-function lineSeverity(l: ResolvedLine): { tint?: "bad" | "warn"; color: string } {
-  const bad = ["line_unresolved", "line_parent_sku", "line_blocked_by_assortment", "line_sku_description_conflict", "price_mismatch"];
-  const warn = ["line_inventory_short", "line_qty_bounds", "missing_quantity"];
-  if (l.issues.some((i) => bad.includes(i))) return { tint: "bad", color: "var(--danger-600)" };
-  if (l.issues.some((i) => warn.includes(i))) return { tint: "warn", color: "var(--warning-600)" };
+/** Row tint + issue colour follow the worst issue on the line (shared with the simulator). */
+function lineTint(l: ResolvedLine): { tint?: "bad" | "warn"; color: string } {
+  const sev = lineSeverity(l.issues);
+  if (sev === "bad") return { tint: "bad", color: "var(--danger-600)" };
+  if (sev === "warn") return { tint: "warn", color: "var(--warning-600)" };
   return { color: "var(--success-600)" };
 }
 
@@ -214,7 +215,7 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
   const metaLine = (
     <span style={{ display: "inline-flex", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
       <span>
-        {session.buyer?.email ?? session.inbound?.from ?? "unknown sender"} · <span style={num}>{session.id}</span>
+        {session.buyer?.companyName || "No matching account"} · <span style={num}>{session.id}</span>
         {poOf(session) ? <> · <span style={num}>{poOf(session)}</span></> : null}
       </span>
       <Chip kind={session.state}>{stateLabel(session.state)}</Chip>
@@ -225,7 +226,7 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap-section)", maxWidth: 1240 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
         <Link href="/staff/po-inbox" style={backLink}>← Inbox</Link>
-        <PageHead title={session.buyer?.companyName || "(unknown sender)"} sub={metaLine}>
+        <PageHead title={customerEmail(session)} sub={metaLine}>
           <SessionActionButtons sessionId={id} summary={actionSummary} />
         </PageHead>
       </div>
@@ -281,7 +282,7 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
       >
         {lines.length ? (
           lines.map((l, i) => {
-            const sev = lineSeverity(l);
+            const sev = lineTint(l);
             const unit = l.calculatedUnitPrice ?? l.line.statedUnitPrice;
             const bg = sev.tint === "bad" ? "var(--danger-tint)" : sev.tint === "warn" ? "var(--warning-tint)" : undefined;
             return (

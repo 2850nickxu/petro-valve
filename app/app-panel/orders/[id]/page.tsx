@@ -36,7 +36,7 @@ export default async function OrderPanel({ params }: { params: Promise<{ id: str
               </span>
             </span>
             <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
-              {s.buyer?.companyName} · {s.buyer?.email}
+              {s.buyer?.email} · {s.buyer?.companyName}
             </span>
             <span>
               <a href={`/staff/po-inbox/${encodeURIComponent(s.id)}`} target="_blank" rel="noreferrer">Open session ↗</a>

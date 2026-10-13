@@ -1,4 +1,5 @@
 import { sessionMessages } from "./messages";
+import { actorLabel } from "./people";
 import type { AuditEntry, DecisionStage, PoSession, SessionMessage, SourceRef, StepOutcome, StepSetting } from "./types";
 
 // View model for the session detail page: the conversation thread and the decision trail,
@@ -28,7 +29,7 @@ export function stamp(iso: string): string {
 export type OutcomeTone = "neutral" | "warning" | "danger";
 
 /** Positive outcomes stay neutral; colour is kept for steps that need attention. */
-const OUTCOME: Record<StepOutcome, { label: string; tone: OutcomeTone }> = {
+export const OUTCOME: Record<StepOutcome, { label: string; tone: OutcomeTone }> = {
   known_account: { label: "Known account", tone: "neutral" },
   unknown_sender: { label: "Unknown sender", tone: "warning" },
   confidence_high: { label: "Confidence high", tone: "neutral" },
@@ -56,7 +57,7 @@ const STAGE_LABEL: Record<DecisionStage, string> = {
   validate: "Validate",
   decide: "Decide",
   outbound: "Outbound",
-  human: "Person",
+  human: "Sales agent",
   lifecycle: "Follow-up",
 };
 
@@ -123,6 +124,11 @@ export interface TrailRun {
 
 const LEGACY_DETAIL_CAP = 160;
 
+/** Person-step summaries written before the Sales agent label say "Staff …". */
+function personSummary(summary: string): string {
+  return summary.startsWith("Staff ") ? `Sales agent ${summary.slice("Staff ".length)}` : summary;
+}
+
 function legacyDetail(detail: unknown): string | undefined {
   if (detail == null) return undefined;
   const s = typeof detail === "string" ? detail : JSON.stringify(detail);
@@ -153,9 +159,9 @@ export function decisionTrail(session: PoSession): TrailRun[] {
       event: a.event,
       stage: a.stage ? STAGE_LABEL[a.stage] : undefined,
       title: stepTitle(a),
-      summary: a.summary ?? (a.note ? undefined : legacyDetail(a.detail)),
+      summary: a.summary ? (a.stage === "human" ? personSummary(a.summary) : a.summary) : a.note ? undefined : legacyDetail(a.detail),
       note: a.note,
-      actor: a.stage === "human" || !a.stage ? a.actor : undefined,
+      actor: a.stage === "human" || (!a.stage && a.actor) ? actorLabel(a.actor) : undefined,
       outcome: a.outcome ? OUTCOME[a.outcome] : undefined,
       setting: a.setting,
       sources: a.sources ?? [],
@@ -194,7 +200,7 @@ const PURPOSE_LABEL: Record<NonNullable<SessionMessage["purpose"]>, string> = {
 const KIND_LABEL: Record<SessionMessage["kind"], string> = {
   inbound: "Customer email",
   auto_reply: "Reply",
-  staff_reply: "Staff reply",
+  staff_reply: "Sales agent reply",
   reminder: "Reminder",
   expiry: "Expiry notice",
   escalation_email: "Escalation email",
@@ -253,7 +259,7 @@ export function conversationThread(session: PoSession): ThreadEntry[] {
   const decided = new Map<number, { at: string; summary: string; stepN: number }>();
   session.audit.forEach((a, i) => {
     if (a.event === "note" && a.note) {
-      entries.push({ kind: "note", key: `note-${i}`, at: a.at, side: "internal", text: a.note, actor: a.actor, run: a.run, stepN: i + 1 });
+      entries.push({ kind: "note", key: `note-${i}`, at: a.at, side: "internal", text: a.note, actor: actorLabel(a.actor), run: a.run, stepN: i + 1 });
     }
     if (a.stage === "decide" && a.run != null && a.summary) {
       decided.set(a.run, { at: a.at, summary: a.summary, stepN: i + 1 });

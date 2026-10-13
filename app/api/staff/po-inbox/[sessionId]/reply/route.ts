@@ -6,6 +6,7 @@ import { sessionStoreHash } from "@/lib/bc-app/request-context";
 import { resolveChannelAdapter } from "@/lib/po-agent/runtime";
 import { currentRun, replyThread, sendRecordedReply } from "@/lib/po-agent/messages";
 import { repliedStep } from "@/lib/po-agent/decision-steps";
+import { SALES_AGENT } from "@/lib/po-agent/people";
 
 // Staff reply-on-thread (gated by middleware). Sends an operator-authored message to the
 // buyer on the SAME email thread as the original PO, from the monitored mailbox, and
@@ -49,7 +50,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
 
   // Reply against the newest message we've seen on the thread so clients nest it correctly.
   const thread = replyThread(session, to);
-  const actor = body.actor?.trim() || "staff";
+  const actor = body.actor?.trim() || SALES_AGENT;
   const now = () => new Date().toISOString();
 
   const sent = await sendRecordedReply(

@@ -6,6 +6,7 @@ import { PageHead, SessionRow, stateLabel } from "../ui";
 import { Banner, EmptyState } from "@/components/ui/states";
 import { AutoRefresh } from "@/components/ui/auto-refresh";
 import type { PoSession } from "@/lib/po-agent/types";
+import { customerEmail } from "@/lib/po-agent/people";
 
 export const dynamic = "force-dynamic";
 
@@ -67,8 +68,8 @@ export default async function PoInboxPage() {
               <SessionRow
                 key={s.id}
                 href={`/staff/po-inbox/${encodeURIComponent(s.id)}`}
-                company={s.buyer?.companyName || "(unknown sender)"}
-                sub={`${s.buyer?.email ?? "unknown"} · ${shortWhen(s.updatedAt, nowMs)}`}
+                customer={customerEmail(s)}
+                sub={`${s.buyer?.companyName || "No matching account"} · ${shortWhen(s.updatedAt, nowMs)}`}
                 meta={<span style={{ color: "var(--danger-600)" }}>{reasonOf(s)}</span>}
                 state="escalated"
                 stateLabel="escalated"
@@ -88,8 +89,8 @@ export default async function PoInboxPage() {
               <SessionRow
                 key={s.id}
                 href={`/staff/po-inbox/${encodeURIComponent(s.id)}`}
-                company={s.buyer?.companyName || "(unknown sender)"}
-                sub={`${s.buyer?.email ?? "unknown"} · ${poOf(s)} · ${shortWhen(s.updatedAt, nowMs)}`}
+                customer={customerEmail(s)}
+                sub={`${s.buyer?.companyName || "No matching account"} · ${poOf(s)} · ${shortWhen(s.updatedAt, nowMs)}`}
                 state={s.state}
                 stateLabel={stateLabel(s.state)}
               />

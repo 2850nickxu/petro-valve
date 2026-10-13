@@ -134,8 +134,8 @@ export function SessionsBrowser() {
             <SessionRow
               key={item.id}
               href={`/staff/po-inbox/${encodeURIComponent(item.id)}`}
-              company={item.company || "(unknown sender)"}
-              sub={`${item.email || "unknown"} · ${item.poNumber || "no PO number"} · ${item.updatedAt.slice(0, 16).replace("T", " ")}`}
+              customer={item.email || "Unknown sender"}
+              sub={`${item.company || "No matching account"} · ${item.poNumber || "no PO number"} · ${item.updatedAt.slice(0, 16).replace("T", " ")}`}
               meta={item.decision ?? "—"}
               state={item.state}
               stateLabel={stateLabel(item.state)}

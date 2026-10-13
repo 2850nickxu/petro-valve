@@ -158,7 +158,15 @@ describe("decisionTrail", () => {
     expect(trail[0].label).toMatch(/^Earlier events/);
     expect(trail[0].steps[0].summary!.length).toBeLessThanOrEqual(161);
     expect(trail[0].steps[0].title).toBe("Identified the sender");
-    expect(trail[1].steps[0]).toMatchObject({ n: 2, stage: "Person", note: "dup", actor: "staff", outcome: { label: "Rejected" } });
+    // A session saved with actor "staff" and a "Staff …" summary reads as the Sales agent.
+    expect(trail[1].steps[0]).toMatchObject({
+      n: 2,
+      stage: "Sales agent",
+      summary: "Sales agent dismissed the session.",
+      note: "dup",
+      actor: "Sales agent",
+      outcome: { label: "Rejected" },
+    });
   });
 
   it("titles a failed send and unknown events sensibly", () => {

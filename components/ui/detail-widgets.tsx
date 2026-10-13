@@ -77,7 +77,7 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
                 {it.tag}
               </span>
             ) : null}
-            {it.detail ? <span style={{ color: "var(--text-metadata)" }}>{it.detail}</span> : null}
+            {it.detail ? <span style={{ color: "var(--text-metadata)", marginLeft: it.tag ? 0 : 6 }}>{it.detail}</span> : null}
           </div>
           {it.time ? (
             <div

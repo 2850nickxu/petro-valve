@@ -7,6 +7,7 @@ import { submitQuote } from "@/lib/po-agent/core/submit-quote";
 import { getQuoteConfigs, getQuoteExpiryDays } from "@/lib/bc/quote-config";
 import { currentRun } from "@/lib/po-agent/messages";
 import { dismissedStep, forcedStep, noteStep } from "@/lib/po-agent/decision-steps";
+import { SALES_AGENT } from "@/lib/po-agent/people";
 
 // Staff review-queue actions (gated by middleware). Dismiss is Redis-only; force order/
 // quote re-run the submission against the stored session's resolution.
@@ -24,7 +25,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
 
   const { action, note, actor } = (await req.json().catch(() => ({}))) as { action?: string; note?: string; actor?: string };
   const now = () => new Date().toISOString();
-  const by = actor?.trim() || "staff";
+  const by = actor?.trim() || SALES_AGENT;
   const trimmedNote = note?.trim() || undefined;
 
   // Append-only note — no state change, stays in the queue.

@@ -147,7 +147,7 @@ export function HealthRow({
 /** One clickable session line — used by the dashboard, inbox and sessions list. */
 export function SessionRow({
   href,
-  company,
+  customer,
   sub,
   meta,
   state,
@@ -155,7 +155,8 @@ export function SessionRow({
   tint,
 }: {
   href: string;
-  company: ReactNode;
+  /** The customer, by email — how customers are identified across the app. */
+  customer: ReactNode;
   sub?: ReactNode;
   meta?: ReactNode;
   state?: string;
@@ -180,7 +181,7 @@ export function SessionRow({
       }}
     >
       <span style={{ flex: "1 1 230px", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-        <span style={{ fontWeight: "var(--weight-medium)", color: "var(--text-primary)" }}>{company}</span>
+        <span style={{ fontWeight: "var(--weight-medium)", color: "var(--text-primary)", overflowWrap: "anywhere" }}>{customer}</span>
         {sub ? <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>{sub}</span> : null}
       </span>
       {meta ? <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>{meta}</span> : null}

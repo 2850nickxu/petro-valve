@@ -3,6 +3,7 @@ import type { IdentifyResult } from "./core/identify";
 import { ISSUE_CATEGORY } from "./core/decide";
 import { submittableLines } from "./core/resolve";
 import { money } from "./ai/respond";
+import { actorLabel } from "./people";
 import type {
   AuditEntry,
   Decision,
@@ -85,8 +86,7 @@ function signedPct(n: number): string {
 }
 
 function who(actor: string | undefined): string {
-  const a = actor?.trim();
-  return !a || a === "staff" ? "Staff" : a;
+  return actorLabel(actor);
 }
 
 function messageRef(m: Pick<SessionMessage, "id" | "at">, label = "Message"): SourceRef {

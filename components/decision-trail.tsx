@@ -4,6 +4,7 @@ import { formatMoney } from "@/components/ui/money";
 import type { AdminLinks } from "@/lib/bc/admin-links";
 import { stamp, type TrailRun, type TrailStep } from "@/lib/po-agent/session-view";
 import type { SourceRef, StepSetting } from "@/lib/po-agent/types";
+import { isDefaultActor } from "@/lib/po-agent/people";
 
 // The decision trail: every step the agent (or a person) took on a session, numbered and
 // grouped by run, each saying what happened, which setting drove it, what data it read and
@@ -149,7 +150,7 @@ function Step({ step, last, links, currency }: { step: TrailStep; last: boolean;
           <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-secondary)", overflowWrap: "anywhere" }}>
             “{step.note}”{step.actor ? <span style={{ color: "var(--text-metadata)" }}> — {step.actor}</span> : null}
           </span>
-        ) : step.actor && step.stage === "Person" ? (
+        ) : step.actor && !isDefaultActor(step.actor) ? (
           <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>By {step.actor}</span>
         ) : null}
         {hasChips ? (

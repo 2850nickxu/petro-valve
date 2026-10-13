@@ -12,6 +12,7 @@ import { PageHead, Stat, HealthRow, SessionRow, stateLabel } from "./ui";
 import { Banner, EmptyState } from "@/components/ui/states";
 import { AutoRefresh } from "@/components/ui/auto-refresh";
 import type { PoSession } from "@/lib/po-agent/types";
+import { customerEmail } from "@/lib/po-agent/people";
 
 export const dynamic = "force-dynamic";
 
@@ -156,8 +157,8 @@ export default async function Dashboard() {
               <SessionRow
                 key={s.id}
                 href={`${INBOX}/${encodeURIComponent(s.id)}`}
-                company={s.buyer?.companyName || "(unknown sender)"}
-                sub={`${s.buyer?.email ?? "unknown"} · ${poOf(s)} · ${shortWhen(s.updatedAt, nowMs)}`}
+                customer={customerEmail(s)}
+                sub={`${s.buyer?.companyName || "No matching account"} · ${poOf(s)} · ${shortWhen(s.updatedAt, nowMs)}`}
                 state={s.state}
                 stateLabel={stateLabel(s.state)}
               />
