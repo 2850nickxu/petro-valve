@@ -1,7 +1,6 @@
 import { getPoAgentConfig } from "@/lib/po-agent/config";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
 import { activeStoreSource, sessionStoreHash } from "@/lib/bc-app/request-context";
-import { adminLinks } from "@/lib/bc/admin-links";
 import { hasConfiguredModel } from "@/lib/po-agent/ai/registry";
 import { Simulator } from "@/components/simulator";
 import { ConversationSimulator } from "@/components/conversation-simulator";
@@ -14,7 +13,7 @@ export default async function SimulatorPage() {
   const hash = await sessionStoreHash();
   const env = await effectiveEnv(hash ?? undefined);
   const config = getPoAgentConfig(env);
-  const links = adminLinks((await activeStoreSource()).storeHash);
+  const { storeHash } = await activeStoreSource();
 
   return (
     <>
@@ -23,7 +22,7 @@ export default async function SimulatorPage() {
         sub="Write as a customer and watch the agent decide and reply. Nothing here is emailed."
       />
       <SimulatorTabs
-        conversation={<ConversationSimulator links={links} modelConfigured={hasConfiguredModel(env)} />}
+        conversation={<ConversationSimulator storeHash={storeHash} modelConfigured={hasConfiguredModel(env)} />}
         pipeline={
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
             <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>

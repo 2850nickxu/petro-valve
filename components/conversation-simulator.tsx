@@ -10,7 +10,7 @@ import { DecisionTrail } from "@/components/decision-trail";
 import { DecisionRecordView } from "@/components/decision-record";
 import { conversationThread, decisionTrail } from "@/lib/po-agent/session-view";
 import { reSubject } from "@/lib/po-agent/messages";
-import type { AdminLinks } from "@/lib/bc/admin-links";
+import { adminLinks } from "@/lib/bc/admin-links";
 import type { PoSession } from "@/lib/po-agent/types";
 import type { DecisionRecord } from "@/lib/po-agent/rules/types";
 
@@ -128,8 +128,11 @@ interface TurnResponse {
   record: DecisionRecord;
 }
 
-export function ConversationSimulator({ links, modelConfigured }: { links: AdminLinks | null; modelConfigured: boolean }) {
+// Takes the store hash, not prebuilt links: AdminLinks holds functions, which can't cross
+// from the server page into this client component.
+export function ConversationSimulator({ storeHash, modelConfigured }: { storeHash?: string; modelConfigured: boolean }) {
   const toast = useToast();
+  const links = useMemo(() => adminLinks(storeHash), [storeHash]);
   const [mode, setMode] = useState<Mode>("reply");
   const [reviewAll, setReviewAll] = useState(false);
   const [preset, setPreset] = useState<string>(PRESETS[0].id);
