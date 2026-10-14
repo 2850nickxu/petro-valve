@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Button, DataTable, Panel, SearchInput, Spinner, TabPanel, Tabs, type Column } from "@/components/backbone";
+import { Badge, Button, DataTable, Panel, SearchInput, Spinner, TabPanel, Tabs, type Column } from "@/components/backbone";
 import { Chip, stateLabel } from "@/app/staff/ui";
 import { EmptyState } from "@/components/ui/states";
 import { stamp } from "@/lib/po-agent/session-view";
@@ -18,6 +18,7 @@ type TabId = "all" | PoSessionState;
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "all", label: "All" },
   { id: "escalated", label: "Escalated" },
+  { id: "held", label: "Held for review" },
   { id: "clarifying", label: "Clarifying" },
   { id: "awaiting_confirmation", label: "Awaiting confirm" },
   { id: "completed_quote", label: "Quote sent" },
@@ -57,9 +58,12 @@ const COLUMNS: Column[] = [
     label: "Customer",
     primary: true,
     render: (s: SessionSummary) => (
-      <Link href={href(s.id)} onClick={(e) => e.stopPropagation()} style={{ color: "inherit", textDecoration: "none" }}>
-        {s.email || "Unknown sender"}
-      </Link>
+      <span style={{ display: "inline-flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+        <Link href={href(s.id)} onClick={(e) => e.stopPropagation()} style={{ color: "inherit", textDecoration: "none" }}>
+          {s.email || "Unknown sender"}
+        </Link>
+        {s.simulated ? <Badge tone="draft">Simulated</Badge> : null}
+      </span>
     ),
   },
   { key: "company", label: "Company", muted: true, render: (s: SessionSummary) => s.company || "No matching account" },

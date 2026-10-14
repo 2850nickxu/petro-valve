@@ -201,6 +201,7 @@ export const STATE_LABEL: Record<string, string> = {
   completed_order: "order placed",
   completed_quote: "quote sent",
   escalated: "escalated",
+  held: "held for review",
   rejected: "rejected",
   expired: "expired",
 };

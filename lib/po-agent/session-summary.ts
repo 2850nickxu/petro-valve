@@ -14,7 +14,7 @@ const SKU_CAP = 25;
 
 /** A person action that changes how the session stands (notes and replies don't). */
 function isOutcomeAction(event: string): boolean {
-  return event === "dismissed" || event === "expired" || event.startsWith("forced_");
+  return event === "dismissed" || event === "expired" || event === "draft_approved" || event.startsWith("forced_");
 }
 
 /** How the session stands, in one sentence: the latest decide-stage step (held, submitted,

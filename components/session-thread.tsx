@@ -1,10 +1,18 @@
 "use client";
 
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { Badge, Button, SegmentedControl } from "@/components/backbone";
+import { useRouter } from "next/navigation";
+import { Badge, Button, SegmentedControl, TextareaField } from "@/components/backbone";
+import { useToast } from "@/components/ui/toast";
 import { messageLabel, stamp, type ThreadEntry } from "@/lib/po-agent/session-view";
 import { actorLabel } from "@/lib/po-agent/people";
-import type { SessionMessage } from "@/lib/po-agent/types";
+import type { PoSession, SessionMessage } from "@/lib/po-agent/types";
+
+/** Lets a person approve held drafts on this thread. Without `onDone` the page refreshes. */
+export interface DraftActions {
+  sessionId: string;
+  onDone?: (session: PoSession) => void;
+}
 
 // The conversation on one session, oldest first: what the customer wrote, what the agent
 // and staff sent back, internal emails and notes, and a divider per run carrying the
@@ -85,12 +93,15 @@ function Attachments({ files }: { files: NonNullable<SessionMessage["attachments
  * "Sales agent · sent by hand" for a person replying from the app. */
 function sender(m: SessionMessage): string {
   if (m.kind === "staff_reply") return `${actorLabel(m.actor)} · sent by hand`;
+  if (m.status === "held") return "PO agent · draft";
+  if (m.actor) return `PO agent draft · approved by ${actorLabel(m.actor)}`;
   return "PO agent · sent automatically";
 }
 
 function StatusBadge({ m }: { m: SessionMessage }) {
   if (m.status === "failed") return <Badge tone="danger">Not delivered</Badge>;
   if (m.status === "captured") return <Badge tone="draft">Simulator, not delivered</Badge>;
+  if (m.status === "held") return <Badge tone="warning">Held for review</Badge>;
   return null;
 }
 
@@ -103,17 +114,67 @@ function StepLink({ n }: { n?: number }) {
   );
 }
 
-function Message({ e }: { e: Extract<ThreadEntry, { kind: "message" }> }) {
+/** Approve-and-send for a held draft, with an optional edit first. */
+function HeldDraft({ m, actions }: { m: SessionMessage; actions: DraftActions }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(m.text);
+  const [sending, setSending] = useState(false);
+
+  async function approve() {
+    setSending(true);
+    try {
+      const res = await fetch(`/api/staff/po-inbox/${encodeURIComponent(actions.sessionId)}/drafts/${encodeURIComponent(m.id)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editing ? { text } : {}),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error ?? "Couldn't send the draft.");
+        return;
+      }
+      toast.success("Draft sent.");
+      setEditing(false);
+      if (actions.onDone) actions.onDone(json.session as PoSession);
+      else router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't send the draft.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+      {editing ? <TextareaField label="Edit the draft" value={text} onChange={(ev) => setText(ev.target.value)} rows={10} /> : null}
+      <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap", justifyContent: "flex-end" }}>
+        <Button variant="secondary" size="micro" onClick={() => setEditing((v) => !v)} disabled={sending}>
+          {editing ? "Cancel edit" : "Edit"}
+        </Button>
+        <Button variant="primary" size="micro" onClick={approve} loading={sending} disabled={editing && !text.trim()}>
+          {editing ? "Send edited draft" : "Approve and send"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function Message({ e, actions }: { e: Extract<ThreadEntry, { kind: "message" }>; actions?: DraftActions }) {
   const m = e.message;
   const customer = e.side === "customer";
   const internal = e.side === "internal";
   const failed = m.status === "failed";
+  const held = m.status === "held";
 
   const surface: CSSProperties = customer
     ? { background: "var(--surface-sunken)", border: "var(--border-w) solid var(--border-default)" }
     : internal
       ? { background: "var(--surface-inset)", border: "var(--border-w) dashed var(--border-default)" }
-      : { background: "var(--surface-panel)", border: `var(--border-w) solid ${failed ? "var(--danger-line)" : "var(--border-default)"}` };
+      : held
+        ? { background: "var(--surface-panel)", border: "var(--border-w) dashed var(--warning-line)" }
+        : { background: "var(--surface-panel)", border: `var(--border-w) solid ${failed ? "var(--danger-line)" : "var(--border-default)"}` };
 
   return (
     <article
@@ -140,11 +201,13 @@ function Message({ e }: { e: Extract<ThreadEntry, { kind: "message" }> }) {
       </div>
       <div style={{ ...surface, borderRadius: "var(--radius-md)", padding: "var(--space-3)", display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
         {internal ? <span style={caption}>Never sent to the customer.</span> : null}
+        {held ? <span style={caption}>Not sent. A person approves, edits or takes over before it goes out.</span> : null}
         {m.subject ? <span style={{ ...caption, fontWeight: 600 }}>{m.subject}</span> : null}
         <Body text={m.text} />
         {m.attachments?.length ? <Attachments files={m.attachments} /> : null}
         {failed && m.error ? <span style={{ ...caption, color: "var(--danger-600)" }}>Send failed: {m.error}</span> : null}
       </div>
+      {held && actions ? <HeldDraft m={m} actions={actions} /> : null}
       <div style={{ display: "flex", justifyContent: customer || internal ? "flex-start" : "flex-end" }}>
         <StepLink n={e.stepN} />
       </div>
@@ -189,7 +252,7 @@ function RunDivider({ e }: { e: Extract<ThreadEntry, { kind: "run" }> }) {
   );
 }
 
-export function SessionThread({ entries, footer }: { entries: ThreadEntry[]; footer?: ReactNode }) {
+export function SessionThread({ entries, footer, draftActions }: { entries: ThreadEntry[]; footer?: ReactNode; draftActions?: DraftActions }) {
   const [filter, setFilter] = useState<Filter>("all");
   const count = (f: Filter) => entries.filter((e) => e.kind !== "run" && matches(e, f)).length;
   const shown = entries.filter((e) => matches(e, filter));
@@ -211,7 +274,7 @@ export function SessionThread({ entries, footer }: { entries: ThreadEntry[]; foo
       {shown.length ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
           {shown.map((e) =>
-            e.kind === "message" ? <Message key={e.key} e={e} /> : e.kind === "note" ? <Note key={e.key} e={e} /> : <RunDivider key={e.key} e={e} />,
+            e.kind === "message" ? <Message key={e.key} e={e} actions={draftActions} /> : e.kind === "note" ? <Note key={e.key} e={e} /> : <RunDivider key={e.key} e={e} />,
           )}
         </div>
       ) : (

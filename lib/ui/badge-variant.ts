@@ -19,6 +19,7 @@ const TONE: Record<string, BadgeTone> = {
   clarifying: "warning",
   clarify: "warning",
   awaiting_confirmation: "warning",
+  held: "warning",
   new: "info",
   identifying: "info",
   validating: "info",

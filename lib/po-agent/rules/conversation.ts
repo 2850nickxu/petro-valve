@@ -393,7 +393,8 @@ export async function runSimulatedTurn(
       customerId: buyer?.customerId ?? null,
       company: buyer?.companyName ?? null,
       guest: !buyer,
-      name: buyer?.companyRoleName ?? safe.from,
+      // The store gives no person name for a buyer; the email is how they are identified.
+      name: safe.from,
       email: safe.from,
     },
     extracted: extracted ?? null,

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { Panel } from "@/components/backbone";
+import { Badge, Panel } from "@/components/backbone";
 import { getRedis } from "@/lib/redis";
 import { createPoStore } from "@/lib/po-agent/store";
 import { activeStoreSource } from "@/lib/bc-app/request-context";
@@ -20,9 +20,11 @@ import { ReplyBox } from "@/components/reply-box";
 import { AiCard, Callout, KeyValue, type CalloutTone, type KeyValueRow } from "@/components/ui/detail-widgets";
 import { SessionThread } from "@/components/session-thread";
 import { DecisionTrail } from "@/components/decision-trail";
+import { ACTION_LABEL, DecisionRecordView } from "@/components/decision-record";
 import { conversationThread, decisionTrail } from "@/lib/po-agent/session-view";
 import { SessionActionButtons, SessionNote, type ActionSummary } from "./actions";
 import type { DecisionKind, PoSession, ResolvedLine } from "@/lib/po-agent/types";
+import type { RulesAction } from "@/lib/po-agent/rules/types";
 import { customerEmail } from "@/lib/po-agent/people";
 import { lineSeverity } from "@/lib/ui/line-severity";
 
@@ -35,6 +37,14 @@ const CALLOUT_TONE: Record<DecisionKind | "pending", CalloutTone> = {
   clarify: "warn",
   reject: "bad",
   pending: "info",
+};
+
+const RULES_TONE: Record<RulesAction, CalloutTone> = {
+  AUTO_RESPOND: "ok",
+  CLARIFY: "warn",
+  HOLD: "warn",
+  ESCALATE: "bad",
+  NO_RESPONSE: "info",
 };
 
 /** Row tint + issue colour follow the worst issue on the line (shared with the simulator). */
@@ -144,8 +154,10 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
     estimatedTotal: formatMoney(estimatedSubtotal(lines), currency),
   };
 
+  const simulated = Boolean(session.simulated || session.channel === "simulator");
   const hasChannel = status.channelCreds.google || status.channelCreds.microsoft;
-  const canReply = hasChannel && Boolean(session.buyer?.email ?? session.inbound?.from);
+  // A simulated customer's replies are captured by the simulator, so no channel is needed.
+  const canReply = (simulated || hasChannel) && Boolean(session.buyer?.email ?? session.inbound?.from);
   const replyDisabledReason = !hasChannel
     ? "Connect an email channel in Settings to reply on the buyer's thread."
     : "This session has no known buyer address to reply to.";
@@ -220,8 +232,11 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
         {poOf(session) ? <> · <span style={num}>{poOf(session)}</span></> : null}
       </span>
       <Chip kind={session.state}>{stateLabel(session.state)}</Chip>
+      {simulated ? <Badge tone="draft">Simulated</Badge> : null}
     </span>
   );
+  const records = session.rules?.records ?? [];
+  const latestRecord = records[records.length - 1];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap-section)", maxWidth: 1240 }}>
@@ -232,23 +247,30 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
         </PageHead>
       </div>
 
-      <Callout
-        tone={CALLOUT_TONE[outcome.kind]}
-        title={
-          <>
-            {outcome.headline}
-            {outcome.kind === "escalate" && session.escalation?.reasons.length
-              ? ` — ${session.escalation.reasons.join(", ")}`
-              : ""}
-          </>
-        }
-      >
-        {outcome.reasons.length ? outcome.reasons.join(" ") : "No blocking issues."}
-        {notified.length ? ` Notified: ${notified.join(", ")}.` : ""}
-        {session.clarificationRounds > 0
-          ? ` ${session.clarificationRounds} clarification round${session.clarificationRounds === 1 ? "" : "s"} used.`
-          : ""}
-      </Callout>
+      {latestRecord ? (
+        <Callout tone={RULES_TONE[latestRecord.action]} title={`Decision rules: ${ACTION_LABEL[latestRecord.action].toLowerCase()}`}>
+          {latestRecord.notes_for_rep}
+          {session.state === "held" ? " The draft is in the conversation below, waiting for approval." : ""}
+        </Callout>
+      ) : (
+        <Callout
+          tone={CALLOUT_TONE[outcome.kind]}
+          title={
+            <>
+              {outcome.headline}
+              {outcome.kind === "escalate" && session.escalation?.reasons.length
+                ? ` — ${session.escalation.reasons.join(", ")}`
+                : ""}
+            </>
+          }
+        >
+          {outcome.reasons.length ? outcome.reasons.join(" ") : "No blocking issues."}
+          {notified.length ? ` Notified: ${notified.join(", ")}.` : ""}
+          {session.clarificationRounds > 0
+            ? ` ${session.clarificationRounds} clarification round${session.clarificationRounds === 1 ? "" : "s"} used.`
+            : ""}
+        </Callout>
+      )}
 
       <ReplyBox
         sessionId={id}
@@ -266,7 +288,7 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 440px), 1fr))", gap: "var(--gap-group)", alignItems: "start" }}>
         <Panel title="Conversation" meta="Every email on this thread, oldest first. Times in UTC.">
-          <SessionThread entries={thread} footer={<SessionNote sessionId={id} />} />
+          <SessionThread entries={thread} footer={<SessionNote sessionId={id} />} draftActions={session.simulated ? { sessionId: id } : undefined} />
         </Panel>
         <Panel
           title="Decision trail"
@@ -275,6 +297,27 @@ export default async function SessionDetail({ params }: { params: Promise<{ sess
           <DecisionTrail runs={trail} links={links} currency={currency ?? undefined} />
         </Panel>
       </div>
+
+      {records.length ? (
+        <Panel
+          title="Decision records"
+          meta="What the Petro Valve rules decided for each customer email. For an escalation this is the handoff to a person."
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+            {[...records].reverse().map((r, i) => (
+              <div
+                key={`${r.message_id}-${i}`}
+                style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", paddingTop: i > 0 ? "var(--space-4)" : 0, borderTop: i > 0 ? "var(--border-w) solid var(--border-subtle)" : undefined }}
+              >
+                <span style={{ fontSize: "var(--text-caption-size)", fontWeight: 600, color: "var(--text-secondary)", ...num }}>
+                  Run {r.run} · {ACTION_LABEL[r.action]}
+                </span>
+                <DecisionRecordView record={r} currency={currency ?? undefined} />
+              </div>
+            ))}
+          </div>
+        </Panel>
+      ) : null}
 
       <Panel
         title="Lines"
