@@ -2,13 +2,15 @@ import type { CSSProperties, ReactNode } from "react";
 import { Badge } from "@/components/backbone";
 import { formatMoney } from "@/components/ui/money";
 import type { AdminLinks } from "@/lib/bc/admin-links";
-import { stamp, type TrailRun, type TrailStep } from "@/lib/po-agent/session-view";
+import type { TrailRun, TrailStep } from "@/lib/po-agent/session-view";
+import { LocalTime, LocalTimeTitle } from "@/components/local-time";
 import type { SourceRef, StepSetting } from "@/lib/po-agent/types";
 import { isDefaultActor } from "@/lib/po-agent/people";
 
 // The decision trail: every step the agent (or a person) took on a session, numbered and
 // grouped by run, each saying what happened, which setting drove it, what data it read and
-// how it came out. Rendered from stored decision steps only. Server-safe (no hooks).
+// how it came out. Rendered from stored decision steps only. Server-safe (no hooks); times
+// render in the viewer's local zone via the client-side LocalTime.
 
 const num: CSSProperties = { fontVariantNumeric: "tabular-nums" };
 
@@ -51,27 +53,23 @@ function sourceHref(s: SourceRef, links: AdminLinks | null): { href: string; ext
 function SourceChip({ source, links, currency }: { source: SourceRef; links: AdminLinks | null; currency?: string }) {
   const value = sourceValue(source, currency);
   const target = sourceHref(source, links);
-  const title = source.readAt ? `Read ${stamp(source.readAt)} UTC` : undefined;
   const body = (
     <>
       <span>{source.label}</span>
       {value ? <span style={{ color: "var(--text-metadata)", ...num }}>· {value}</span> : null}
     </>
   );
-  if (!target) {
+  const style = target ? linkedChip : chip;
+  if (source.readAt) {
     return (
-      <span style={chip} title={title}>
+      <LocalTimeTitle iso={source.readAt} prefix="Read" href={target?.href} external={target?.external} style={style}>
         {body}
-      </span>
+      </LocalTimeTitle>
     );
   }
+  if (!target) return <span style={style}>{body}</span>;
   return (
-    <a
-      href={target.href}
-      style={linkedChip}
-      title={title}
-      {...(target.external ? { target: "_blank", rel: "noreferrer" } : {})}
-    >
+    <a href={target.href} style={style} {...(target.external ? { target: "_blank", rel: "noreferrer" } : {})}>
       {body}
     </a>
   );
@@ -137,9 +135,10 @@ function Step({ step, last, links, currency }: { step: TrailStep; last: boolean;
             </span>
           ) : null}
           <span style={{ fontSize: "var(--text-body-size)", fontWeight: 600, color: "var(--text-primary)" }}>{step.title}</span>
-          <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
-            {stamp(step.at)}
-          </span>
+          <LocalTime
+            iso={step.at}
+            style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}
+          />
         </div>
         {step.summary ? (
           <span style={{ fontSize: "var(--text-caption-size)", lineHeight: "var(--text-caption-line)", color: "var(--text-secondary)", overflowWrap: "anywhere" }}>
@@ -195,7 +194,10 @@ export function DecisionTrail({ runs, links, currency }: { runs: TrailRun[]; lin
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
       {runs.map((r) => (
         <section key={r.key} aria-label={r.label}>
-          <RunHeader>{r.label}</RunHeader>
+          <RunHeader>
+            {r.label}
+            {r.at ? <> · <LocalTime iso={r.at} /></> : null}
+          </RunHeader>
           <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
             {r.steps.map((s, i) => (
               <Step key={s.n} step={s} last={i === r.steps.length - 1} links={links} currency={currency} />

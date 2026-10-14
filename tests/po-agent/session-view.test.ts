@@ -4,7 +4,7 @@ import { SimulatorChannel } from "@/lib/po-agent/channel/simulator";
 import { resolveExtractor } from "@/lib/po-agent/ai/extractor";
 import { getPoAgentConfig } from "@/lib/po-agent/config";
 import { createPoStore } from "@/lib/po-agent/store";
-import { conversationThread, decisionTrail, messageLabel, stamp, stepTitle } from "@/lib/po-agent/session-view";
+import { conversationThread, decisionTrail, messageLabel, stepTitle } from "@/lib/po-agent/session-view";
 import type { AuditEntry, PoSession, SessionMessage } from "@/lib/po-agent/types";
 import { createMockRedis } from "@/tests/helpers/mock-redis";
 import { installMockFetch, TEST_CTX } from "@/tests/helpers/mock-fetch";
@@ -95,7 +95,7 @@ describe("conversation thread and decision trail from a real pipeline run", () =
 
     // Trail: one group per run, numbered across the whole session, with plain titles.
     expect(trail.map((r) => r.run)).toEqual([1, 2]);
-    expect(trail[0].label).toBe(`Run 1 · New email · ${stamp(NOW)}`);
+    expect(trail[0]).toMatchObject({ label: "Run 1 · New email", at: NOW });
     expect(trail[1].label).toMatch(/^Run 2 · Buyer replied/);
     expect(steps.map((s) => s.n)).toEqual(steps.map((_, i) => i + 1));
     expect(steps[0]).toMatchObject({ title: "Received the email", stage: "Received" });

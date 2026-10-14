@@ -9,14 +9,16 @@ import type { AuditEntry, DecisionStage, PoSession, SessionMessage, SourceRef, S
 
 /* ---------------------------------------------------------------- time */
 
-const STAMP = new Intl.DateTimeFormat("en-US", {
+/** "Oct 9, 14:32" — shared by the UTC stamp and the viewer-local one (components/local-time). */
+export const STAMP_FORMAT: Intl.DateTimeFormatOptions = {
   month: "short",
   day: "numeric",
   hour: "2-digit",
   minute: "2-digit",
   hourCycle: "h23",
-  timeZone: "UTC",
-});
+};
+
+const STAMP = new Intl.DateTimeFormat("en-US", { ...STAMP_FORMAT, timeZone: "UTC" });
 
 /** "Oct 9, 14:32" in UTC — the page states the zone once. */
 export function stamp(iso: string): string {
@@ -119,6 +121,8 @@ export interface TrailRun {
   /** null = events saved before decision steps existed. */
   run: number | null;
   label: string;
+  /** When the email that started the run arrived; shown in the viewer's local time. */
+  at?: string;
   steps: TrailStep[];
 }
 
@@ -135,11 +139,11 @@ function legacyDetail(detail: unknown): string | undefined {
   return s.length > LEGACY_DETAIL_CAP ? `${s.slice(0, LEGACY_DETAIL_CAP)}…` : s;
 }
 
-function runLabel(run: number | null, messages: SessionMessage[]): string {
-  if (run == null) return "Earlier events (before the decision trail)";
+function runHeading(run: number | null, messages: SessionMessage[]): Pick<TrailRun, "label" | "at"> {
+  if (run == null) return { label: "Earlier events (before the decision trail)" };
   const trigger = messages.find((m) => m.direction === "in" && m.run === run);
   const what = run === 1 ? "New email" : "Buyer replied";
-  return trigger ? `Run ${run} · ${what} · ${stamp(trigger.at)}` : `Run ${run}`;
+  return trigger ? { label: `Run ${run} · ${what}`, at: trigger.at } : { label: `Run ${run}` };
 }
 
 /** The audit log as numbered steps, oldest first, grouped into consecutive runs. */
@@ -150,7 +154,7 @@ export function decisionTrail(session: PoSession): TrailRun[] {
     const run = a.run ?? null;
     let group = runs[runs.length - 1];
     if (!group || group.run !== run) {
-      group = { key: `g${runs.length}`, run, label: runLabel(run, messages), steps: [] };
+      group = { key: `g${runs.length}`, run, ...runHeading(run, messages), steps: [] };
       runs.push(group);
     }
     group.steps.push({
