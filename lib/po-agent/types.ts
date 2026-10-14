@@ -3,6 +3,7 @@
 // decoupled from the AI layer.
 
 import type { VariantChoice } from "@/lib/bc/types";
+import type { RulesThreadState } from "./rules/types";
 
 export type { VariantChoice };
 
@@ -140,6 +141,8 @@ export type PoSessionState =
   | "completed_order"
   | "completed_quote"
   | "escalated"
+  /** A drafted reply is waiting for a person to approve it (rules HOLD). */
+  | "held"
   | "rejected"
   | "expired";
 
@@ -164,6 +167,7 @@ export interface Escalation {
 export type DecisionStage =
   | "received"
   | "identify"
+  | "classify"
   | "extract"
   | "resolve"
   | "price"
@@ -190,6 +194,8 @@ export type StepOutcome =
   | "sent"
   | "failed"
   | "resolved_by_buyer"
+  | "held"
+  | "no_response"
   | "error";
 
 /** The setting that drove a step, with its value at the time. */
@@ -257,10 +263,12 @@ export type MessagePurpose =
   | "escalation_notice"
   | "first_order_confirm"
   | "order_confirmation"
-  | "quote_confirmation";
+  | "quote_confirmation"
+  | "checkout_link_resend";
 
-/** "captured" = a simulator sandbox send that was suppressed and never left the app. */
-export type MessageStatus = "received" | "sent" | "failed" | "captured";
+/** "captured" = a simulator sandbox send that was suppressed and never left the app.
+ * "held" = a drafted reply waiting for a person to approve it; not sent. */
+export type MessageStatus = "received" | "sent" | "failed" | "captured" | "held";
 
 export interface MessageAttachment {
   filename: string;
@@ -320,6 +328,8 @@ export interface SessionSummary {
   messagesOut?: number;
   /** SKUs on the PO, for search. */
   skus?: string[];
+  /** Created by the simulator, not real email. */
+  simulated?: boolean;
 }
 
 export interface PoSession {
@@ -348,4 +358,8 @@ export interface PoSession {
   messageIds: string[];
   createdAt: string;
   updatedAt: string;
+  /** Created by the simulator's conversation mode: nothing on it reached real email. */
+  simulated?: boolean;
+  /** Decision-rules state (simulated conversations only, for now). */
+  rules?: RulesThreadState;
 }

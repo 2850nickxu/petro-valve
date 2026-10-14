@@ -4,6 +4,9 @@ import { ISSUE_CATEGORY } from "./core/decide";
 import { submittableLines } from "./core/resolve";
 import { money } from "./ai/respond";
 import { actorLabel } from "./people";
+import { REASON_TEXT, scenarioLabel } from "./rules/catalog";
+import type { RulesConfig } from "./rules/config";
+import type { Classification, RulesAction, RulesOutcome } from "./rules/types";
 import type {
   AuditEntry,
   Decision,
@@ -620,6 +623,7 @@ const PURPOSE_TEXT: Record<NonNullable<SessionMessage["purpose"]>, string> = {
   first_order_confirm: "the first-order confirmation request",
   order_confirmation: "the order confirmation",
   quote_confirmation: "the quote",
+  checkout_link_resend: "the checkout link again",
 };
 
 function sendWhat(msg: SessionMessage): string {
@@ -733,5 +737,135 @@ export function expiredStep(config: Pick<PoAgentConfig, "sessionExpiryDays">): D
     stage: "lifecycle",
     setting: setting("sessionExpiryDays", "Session expiry", `${config.sessionExpiryDays} days`),
     summary: `Closed after ${plural(config.sessionExpiryDays, "day")} without a reply from the buyer.`,
+  };
+}
+
+// ── Decision rules (simulated conversations) ─────────────────────────────────
+
+const INTENT_TEXT: Record<Classification["intent"], string> = {
+  quote: "a quote request",
+  order: "an order",
+  availability: "an availability question",
+  follow_up: "a reply on the thread",
+  other: "something other than a quote or order",
+};
+
+const FOLLOW_UP_TEXT: Record<Classification["followUp"], string> = {
+  accept: "accepting the quote",
+  answer: "answering our question",
+  change: "changing the request",
+  price_pushback: "pushing back on price",
+  none: "",
+};
+
+function flagText(key: string): string {
+  return key.replace(/_/g, " ");
+}
+
+export function classifiedStep(c: Classification, msg: Pick<SessionMessage, "id" | "at">): DecisionStep {
+  const flags = Object.entries(c.flags)
+    .filter(([, on]) => on)
+    .map(([k]) => flagText(k));
+  const pct = Math.round(c.confidence * 100);
+  const follow = c.followUp !== "none" ? `, ${FOLLOW_UP_TEXT[c.followUp]}` : "";
+  const parts = [
+    `Read as ${INTENT_TEXT[c.intent]}${follow} (${pct}% confident, ${c.source === "model" ? "model" : "keyword rules"}).`,
+  ];
+  if (c.language && c.language !== "en") parts.push(`Written in "${c.language}".`);
+  if (flags.length) parts.push(`Signals: ${joinAnd(flags.slice(0, 8))}${flags.length > 8 ? ` and ${flags.length - 8} more` : ""}.`);
+  if (c.paymentData) parts.push("Card or bank numbers were found and removed from what's stored.");
+  return {
+    event: "classified",
+    stage: "classify",
+    outcome: c.confidence >= 0.9 ? "confidence_high" : c.confidence >= 0.6 ? "confidence_medium" : "confidence_low",
+    summary: parts.join(" "),
+    sources: [messageRef(msg, "Email")],
+    detail: { intent: c.intent, confidence: c.confidence, followUp: c.followUp, language: c.language, flags, paymentData: c.paymentData, source: c.source },
+  };
+}
+
+const ACTION_OUTCOME: Record<RulesAction, StepOutcome> = {
+  AUTO_RESPOND: "quote",
+  CLARIFY: "clarify",
+  HOLD: "held",
+  ESCALATE: "needs_review",
+  NO_RESPONSE: "no_response",
+};
+
+function rulesSetting(o: RulesOutcome, cfg: RulesConfig): StepSetting | undefined {
+  if (o.reasonCodes.includes("review_all_mode")) return { key: "reviewAll", label: "Hold every reply for review", value: "On" };
+  if (o.scenarios.some((h) => h.id === "T5")) {
+    return { key: "maxClarificationRounds", label: "Max clarification rounds", value: String(cfg.maxClarificationRounds) };
+  }
+  if (o.scenarios.some((h) => h.id === "Q6")) return { key: "orderValueHoldUsd", label: "Hold above", value: money(cfg.orderValueHoldUsd) };
+  if (o.scenarios.some((h) => h.id === "I10")) {
+    return { key: "intentConfidenceMin", label: "Minimum intent confidence", value: `${Math.round(cfg.intentConfidenceMin * 100)}%` };
+  }
+  return undefined;
+}
+
+/** The rules' answer: the action, the scenarios behind it, and the reason codes. */
+export function rulesDecidedStep(o: RulesOutcome, cfg: RulesConfig): DecisionStep {
+  const ids = [...new Set(o.scenarios.map((h) => h.id))];
+  const drivers = o.scenarios.filter((h) => h.action === o.action || (o.action === "HOLD" && h.id === "T5"));
+  const why = [...new Set(drivers.map((h) => scenarioLabel(h.id).toLowerCase()))];
+  const codes = o.reasonCodes.map((c) => REASON_TEXT[c]);
+  let summary: string;
+  switch (o.action) {
+    case "AUTO_RESPOND":
+      summary = o.replyKind === "resend_link" ? "Auto-respond: resend the checkout link." : "Auto-respond with a quote and a checkout link.";
+      break;
+    case "CLARIFY":
+      summary = `Clarify: ${joinAnd(why)}.`;
+      break;
+    case "HOLD":
+      summary = `Hold the reply for a person: ${joinAnd(codes)}.`;
+      break;
+    case "ESCALATE":
+      summary = `Escalate to a person: ${joinAnd(codes)}.`;
+      break;
+    case "NO_RESPONSE":
+      summary = `No response: ${joinAnd(why)}.`;
+      break;
+  }
+  const setting = rulesSetting(o, cfg);
+  return {
+    event: "rules_decided",
+    stage: "decide",
+    outcome: ACTION_OUTCOME[o.action],
+    summary: `${summary} Scenarios: ${ids.join(", ")}.`,
+    ...(setting ? { setting } : {}),
+    detail: { action: o.action, scenarios: ids, reasonCodes: o.reasonCodes, replyKind: o.replyKind },
+  };
+}
+
+export function heldDraftStep(msg: SessionMessage): DecisionStep {
+  return {
+    event: "held_draft",
+    stage: "outbound",
+    outcome: "held",
+    summary: `Drafted ${sendWhat(msg)} and held it for a person to approve. Nothing was sent.`,
+    sources: [messageRef(msg, "Draft")],
+    detail: { messageId: msg.id, purpose: msg.purpose, to: msg.to },
+  };
+}
+
+export function handoffStep(lines: number, quotable: number): DecisionStep {
+  return {
+    event: "handoff",
+    stage: "outbound",
+    outcome: "needs_review",
+    summary: `Created the handoff for a person with the decision record (${quotable} of ${plural(lines, "line")} matched and priced). In the simulator this stands in for the HubSpot ticket.`,
+    detail: { lines, quotable },
+  };
+}
+
+export function draftApprovedStep(actor: string | undefined, msg: SessionMessage, edited: boolean): DecisionStep {
+  return {
+    event: "draft_approved",
+    stage: "human",
+    outcome: "sent",
+    summary: `${who(actor)} approved the held draft${edited ? " with edits" : ""} and sent it${msg.status === "captured" ? " (simulator: captured, not delivered)" : ""}.`,
+    sources: [messageRef(msg)],
   };
 }

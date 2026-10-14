@@ -47,12 +47,15 @@ export const OUTCOME: Record<StepOutcome, { label: string; tone: OutcomeTone }> 
   sent: { label: "Sent", tone: "neutral" },
   failed: { label: "Failed", tone: "danger" },
   resolved_by_buyer: { label: "Resolved by buyer", tone: "neutral" },
+  held: { label: "Held for review", tone: "warning" },
+  no_response: { label: "No response", tone: "neutral" },
   error: { label: "Error", tone: "danger" },
 };
 
 const STAGE_LABEL: Record<DecisionStage, string> = {
   received: "Received",
   identify: "Identify",
+  classify: "Classify",
   extract: "Extract",
   resolve: "Resolve",
   price: "Price",
@@ -69,6 +72,11 @@ const STEP_TITLE: Record<string, string> = {
   identified: "Identified the sender",
   extracted: "Read the PO",
   triaged: "Triaged the email",
+  classified: "Classified the message",
+  rules_decided: "Applied the decision rules",
+  held_draft: "Held a draft for review",
+  handoff: "Handed off to a person",
+  draft_approved: "Approved a held draft",
   contract_price_accepted: "Buyer accepted the store price",
   price_review_requested: "Buyer asked for sales pricing",
   resolved: "Matched lines to products",
@@ -199,6 +207,7 @@ const PURPOSE_LABEL: Record<NonNullable<SessionMessage["purpose"]>, string> = {
   first_order_confirm: "First-order confirmation",
   order_confirmation: "Order confirmation",
   quote_confirmation: "Quote",
+  checkout_link_resend: "Checkout link",
 };
 
 const KIND_LABEL: Record<SessionMessage["kind"], string> = {

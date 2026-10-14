@@ -391,6 +391,23 @@ export function SettingsForm({
 
           {saveBar()}
         </Panel>
+
+        <Panel title="Decision rules (draft)" bodyStyle={{ gap: "var(--gap-group)" }} style={{ marginTop: "var(--gap-section)" }}>
+          <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+            Petro Valve&rsquo;s escalation and response rules. Only the simulator&rsquo;s conversation mode uses them
+            until they&rsquo;re signed off; real email keeps the settings above. Leave a field empty for the launch default.
+          </span>
+          <div style={GRID_TWO}>
+            {field("PO_AGENT_RULES_INTENT_MIN")}
+            {field("PO_AGENT_RULES_HOLD_USD")}
+            {field("PO_AGENT_RULES_MAX_LINES")}
+            {field("PO_AGENT_RULES_MAX_CLARIFY")}
+            {field("PO_AGENT_RULES_UNUSUAL_QTY")}
+            {field("PO_AGENT_RULES_STAFF_DOMAINS")}
+          </div>
+          {toggle("PO_AGENT_RULES_ESCALATION_ACK", true)}
+          {saveBar()}
+        </Panel>
       </TabPanel>
 
       {/* ── AI model (Silk view only) ── */}

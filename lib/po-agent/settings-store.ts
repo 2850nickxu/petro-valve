@@ -54,6 +54,15 @@ export const SETTINGS_FIELDS: FieldDef[] = [
   { key: "PO_AGENT_DAILY_SUBMIT_CAP", label: "Daily submit cap", group: "Workflow", type: "number", help: "Maximum orders/quotes submitted per calendar day (0 = unlimited)" },
   { key: "PO_AGENT_SIMULATOR_SEND", label: "Sandbox mode (simulator submits real orders/quotes)", group: "Workflow", type: "bool", help: "When true, simulator sessions submit to BigCommerce and trigger real downstream effects — use with care" },
   { key: "PO_AGENT_SIMULATOR_SEND_EMAILS", label: "Sandbox: also send emails", group: "Workflow", type: "bool", help: "When true, simulator sessions also dispatch outbound reply emails" },
+  // Decision rules (draft) — docs/petrovalve-offline-po-decision-rules.md §5. Used by the
+  // simulator's conversation mode only until the rules are signed off.
+  { key: "PO_AGENT_RULES_INTENT_MIN", label: "Minimum intent confidence", group: "Decision rules", type: "number", placeholder: "0.9", help: "0–1. Below this the request escalates as unclear (I10)" },
+  { key: "PO_AGENT_RULES_HOLD_USD", label: "Hold requests above (USD)", group: "Decision rules", type: "number", placeholder: "50000", help: "Quotes whose total is above this are held for review (Q6)" },
+  { key: "PO_AGENT_RULES_MAX_LINES", label: "Hold requests with more lines than", group: "Decision rules", type: "number", placeholder: "50", help: "Large requests are held for review (A2)" },
+  { key: "PO_AGENT_RULES_MAX_CLARIFY", label: "Clarification rounds", group: "Decision rules", type: "number", placeholder: "1", help: "After this many questions, the next reply is held for a person (T5)" },
+  { key: "PO_AGENT_RULES_UNUSUAL_QTY", label: "Unusual quantity", group: "Decision rules", type: "number", placeholder: "10000", help: "A line at or above this quantity is held for review (Q7)" },
+  { key: "PO_AGENT_RULES_STAFF_DOMAINS", label: "Staff email domains", group: "Decision rules", placeholder: "petrovalve.com", help: "Comma-separated. Mail from these domains is a staff forward; the draft goes back to the staff member (I11)" },
+  { key: "PO_AGENT_RULES_ESCALATION_ACK", label: "Acknowledge escalations", group: "Decision rules", type: "bool", help: "Send the customer a short 'a specialist will follow up' reply when a request escalates" },
 ];
 
 export const SECRET_KEYS = new Set(SETTINGS_FIELDS.filter((f) => f.secret).map((f) => f.key));
