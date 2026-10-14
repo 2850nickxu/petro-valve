@@ -228,3 +228,18 @@ describe("simulated conversation — decide only", () => {
     expect(session.state).toBe("validating");
   });
 });
+
+describe("simulated conversation — token usage", () => {
+  it("records model tokens for a decide-only run without saving the run", async () => {
+    const { channel, deps, store } = setup();
+    deps.classify = async (input) => ({
+      classification: (await resolveClassifier({})(input)).classification,
+      usage: { model: "anthropic:test-model", inputTokens: 1200, outputTokens: 350, totalTokens: 1550 },
+    });
+    const msg = channel.inject({ from: "buyer@acme.com", subject: "Quote request", bodyText: QUOTE, messageId: "sim-t", threadId: "sim-t" });
+    const { session } = await runSimulatedTurn(deps, msg, { mode: "decide" });
+
+    expect(Object.values(await store.getTokenUsage("202610")).some((v) => v > 0)).toBe(true);
+    expect(await store.loadSession(session.id)).toBeNull();
+  });
+});

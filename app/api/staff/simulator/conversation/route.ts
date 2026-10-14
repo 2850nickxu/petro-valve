@@ -84,7 +84,8 @@ export async function POST(req: Request) {
         ctx,
         config,
         rules,
-        store: mode === "reply" ? store : undefined,
+        // Decide-only uses the store only to record token usage; nothing else is saved.
+        store,
         channel,
         extract: resolveExtractor(env),
         classify: resolveClassifier(env, { attempts: rules.modelRetryAttempts }),

@@ -46,7 +46,8 @@ export interface ConversationDeps {
   ctx: StoreContext;
   config: PoAgentConfig;
   rules: RulesConfig;
-  /** Required in reply mode. */
+  /** Required in reply mode. In decide mode it's only used to record token usage — the
+   * run itself is never saved. */
   store?: PoStore;
   /** Always the simulator channel: sends are captured, never delivered. */
   channel: EmailChannel;
@@ -168,7 +169,8 @@ export async function runSimulatedTurn(
   }
   const step = (s: DecisionStep) => session.audit.push({ at: now(), ...s, run });
   const tokens = async (u?: { model: string; inputTokens: number; outputTokens: number }) => {
-    if (reply && u) await deps.store!.recordTokens(ym(now()), u.model, u.inputTokens, u.outputTokens).catch(() => {});
+    // Model spend is real in both modes, so it always counts toward Token usage.
+    if (deps.store && u) await deps.store.recordTokens(ym(now()), u.model, u.inputTokens, u.outputTokens).catch(() => {});
   };
   step(receivedStep(inbound));
 
