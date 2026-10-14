@@ -7,7 +7,7 @@ import type { PoSession, SessionSummary } from "./types";
 // whole session. Pure. Bump SUMMARY_VERSION when the shape changes — the search back-fills
 // older index entries from their sessions on read.
 
-export const SUMMARY_VERSION = 2;
+export const SUMMARY_VERSION = 3;
 
 const WHY_CAP = 240;
 const SKU_CAP = 25;
@@ -55,5 +55,6 @@ export function summaryOf(s: PoSession): SessionSummary {
     messagesIn: messages.filter((m) => m.direction === "in").length,
     messagesOut: messages.filter((m) => m.direction === "out" && m.audience === "buyer").length,
     skus: skus.slice(0, SKU_CAP),
+    ...(s.simulated || s.channel === "simulator" ? { simulated: true } : {}),
   };
 }

@@ -30,7 +30,9 @@ export interface QuoteItemInput {
 }
 
 export interface CreateQuoteParams {
-  companyId: number;
+  /** Omit for a guest quote: companyId is only required for a Company account
+   * (docs.bigcommerce.com/developer/api-reference/rest/b2b/management/quotes/post-rfq). */
+  companyId?: number;
   contactInfo: { name: string; email: string; companyName?: string; phoneNumber?: string };
   items: QuoteItemInput[];
   channelId?: number;
@@ -103,7 +105,7 @@ export async function createQuote(
     isBackendUser: "1",
     expiredAt: params.expiredAt,
     channelId: params.channelId ?? ctx.channelId,
-    companyId: params.companyId,
+    ...(params.companyId != null ? { companyId: params.companyId } : {}),
     storeHash: ctx.storeHash,
     ...(params.quoteTitle ? { quoteTitle: params.quoteTitle } : {}),
     ...(params.referenceNumber ? { quoteReference: params.referenceNumber } : {}),

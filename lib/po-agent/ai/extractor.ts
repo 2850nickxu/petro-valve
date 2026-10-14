@@ -34,7 +34,9 @@ export function resolveExtractor(env: Record<string, string | undefined> = proce
       .filter((p): p is { type: "text"; text: string } => p.type === "text")
       .map((p) => p.text)
       .join("\n");
-    const bodyText = [msg.bodyText, prior?.buyerReply].filter(Boolean).join("\n");
+    // The reply is usually the body itself; reading it twice would double every line.
+    const reply = prior?.buyerReply && !msg.bodyText.includes(prior.buyerReply) ? prior.buyerReply : undefined;
+    const bodyText = [msg.bodyText, reply].filter(Boolean).join("\n");
     const extracted = heuristicExtract({ subject: msg.subject, bodyText, extraText });
 
     // Merge: a short reply (e.g. "CONFIRM") has no SKUs — carry forward the prior PO so a

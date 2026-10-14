@@ -35,6 +35,9 @@ export interface RulesInput {
     humanOwned: boolean;
     clarificationRoundsUsed: number;
     hasQuote: boolean;
+    /** Clarify scenarios the customer has answered on this thread (Q2, C11, P15): their
+     * answer resolves them, so the reprocessed request doesn't ask again. */
+    answered?: string[];
   };
   /** The store or the model failed after retries (T14 / T15). */
   systemError?: "store" | "model";
@@ -137,6 +140,7 @@ export function decideByRules(input: RulesInput, cfg: RulesConfig): RulesOutcome
   const add = (id: string, line?: number) => {
     const d = SCENARIOS[id];
     if (!d) throw new Error(`Unknown scenario ${id}`);
+    if (input.thread.answered?.includes(id)) return;
     if (hits.some((h) => h.id === id && h.line === line)) return;
     hits.push({ id, action: d.action, ...(d.code ? { code: d.code } : {}), ...(line ? { line } : {}) });
   };

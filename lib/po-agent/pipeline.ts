@@ -181,6 +181,8 @@ export interface EvaluateResult {
   quoteConfig: QuoteConfig;
   /** The account-level checks behind validate and decide, for the decision trail. */
   checks: EvaluateChecks;
+  /** The company's default ship-to address, when it has one. */
+  defaultShipTo?: { line1?: string; zip?: string };
 }
 
 /**
@@ -266,7 +268,28 @@ export async function evaluate(deps: EvaluateDeps, input: EvaluateInput): Promis
     estimatedTotal: estTotal,
   };
 
-  return { resolved, issues, decision, credit, quoteConfig, checks };
+  const ship = defaultShipping(addrs);
+  const defaultShipTo = ship ? { line1: ship.addressLine1, zip: ship.zipCode } : undefined;
+
+  return { resolved, issues, decision, credit, quoteConfig, checks, defaultShipTo };
+}
+
+/**
+ * Lines against the catalog for a sender with no account (a guest): resolve → price at the
+ * default (guest) price → SKU/description check. Guest pricing is customer_group_id 0
+ * (docs.bigcommerce.com/developer/docs/storefront/headless/customers). No account checks.
+ */
+export async function evaluateCatalog(
+  deps: EvaluateDeps,
+  input: { extracted: ExtractedPo; channelId: number },
+): Promise<ResolvedLine[]> {
+  let resolved = await resolveLines(deps.ctx, input.extracted.lines);
+  resolved = await priceLines(deps.ctx, resolved, {
+    channelId: input.channelId,
+    tolerancePct: deps.config.priceTolerancePct,
+    currencyCode: input.extracted.currency ?? undefined,
+  });
+  return checkSkuDescription(resolved);
 }
 
 export async function processInbound(

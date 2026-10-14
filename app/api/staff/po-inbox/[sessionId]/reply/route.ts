@@ -4,6 +4,8 @@ import { createPoStore } from "@/lib/po-agent/store";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
 import { sessionStoreHash } from "@/lib/bc-app/request-context";
 import { resolveChannelAdapter } from "@/lib/po-agent/runtime";
+import { SimulatorChannel } from "@/lib/po-agent/channel/simulator";
+import type { EmailChannel } from "@/lib/po-agent/channel/types";
 import { currentRun, replyThread, sendRecordedReply } from "@/lib/po-agent/messages";
 import { repliedStep } from "@/lib/po-agent/decision-steps";
 import { SALES_AGENT } from "@/lib/po-agent/people";
@@ -43,10 +45,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
     return NextResponse.json({ error: "This session has no known buyer address to reply to." }, { status: 400 });
   }
 
-  const hash = await sessionStoreHash();
-  const env = await effectiveEnv(hash ?? undefined);
-  const adapter = resolveChannelAdapter(env);
-  if ("error" in adapter) return NextResponse.json({ error: adapter.error }, { status: 503 });
+  // A simulator session's buyer isn't real: the reply is captured, never emailed.
+  let channel: EmailChannel;
+  let mailbox: string | undefined;
+  if (session.simulated || session.channel === "simulator") {
+    channel = new SimulatorChannel();
+  } else {
+    const hash = await sessionStoreHash();
+    const env = await effectiveEnv(hash ?? undefined);
+    const adapter = resolveChannelAdapter(env);
+    if ("error" in adapter) return NextResponse.json({ error: adapter.error }, { status: 503 });
+    channel = adapter.channel;
+    mailbox = adapter.mailbox || undefined;
+  }
 
   // Reply against the newest message we've seen on the thread so clients nest it correctly.
   const thread = replyThread(session, to);
@@ -54,11 +65,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
   const now = () => new Date().toISOString();
 
   const sent = await sendRecordedReply(
-    adapter.channel,
+    channel,
     session,
     thread,
     { subject: thread.subject!, text },
-    { kind: "staff_reply", from: adapter.mailbox || undefined, actor },
+    { kind: "staff_reply", from: mailbox, actor },
     now,
   );
   session.updatedAt = now();
@@ -76,8 +87,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
     run: currentRun(session),
     actor,
     note: text,
-    detail: { to, messageId, preview, via: adapter.mailbox || adapter.channel.id },
+    detail: { to, messageId, preview, via: mailbox || channel.id },
   });
+  // A person has taken over the thread: the rules won't answer it again (T6).
+  if (session.rules) session.rules.humanOwned = true;
   await store.saveSession(session);
 
   return NextResponse.json({ ok: true, messageId, state: session.state });

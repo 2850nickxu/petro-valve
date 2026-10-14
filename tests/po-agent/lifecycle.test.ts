@@ -65,3 +65,27 @@ describe("sweepLifecycle", () => {
     expect(channel.sent).toHaveLength(0);
   });
 });
+
+describe("sweepLifecycle — simulator sessions", () => {
+  it("never nudges a simulator buyer through the real mailbox", async () => {
+    const store = createPoStore(createMockRedis());
+    const sends: unknown[] = [];
+    const real = {
+      ...new SimulatorChannel(),
+      id: "google" as const,
+      sendReply: async (...args: unknown[]) => {
+        sends.push(args);
+        return { messageId: "g1" };
+      },
+    } as unknown as SimulatorChannel;
+    const s = waiting("simulator:sandbox", "2026-07-10T12:00:00.000Z");
+    await store.saveSession(s);
+    await store.enqueue("awaiting", s.id, 0);
+
+    const result = await sweepLifecycle({ config: getPoAgentConfig({}), store, channel: real, now: () => NOW });
+
+    expect(result).toEqual({ reminded: [], expired: [] });
+    expect(sends).toHaveLength(0);
+    expect(await store.listQueue("awaiting")).not.toContain("simulator:sandbox");
+  });
+});

@@ -5,7 +5,9 @@ import { SANDBOX_NOTE } from "./submit-order";
 import type { Buyer, ResolvedLine } from "../types";
 
 export interface SubmitQuoteParams {
-  buyer: Buyer;
+  /** The company buyer. Omit (and pass `guest`) for a guest quote at list price. */
+  buyer?: Buyer;
+  guest?: { email: string; name?: string };
   channelId: number;
   resolvedLines: ResolvedLine[];
   poNumber?: string;
@@ -35,19 +37,20 @@ export async function submitQuote(ctx: StoreContext, params: SubmitQuoteParams):
   }));
   if (!items.length) return { ok: false, reason: "no_items" };
 
+  const buyer = params.buyer;
+  const email = buyer?.email ?? params.guest?.email;
+  if (!email) return { ok: false, reason: "no_contact" };
+  const who = buyer?.companyName || email;
+
   const created = await createQuote(ctx, {
-    companyId: params.buyer.companyId,
-    contactInfo: {
-      name: params.buyer.companyRoleName ?? params.buyer.email,
-      email: params.buyer.email,
-      companyName: params.buyer.companyName,
-    },
+    companyId: buyer?.companyId,
+    contactInfo: buyer
+      ? { name: buyer.companyRoleName ?? buyer.email, email: buyer.email, companyName: buyer.companyName }
+      : { name: params.guest?.name || email, email },
     items,
     channelId: params.channelId,
     referenceNumber: params.poNumber ?? null,
-    quoteTitle: params.poNumber
-      ? `PO ${params.poNumber} — ${params.buyer.companyName}`
-      : `Quote — ${params.buyer.companyName}`,
+    quoteTitle: params.poNumber ? `PO ${params.poNumber} — ${who}` : `Quote — ${who}`,
     notes: `${params.notes ?? ""}${params.sandbox ? SANDBOX_NOTE : ""}`.trim() || undefined,
     expiredAt: computeExpiryDate(params.expiryDays, params.now),
   });

@@ -94,7 +94,9 @@ export function heuristicExtract(input: HeuristicInput): ExtractedPo {
       if (!item.description && prev && !prev.item && describesNextLine(prev.text)) item.description = prev.text.trim();
       lines.push(item);
     }
-    prev = raw.trim() ? { text: raw, item: Boolean(item) } : null;
+    // The subject is never an item's description ("Re: Quote request" above the first line).
+    const isSubject = Boolean(input.subject) && raw.trim() === input.subject!.trim();
+    prev = raw.trim() && !isSubject ? { text: raw, item: Boolean(item) } : null;
   }
 
   const currency = /\$|\bUSD\b/i.test(combined) ? "USD" : null;

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createPoStore } from "@/lib/po-agent/store";
 import { createMockRedis } from "@/tests/helpers/mock-redis";
 import type { PoSession } from "@/lib/po-agent/types";
+import { SUMMARY_VERSION } from "@/lib/po-agent/session-summary";
 
 // searchSessions prunes summaries older than its 30-day TTL window, measured against the
 // real Date.now(). Fixtures MUST therefore be anchored near "now" — absolute past dates are
@@ -266,12 +267,12 @@ describe("searchSessions — Sessions list support", () => {
     const { items, counts } = await store.searchSessions({});
     expect(items.map((s) => s.id)).toEqual([SESSION_C.id]); // the session-less row is dropped
     expect(counts).toEqual({ escalated: 1 });
-    expect(items[0]).toMatchObject({ v: 2, linesTotal: 0, messagesIn: 0, messagesOut: 0 });
+    expect(items[0]).toMatchObject({ v: SUMMARY_VERSION, linesTotal: 0, messagesIn: 0, messagesOut: 0 });
     expect(items[0].why).toBeTruthy();
 
     // Written back, so the next search reads the new format straight from the index.
     const row = await redis.cmd<string[]>(["HGETALL", "poa:index:search"]);
     expect(row).toHaveLength(2);
-    expect(JSON.parse(row[1])).toMatchObject({ id: SESSION_C.id, v: 2 });
+    expect(JSON.parse(row[1])).toMatchObject({ id: SESSION_C.id, v: SUMMARY_VERSION });
   });
 });

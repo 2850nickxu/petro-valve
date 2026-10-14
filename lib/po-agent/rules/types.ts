@@ -197,4 +197,6 @@ export interface RulesThreadState {
   quote?: { quoteId: number; quoteNumber?: string; checkoutUrl?: string; quoteUrl?: string };
   /** The hold-every-reply toggle the conversation was run with. */
   reviewAll: boolean;
+  /** Clarify scenarios the customer has answered (Q2, C11, P15), so they aren't asked again. */
+  answered?: string[];
 }

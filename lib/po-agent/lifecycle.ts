@@ -39,7 +39,9 @@ export async function sweepLifecycle(deps: LifecycleDeps): Promise<SweepResult> 
   const ids = await deps.store.listQueue("awaiting", 500);
   for (const id of ids) {
     const session = await deps.store.loadSession(id).catch(() => null);
-    if (!session || !WAITING_STATES.includes(session.state)) {
+    // Simulator buyers aren't real: never nudge them through the real mailbox.
+    const simulatedOnRealMailbox = (session?.simulated || session?.channel === "simulator") && deps.channel.id !== "simulator";
+    if (!session || !WAITING_STATES.includes(session.state) || simulatedOnRealMailbox) {
       await deps.store.dequeue("awaiting", id);
       continue;
     }

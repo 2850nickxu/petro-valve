@@ -224,3 +224,12 @@ describe("decideByRules — precedence and thread rules", () => {
     expect(free.scenarios.map((h) => h.id)).toContain("C4");
   });
 });
+
+describe("decideByRules — answered questions", () => {
+  it("doesn't ask about the target price again once the customer has answered", () => {
+    const thread = { humanOwned: false, clarificationRoundsUsed: 1, hasQuote: false, priorAction: "CLARIFY" as const, answered: ["Q2"] };
+    const o = decideByRules(input({ resolved: [line({ stated: 1 })], classification: classification({ intent: "follow_up", followUp: "answer" }), thread }), CFG);
+    expect(o.action).toBe("AUTO_RESPOND");
+    expect(o.replyKind).toBe("quote");
+  });
+});

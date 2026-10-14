@@ -198,3 +198,55 @@ export function replyThread(session: PoSession, to: string | undefined): ThreadR
     subject: reSubject(session.inbound?.subject ?? lastIn?.subject),
   };
 }
+
+/** Log a drafted reply that is held for a person to approve — not sent (rules HOLD). */
+export function recordDraft(
+  session: PoSession,
+  thread: ThreadRef,
+  reply: OutboundReply,
+  meta: SendMeta,
+  now: () => string,
+): SessionMessage {
+  return append(session, {
+    at: now(),
+    direction: "out",
+    audience: "buyer",
+    kind: meta.kind,
+    purpose: meta.purpose,
+    status: "held",
+    from: meta.from,
+    to: thread.to,
+    subject: reply.subject,
+    text: capText(reply.text),
+    run: meta.run,
+  });
+}
+
+/** Send a held draft, optionally edited, and mark it sent in place. Never throws: check
+ * `status`. Returns null when there's no held draft with that id. */
+export async function sendHeldDraft(
+  channel: EmailChannel,
+  session: PoSession,
+  messageId: string,
+  opts: { text?: string; actor?: string },
+  now: () => string,
+): Promise<SessionMessage | null> {
+  const msg = log(session).find((m) => m.id === messageId && m.status === "held");
+  if (!msg) return null;
+  const text = opts.text != null ? capText(opts.text) : msg.text;
+  const thread = replyThread(session, msg.to);
+  msg.text = text;
+  msg.actor = opts.actor;
+  msg.at = now();
+  try {
+    const sent = await channel.sendReply(thread, { subject: msg.subject, text });
+    msg.status = channel.id === "simulator" ? "captured" : "sent";
+    msg.providerMessageId = sent.messageId;
+    msg.providerThreadId = sent.threadId ?? thread.threadId;
+  } catch (err) {
+    msg.status = "failed";
+    msg.error = errorText(err);
+    sendFailed(session, msg);
+  }
+  return msg;
+}
