@@ -38,7 +38,7 @@ export interface SubmitOrderParams {
 export const SANDBOX_NOTE = " [PO agent sandbox]";
 
 export type SubmitOrderResult =
-  | { ok: true; orderId: number; totals: TermsOrderTotals; invoice: FinalizeTermsResult }
+  | { ok: true; orderId: number; totals: TermsOrderTotals; invoice: FinalizeTermsResult; statusWarning?: string }
   | { ok: false; reason: string };
 
 export async function submitOrder(ctx: StoreContext, params: SubmitOrderParams): Promise<SubmitOrderResult> {
@@ -79,11 +79,13 @@ export async function submitOrder(ctx: StoreContext, params: SubmitOrderParams):
   });
   if (!placed.ok) return { ok: false, reason: placed.reason };
 
+  // The order exists from here on: invoicing is idempotent and retried on order view, so a
+  // failure must not surface as a failed placement.
   const invoice = await finalizeTermsOrder(ctx, placed.orderId, {
     poNumber: params.poNumber,
     attempts: 6,
     delayMs: 1500,
-  });
+  }).catch((): FinalizeTermsResult => ({ status: "failed" }));
 
-  return { ok: true, orderId: placed.orderId, totals: placed.totals, invoice };
+  return { ok: true, orderId: placed.orderId, totals: placed.totals, invoice, statusWarning: placed.statusWarning };
 }

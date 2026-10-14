@@ -59,6 +59,7 @@ export type ValidationIssueKind =
   | "line_qty_bounds"
   | "line_inventory_short"
   | "line_sku_description_conflict"
+  | "line_unpriced"
   | "price_mismatch"
   | "missing_quantity"
   | "missing_ship_to"

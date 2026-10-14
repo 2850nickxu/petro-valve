@@ -40,14 +40,11 @@ export async function getProductsByIds(
   const map = new Map<number, ProductDetail>();
   const ids = [...new Set(productIds)];
   if (!ids.length) return map;
-  try {
-    const products = await bcFetchData<RawProduct[]>(
-      ctx,
-      `/v3/catalog/products?id:in=${ids.join(",")}&limit=250`,
-    );
-    for (const p of products) map.set(p.id, mapProduct(p));
-  } catch {
-    /* return whatever we have */
-  }
+  // Throws on failure: an empty map would pass every line as available, unchecked.
+  const products = await bcFetchData<RawProduct[]>(
+    ctx,
+    `/v3/catalog/products?id:in=${ids.join(",")}&limit=250`,
+  );
+  for (const p of products) map.set(p.id, mapProduct(p));
   return map;
 }

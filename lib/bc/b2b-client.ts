@@ -8,6 +8,22 @@ import type { StoreContext } from "./store-context";
 export const B2B_API_BASE = "https://api-b2b.bigcommerce.com/api/v3/io";
 export const B2B_GRAPHQL = "https://api-b2b.bigcommerce.com/graphql";
 
+/** A B2B Edition call that failed, carrying the status so callers can tell "not found" from "down". */
+export class B2BApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "B2BApiError";
+  }
+}
+
+/** True when `err` is a B2B Edition error with one of the given statuses. */
+export function isB2BStatus(err: unknown, ...statuses: number[]): boolean {
+  return err instanceof B2BApiError && statuses.includes(err.status);
+}
+
 // B2B Edition response envelopes are INCONSISTENT: most return `{ code: 200, data }`,
 // some return `{ data, meta }` with NO `code`, and a few return a bare array. Treat any
 // 2xx HTTP response as success (preferring the `data` envelope when present) and only
@@ -21,7 +37,8 @@ export function parseB2BEnvelope<T>(
   const hasNumericCode = typeof env.code === "number";
   if (!res.ok || (hasNumericCode && env.code !== 200)) {
     const detail = env.message || JSON.stringify(env.data ?? json);
-    throw new Error(`B2B API error ${env.code ?? res.status} at ${path}: ${detail}`);
+    const status = hasNumericCode ? env.code! : res.status;
+    throw new B2BApiError(status, `B2B API error ${status} at ${path}: ${detail}`);
   }
   return (json && typeof json === "object" && "data" in (json as object)
     ? (json as { data: unknown }).data

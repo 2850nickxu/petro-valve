@@ -53,7 +53,12 @@ export async function priceLines(
     }
 
     const priced = prices.get(priceKey(r.productId, r.variantId));
-    if (!priced) return r;
+    if (!priced) {
+      // No store price ⇒ nothing we may charge or quote. The PO's own price never stands
+      // in for it, so the line blocks (unless it's already excluded from submission).
+      if (r.blockedByAssortment || r.issues.includes("line_unpriced")) return r;
+      return { ...r, issues: [...r.issues, "line_unpriced"] };
+    }
 
     const calc = priced.unitPrice;
     const issues = [...r.issues];

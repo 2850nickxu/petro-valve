@@ -24,20 +24,17 @@ function mapMethod(raw: RawPaymentMethod): CompanyPaymentMethod {
   };
 }
 
+/** Throws on failure — an outage must not read as "pay-on-account not enabled". */
 export async function getCompanyPaymentMethods(
   ctx: StoreContext,
   companyId: number,
 ): Promise<CompanyPaymentMethod[]> {
-  try {
-    const data = await b2bFetch<RawPaymentMethod[] | { list?: RawPaymentMethod[] }>(
-      ctx,
-      `/companies/${companyId}/payments`,
-    );
-    const arr = Array.isArray(data) ? data : (data?.list ?? []);
-    return arr.map(mapMethod);
-  } catch {
-    return [];
-  }
+  const data = await b2bFetch<RawPaymentMethod[] | { list?: RawPaymentMethod[] }>(
+    ctx,
+    `/companies/${companyId}/payments`,
+  );
+  const arr = Array.isArray(data) ? data : (data?.list ?? []);
+  return arr.map(mapMethod);
 }
 
 /**

@@ -31,8 +31,12 @@ export async function GET(req: Request) {
   }
 
   const watermark = await store.getGmailWatermark();
+  // Read the next watermark before fetching (see EmailChannel.currentWatermark) and store it
+  // only once every message is processed, so a failed run retries the same history.
+  const next = (await rt.channel.currentWatermark?.()) ?? null;
   const messages = await rt.channel.fetchNewMessages(watermark);
   const results: string[] = [];
   for (const m of messages) results.push((await processInbound(rt.deps, m, {})).state);
+  if (next) await store.setGmailWatermark(next);
   return NextResponse.json({ ok: true, processed: results.length, sweep });
 }

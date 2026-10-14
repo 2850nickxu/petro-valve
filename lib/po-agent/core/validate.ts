@@ -17,6 +17,7 @@ export const MESSAGES: Record<ValidationIssueKind, string> = {
   line_qty_bounds: "The quantity for this item is outside the allowed order limits.",
   line_inventory_short: "We don't currently have enough stock to fulfill this item.",
   line_sku_description_conflict: "The part number and the description for this item point to different products.",
+  line_unpriced: "We couldn't find a price for this item on your account, so a team member will review it.",
   price_mismatch: "The price on your PO differs from your contract price.",
   missing_quantity: "Please provide a quantity for this item.",
   missing_ship_to: "We need a shipping address to place this order.",

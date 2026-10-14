@@ -1,4 +1,4 @@
-import { b2bFetch } from "./b2b-client";
+import { b2bFetch, isB2BStatus } from "./b2b-client";
 import type { StoreContext } from "./store-context";
 import type { B2BCompany, B2BCreditConfig, B2BPaymentTerms, B2BCompanyAddress } from "./types";
 
@@ -37,12 +37,14 @@ function mapCompany(raw: RawCompany): B2BCompany {
   };
 }
 
+/** Null when the company doesn't exist (B2B Edition answers 404); any other failure throws. */
 export async function getCompany(ctx: StoreContext, companyId: number): Promise<B2BCompany | null> {
   try {
     const raw = await b2bFetch<RawCompany | null>(ctx, `/companies/${companyId}`);
     return raw ? mapCompany(raw) : null;
-  } catch {
-    return null;
+  } catch (err) {
+    if (isB2BStatus(err, 404)) return null;
+    throw err;
   }
 }
 
@@ -66,6 +68,10 @@ interface RawCredit {
   creditHold?: boolean;
 }
 
+/**
+ * Null when the store's company-credit feature is off (B2B Edition answers 400 for that);
+ * any other failure throws, so an outage can't quietly turn pay-on-account off.
+ */
 export async function getCompanyCreditConfig(
   ctx: StoreContext,
   companyId: number,
@@ -82,8 +88,9 @@ export async function getCompanyCreditConfig(
       limitPurchases: Boolean(raw.limitPurchases),
       creditHold: Boolean(raw.creditHold),
     };
-  } catch {
-    return null;
+  } catch (err) {
+    if (isB2BStatus(err, 400)) return null;
+    throw err;
   }
 }
 
@@ -158,20 +165,17 @@ function mapAddress(raw: RawAddress): B2BCompanyAddress {
   };
 }
 
+/** Throws on failure — an outage must not read as "no ship-to address". */
 export async function getCompanyAddresses(
   ctx: StoreContext,
   companyId: number,
 ): Promise<B2BCompanyAddress[]> {
-  try {
-    const data = await b2bFetch<RawAddress[] | { list?: RawAddress[] }>(
-      ctx,
-      `/addresses?companyId=${companyId}&limit=250&isIncludeExtraFields=1`,
-    );
-    const arr = Array.isArray(data) ? data : (data?.list ?? []);
-    return arr.map(mapAddress);
-  } catch {
-    return [];
-  }
+  const data = await b2bFetch<RawAddress[] | { list?: RawAddress[] }>(
+    ctx,
+    `/addresses?companyId=${companyId}&limit=250&isIncludeExtraFields=1`,
+  );
+  const arr = Array.isArray(data) ? data : (data?.list ?? []);
+  return arr.map(mapAddress);
 }
 
 export function defaultBilling(addrs: B2BCompanyAddress[]): B2BCompanyAddress | undefined {

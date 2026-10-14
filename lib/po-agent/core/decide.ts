@@ -15,6 +15,9 @@ export const ISSUE_CATEGORY: Record<ValidationIssueKind, IssueCategory> = {
   // The buyer's own words contradict the product their SKU matched: a person decides which
   // they meant, rather than the agent guessing or asking about a match it can't explain.
   line_sku_description_conflict: "escalate",
+  // The store returned no price for a matched product. The buyer can't fix that, and the
+  // PO's own price is never used in its place, so a person prices it.
+  line_unpriced: "escalate",
   channel_ambiguous: "clarify",
   line_unresolved: "clarify",
   line_parent_sku: "clarify",

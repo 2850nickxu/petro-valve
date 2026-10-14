@@ -40,17 +40,17 @@ export function mapUser(raw: RawUser): B2BUser {
   };
 }
 
-/** Exact-match lookup by email. Returns null on miss or error. */
+/**
+ * Exact-match lookup by email. Returns null only when B2B Edition answers with no match
+ * (an empty `data` list); a failed call throws, so an outage is never read as "unknown
+ * sender" and never gets a buyer rejected.
+ */
 export async function getUserByEmail(ctx: StoreContext, email: string): Promise<B2BUser | null> {
-  try {
-    const data = await b2bFetch<RawUser[] | { list?: RawUser[] }>(
-      ctx,
-      `/users?email=${encodeURIComponent(email)}&limit=1`,
-    );
-    const arr = Array.isArray(data) ? data : (data?.list ?? []);
-    const raw = arr[0];
-    return raw ? mapUser(raw) : null;
-  } catch {
-    return null;
-  }
+  const data = await b2bFetch<RawUser[] | { list?: RawUser[] }>(
+    ctx,
+    `/users?email=${encodeURIComponent(email)}&limit=1`,
+  );
+  const arr = Array.isArray(data) ? data : (data?.list ?? []);
+  const raw = arr[0];
+  return raw ? mapUser(raw) : null;
 }

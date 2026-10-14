@@ -90,6 +90,35 @@ describe("GoogleChannel", () => {
     expect(msgs.map((m) => m.messageId)).toEqual(["mr"]);
   });
 
+  it("follows history pages", async () => {
+    installMockFetch([
+      { url: "/history?startHistoryId=200&historyTypes=messageAdded&pageToken=p2", body: { history: [{ messagesAdded: [{ message: { id: "m2" } }] }] } },
+      { url: "/history?startHistoryId=200", body: { history: [{ messagesAdded: [{ message: { id: "m1" } }] }], nextPageToken: "p2" } },
+      { url: "/messages/m1?format=full", body: gmailMessage("m1", "buyer@acme.com", "first") },
+      { url: "/messages/m2?format=full", body: gmailMessage("m2", "buyer@acme.com", "second") },
+      { url: "/attachments/", body: { data: base64UrlEncode("X") } },
+    ]);
+    const msgs = await channel.fetchNewMessages("200");
+    expect(msgs.map((m) => m.messageId)).toEqual(["m1", "m2"]);
+  });
+
+  it("throws on a failed history or message read rather than reporting no mail", async () => {
+    // Callers advance the watermark after a sync; an empty result here would skip mail.
+    installMockFetch([{ url: "/users/me/history?startHistoryId=300", status: 500, body: {} }]);
+    await expect(channel.fetchNewMessages("300")).rejects.toThrow(/history read failed \(500\)/);
+
+    installMockFetch([
+      { url: "/users/me/history?startHistoryId=301", body: { history: [{ messagesAdded: [{ message: { id: "gone" } }] }] } },
+      { url: "/messages/gone?format=full", status: 503, body: {} },
+    ]);
+    await expect(channel.fetchNewMessages("301")).rejects.toThrow(/message gone read failed \(503\)/);
+  });
+
+  it("reports the mailbox's current history id as the next watermark", async () => {
+    installMockFetch([{ url: "/users/me/profile", body: { emailAddress: "poc@silk.com", historyId: "4242" } }]);
+    expect(await channel.currentWatermark()).toBe("4242");
+  });
+
   it("sends a threaded reply", async () => {
     const mock = installMockFetch([{ method: "POST", url: "/messages/send", body: { id: "sent-1", threadId: "thr-m1" } }]);
     const out = await channel.sendReply(

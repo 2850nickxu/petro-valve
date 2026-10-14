@@ -63,6 +63,7 @@ function issueLabel(l: ResolvedLine): string {
         return `inventory short (${l.inventoryLevel} on hand)`;
       }
       if (kind === "line_sku_description_conflict") return "SKU/description conflict";
+      if (kind === "line_unpriced") return "no store price";
       if (kind === "line_parent_sku") {
         const n = l.variantChoiceCount ?? l.variantChoices?.length ?? 0;
         return n ? `parent SKU (${n} versions)` : "parent SKU";

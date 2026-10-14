@@ -80,6 +80,17 @@ describe("queues and counters", () => {
     expect(await store.listQueue("escalated")).toEqual(["s1"]);
   });
 
+  it("drops a session from the escalated queue once it's saved in any other state", async () => {
+    const store = createPoStore(createMockRedis());
+    const s = { ...newSession("simulator:t1"), state: "escalated" as const };
+    await store.enqueue("escalated", s.id, 100);
+    await store.saveSession(s);
+    expect(await store.listQueue("escalated")).toEqual([s.id]);
+
+    await store.saveSession({ ...s, state: "clarifying" }); // e.g. resolved by a buyer reply
+    expect(await store.listQueue("escalated")).toEqual([]);
+  });
+
   it("bumps monthly counters and daily caps", async () => {
     const store = createPoStore(createMockRedis());
     expect(await store.bumpCounter("202607", "orders")).toBe(1);

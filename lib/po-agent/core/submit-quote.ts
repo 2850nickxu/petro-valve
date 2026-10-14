@@ -21,13 +21,16 @@ export type SubmitQuoteResult =
   | { ok: false; reason: string };
 
 export async function submitQuote(ctx: StoreContext, params: SubmitQuoteParams): Promise<SubmitQuoteResult> {
-  const items: QuoteItemInput[] = submittableLines(params.resolvedLines).map((l) => ({
+  const lines = submittableLines(params.resolvedLines);
+  // Only the store-calculated price may go on a quote — never the PO's stated price. This
+  // also guards staff force-quote, which skips the decision step that blocks unpriced lines.
+  if (lines.some((l) => l.calculatedUnitPrice == null)) return { ok: false, reason: "line_unpriced" };
+  const items: QuoteItemInput[] = lines.map((l) => ({
     productId: l.productId!,
     variantId: l.variantId,
     sku: l.matchedSku ?? l.line.sku ?? "",
     quantity: l.line.quantity ?? 1,
-    // Store-calculated price is authoritative; fall back to stated only if unpriced.
-    unitPrice: l.calculatedUnitPrice ?? l.line.statedUnitPrice ?? 0,
+    unitPrice: l.calculatedUnitPrice!,
     productName: l.productName,
   }));
   if (!items.length) return { ok: false, reason: "no_items" };

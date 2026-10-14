@@ -107,6 +107,7 @@ const REASON: Record<string, string> = {
   line_qty_bounds: "quantity outside order limits",
   line_inventory_short: "not enough stock",
   line_sku_description_conflict: "SKU and description disagree",
+  line_unpriced: "no store price",
   price_mismatch: "PO price outside tolerance",
   missing_quantity: "missing quantity",
   missing_ship_to: "no ship-to address",
@@ -550,7 +551,7 @@ export function evaluationSteps(
 // ── Acting on the decision ───────────────────────────────────────────────────
 
 export type SubmitOutcome =
-  | { kind: "order"; ok: true; orderId: number; grandTotal: number }
+  | { kind: "order"; ok: true; orderId: number; grandTotal: number; statusWarning?: string }
   | { kind: "quote"; ok: true; quoteId: number; quoteNumber?: string; checkoutUrl?: string }
   | { kind: "order" | "quote"; ok: false; reason: string };
 
@@ -569,9 +570,11 @@ export function submittedStep(res: SubmitOutcome): DecisionStep {
       event: "submitted",
       stage: "decide",
       outcome: "order",
-      summary: `Placed order #${res.orderId} on account, total ${money(res.grandTotal)}.`,
+      summary:
+        `Placed order #${res.orderId} on account, total ${money(res.grandTotal)}.` +
+        (res.statusWarning ? " It couldn't be marked Awaiting Fulfillment / Pay on Account, so check it in BigCommerce." : ""),
       sources: [{ system: "bigcommerce", type: "order", id: String(res.orderId), label: `Order #${res.orderId}`, value: res.grandTotal }],
-      detail: { kind: "order", ok: true, orderId: res.orderId, grandTotal: res.grandTotal },
+      detail: { kind: "order", ok: true, orderId: res.orderId, grandTotal: res.grandTotal, ...(res.statusWarning ? { statusWarning: res.statusWarning } : {}) },
     };
   }
   const label = res.quoteNumber ?? String(res.quoteId);

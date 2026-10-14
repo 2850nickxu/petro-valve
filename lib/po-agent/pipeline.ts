@@ -101,6 +101,14 @@ function ymd(iso: string): string {
   return iso.slice(0, 10).replace(/-/g, "");
 }
 
+/**
+ * Metrics, trust and token-usage writes: a Redis error here never fails a run, so a PO
+ * that was handled correctly isn't turned into an escalation by its own bookkeeping.
+ */
+async function bestEffort(write: Promise<unknown>): Promise<void> {
+  await write.catch(() => {});
+}
+
 /** Heuristic: an extraction with no SKUs, no PO number, and low confidence isn't a PO. */
 function looksLikeNonPo(e: ExtractedPo): boolean {
   return e.confidence === "low" && !e.poNumber && e.lines.every((l) => !l.sku);
@@ -277,7 +285,15 @@ export async function processInbound(
     }
   }
 
-  const loaded = !opts.dryRun && deps.store ? await deps.store.loadSession(id).catch(() => null) : null;
+  let loaded: PoSession | null = null;
+  let loadFailed = false;
+  if (!opts.dryRun && deps.store) {
+    try {
+      loaded = await deps.store.loadSession(id);
+    } catch {
+      loadFailed = true;
+    }
+  }
   const session = loaded ?? createSession(id, deps.channel.id, message.threadId, now());
   const priorState = session.state;
   // Captured before this run overwrites them: what we last asked the buyer about.
@@ -312,13 +328,29 @@ export async function processInbound(
   step(receivedStep(inboundMsg));
   if (priorState === "expired") step(reopenedStep());
 
+  // The thread's history couldn't be read. Carrying on from a blank session would reply
+  // without context, and saving it would overwrite the real history — so hand it to a
+  // person and save nothing. The message's claim is released (best-effort) so a later
+  // delivery of it is processed rather than skipped as a duplicate.
+  if (loadFailed) {
+    await bestEffort(deps.store!.releaseMessage(deps.channel.id, message.messageId));
+    step(errorStep("received", "Couldn't load this thread's session from Redis."));
+    session.escalation = {
+      reasons: ["internal_error"],
+      at: now(),
+      notified: await fanOutEscalation(escalateDeps(deps, session, run, now), session, ["internal_error"]).catch(() => []),
+    };
+    session.state = "escalated";
+    return session;
+  }
+
   // The stage in progress, so an error step says where the run broke.
   let stage: DecisionStage = "identify";
   try {
     const idres = await identify(deps.ctx, message.from);
     session.buyer = idres.buyer ?? undefined;
     step(identifiedStep(idres, message.from));
-    if (!opts.dryRun && deps.store) await deps.store.bumpCounter(ym(now()), "received");
+    if (!opts.dryRun && deps.store) await bestEffort(deps.store.bumpCounter(ym(now()), "received"));
 
     const channel = resolveChannel({
       channelMap: deps.config.channelMap,
@@ -338,7 +370,7 @@ export async function processInbound(
     session.extracted = extracted;
     step(extractedStep(extracted, inboundMsg, Boolean(prior)));
     if (!opts.dryRun && deps.store && extraction.usage) {
-      await deps.store.recordTokens(ym(now()), extraction.usage.model, extraction.usage.inputTokens, extraction.usage.outputTokens);
+      await bestEffort(deps.store.recordTokens(ym(now()), extraction.usage.model, extraction.usage.inputTokens, extraction.usage.outputTokens));
     }
 
     // Unknown sender ⇒ polite rejection.
@@ -402,7 +434,7 @@ export async function processInbound(
       stage = "decide";
       const actCtx: ActContext = { buyer, channelId: channel.channelId, resolved, extracted, credit, quoteConfig, decision, priorState, ts: now(), run };
       await actOnDecision(deps, session, message, actCtx);
-      if (deps.store && session.state === "escalated") await deps.store.bumpCounter(ym(now()), "escalations");
+      if (deps.store && session.state === "escalated") await bestEffort(deps.store.bumpCounter(ym(now()), "escalations"));
     }
 
     await persist();
@@ -413,9 +445,10 @@ export async function processInbound(
       session.escalation = {
         reasons: ["internal_error"],
         at: now(),
-        notified: await fanOutEscalation(escalateDeps(deps, session, run, now), session, ["internal_error"]),
+        // The run is already failing; a failed notification mustn't stop the save below.
+        notified: await fanOutEscalation(escalateDeps(deps, session, run, now), session, ["internal_error"]).catch(() => []),
       };
-      await deps.store.bumpCounter(ym(now()), "escalations");
+      await bestEffort(deps.store.bumpCounter(ym(now()), "escalations"));
     }
     session.state = "escalated";
     await persist().catch(() => {});
@@ -534,7 +567,7 @@ async function actOnDecision(
         session.state = "escalated";
         return;
       }
-      step(submittedStep({ kind: "order", ok: true, orderId: res.orderId, grandTotal: res.totals.grandTotal }));
+      step(submittedStep({ kind: "order", ok: true, orderId: res.orderId, grandTotal: res.totals.grandTotal, statusWarning: res.statusWarning }));
       session.result = { orderId: res.orderId };
       const sent = await reply(
         "order_confirmation",
@@ -543,9 +576,9 @@ async function actOnDecision(
       session.result.confirmationMessageId = sent.providerMessageId;
       session.state = "completed_order";
       if (store) {
-        await store.setTrusted(ctx.buyer.email);
-        await store.bumpCounter(ym(ctx.ts), "orders");
-        await store.bumpCounter(ym(ctx.ts), "valueCents", Math.round(res.totals.grandTotal * 100));
+        await bestEffort(store.setTrusted(ctx.buyer.email));
+        await bestEffort(store.bumpCounter(ym(ctx.ts), "orders"));
+        await bestEffort(store.bumpCounter(ym(ctx.ts), "valueCents", Math.round(res.totals.grandTotal * 100)));
       }
     } else if (decision.kind === "quote") {
       const res = await submitQuote(deps.ctx, {
@@ -570,9 +603,10 @@ async function actOnDecision(
       );
       session.result.confirmationMessageId = sent.providerMessageId;
       session.state = "completed_quote";
-      if (store) await store.bumpCounter(ym(ctx.ts), "quotes");
+      if (store) await bestEffort(store.bumpCounter(ym(ctx.ts), "quotes"));
     }
   } finally {
-    if (store) await store.releaseLock(session.id);
+    // The lock has a TTL, so a failed release only delays a retry; it can't fail the run.
+    if (store) await bestEffort(store.releaseLock(session.id));
   }
 }

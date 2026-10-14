@@ -41,6 +41,21 @@ answerable by the buyer in one reply:
 Operators get the same two moves as reply templates (`ask_variant`, `offer_price_review`)
 on the session-detail card.
 
+### 1.2 Escalations that aren't the buyer's to fix
+
+- **`line_unpriced`** — the store returned no price for a matched product. The PO's own
+  price is never used in its place, so the session **escalates** for a person to price it;
+  `submitQuote` also refuses such a line, which covers staff force-quote.
+- **Store or Redis outages** — a failed BigCommerce read (user, company, credit, payment
+  methods, addresses, catalog) escalates as `internal_error` instead of being read as
+  "unknown sender" or "no terms", so a real buyer is never rejected during an outage. The
+  same goes for a session that can't be loaded from Redis: nothing is saved over it, and
+  the message's dedupe claim is released so a later delivery isn't skipped. Metrics, trust
+  and token-usage writes are best-effort and never fail a run.
+- **Post-placement** — once an order exists it stays recorded on the session, even if
+  marking it Awaiting Fulfillment / Pay on Account fails; the decision trail says to check
+  it in BigCommerce.
+
 ## 2. Try it with no credentials (the demo)
 
 ```bash

@@ -42,6 +42,12 @@ export interface ThreadRef {
 export interface EmailChannel {
   id: "google" | "microsoft" | "simulator";
   fetchNewMessages(sinceWatermark: string | null): Promise<InboundMessage[]>;
+  /**
+   * The mailbox's current sync position, for channels that sync from a watermark (Gmail
+   * history id). Read it BEFORE fetching and store it after: anything that lands in
+   * between is fetched again next time and deduped, never skipped.
+   */
+  currentWatermark?(): Promise<string | null>;
   getMessage(messageId: string): Promise<InboundMessage>;
   getAttachment(messageId: string, attachmentId: string): Promise<Buffer>;
   /** Throws when the provider rejects the send. */

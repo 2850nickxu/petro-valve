@@ -13,8 +13,10 @@ export function lineSummary(resolved: ResolvedLine[]): string {
   return submittableLines(resolved)
     .map((l) => {
       const qty = l.line.quantity ?? 1;
-      const unit = l.calculatedUnitPrice ?? l.line.statedUnitPrice ?? 0;
+      const unit = l.calculatedUnitPrice;
       const sku = l.matchedSku ?? l.line.sku ?? "item";
+      // Only a store price is ever stated back to the buyer, never the PO's own figure.
+      if (unit == null) return `• ${qty} × ${sku}`;
       return `• ${qty} × ${sku} @ ${money(unit)} = ${money(qty * unit)}`;
     })
     .join("\n");

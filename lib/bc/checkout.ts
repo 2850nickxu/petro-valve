@@ -66,7 +66,15 @@ export interface TermsOrderParams {
 }
 
 export type TermsOrderResult =
-  | { ok: true; orderId: number; cartId: string; totals: TermsOrderTotals; shippingOption: string }
+  | {
+      ok: true;
+      orderId: number;
+      cartId: string;
+      totals: TermsOrderTotals;
+      shippingOption: string;
+      /** The order was placed but couldn't be marked Awaiting Fulfillment / Pay on Account. */
+      statusWarning?: string;
+    }
   | {
       ok: false;
       reason: "credit_exceeded" | "no_shipping_option" | "empty_cart" | "error";
@@ -167,15 +175,22 @@ export async function placeTermsOrder(
 
   // 8) Mark it a terms order (V2 Orders API): Awaiting Fulfillment + Pay on Account.
   //    PO number is stashed in staff_notes (V2 rejects customer_po_number); the canonical
-  //    B2B poNumber is set by finalizeTermsOrder.
-  await bcFetch(ctx, `/v2/orders/${orderId}`, {
-    method: "PUT",
-    body: JSON.stringify({
-      status_id: 11,
-      payment_method: "Pay on Account",
-      staff_notes: `PO agent${params.poNumber ? ` — PO: ${params.poNumber}` : ""}${params.noteSuffix ?? ""}`,
-    }),
-  });
+  //    B2B poNumber is set by finalizeTermsOrder. The order already exists, so a failure
+  //    here is a warning, not a failed placement — losing the order id would let a
+  //    reprocess place it twice.
+  let statusWarning: string | undefined;
+  try {
+    await bcFetch(ctx, `/v2/orders/${orderId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        status_id: 11,
+        payment_method: "Pay on Account",
+        staff_notes: `PO agent${params.poNumber ? ` — PO: ${params.poNumber}` : ""}${params.noteSuffix ?? ""}`,
+      }),
+    });
+  } catch (err) {
+    statusWarning = err instanceof Error ? err.message : String(err);
+  }
 
-  return { ok: true, orderId, cartId, totals, shippingOption: cheapest.description };
+  return { ok: true, orderId, cartId, totals, shippingOption: cheapest.description, statusWarning };
 }

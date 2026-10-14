@@ -93,7 +93,8 @@ export async function forwardBelowContractPo(
 
   // Fallback: the company's own email when neither reps nor admins resolve.
   if (!recipients.length) {
-    const company = await getCompany(deps.ctx, companyId);
+    // Best-effort: a failed lookup just means no fallback recipient.
+    const company = await getCompany(deps.ctx, companyId).catch(() => null);
     if (isEmail(company?.companyEmail)) recipients.push(company!.companyEmail!);
   }
   if (!recipients.length) return [];

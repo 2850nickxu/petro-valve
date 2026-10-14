@@ -56,6 +56,8 @@ const BACKFILL_BATCH = 100;
 export interface PoStore {
   /** Claim a message for processing. True ⇒ newly claimed; false ⇒ already seen (skip). */
   claimMessage(channel: string, messageId: string): Promise<boolean>;
+  /** Undo a claim for a message that couldn't be processed, so a later delivery isn't skipped. */
+  releaseMessage(channel: string, messageId: string): Promise<void>;
   /** Acquire a short-lived submission lock. True ⇒ acquired; false ⇒ held elsewhere. */
   acquireLock(id: string, ttlSec?: number): Promise<boolean>;
   releaseLock(id: string): Promise<void>;
@@ -101,6 +103,10 @@ export function createPoStore(redis: Redis): PoStore {
       return r === "OK";
     },
 
+    async releaseMessage(channel, messageId) {
+      await redis.cmd(["DEL", keys.msg(channel, messageId)]);
+    },
+
     async acquireLock(id, ttlSec = 300) {
       const r = await redis.cmd<string | null>([
         "SET",
@@ -119,11 +125,16 @@ export function createPoStore(redis: Redis): PoStore {
 
     async saveSession(session) {
       const recentScore = Date.parse(session.updatedAt) || 0;
-      await redis.pipeline([
+      const cmds: string[][] = [
         ["SET", keys.session(session.id), JSON.stringify(session), "EX", String(SESSION_TTL_SEC)],
         ["ZADD", keys.queueRecent, String(recentScore), session.id],
         ["HSET", keys.indexSearch, session.id, JSON.stringify(summaryOf(session))],
-      ]);
+      ];
+      // Escalation adds a session to the review queue; leaving `escalated` by ANY path — a
+      // buyer reply, a reprocess, a staff action — takes it off, so the queue never lists
+      // sessions that no longer need review.
+      if (session.state !== "escalated") cmds.push(["ZREM", keys.queueEscalated, session.id]);
+      await redis.pipeline(cmds);
     },
 
     async loadSession(id) {

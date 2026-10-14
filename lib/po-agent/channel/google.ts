@@ -112,29 +112,48 @@ export class GoogleChannel implements EmailChannel {
     return false;
   }
 
+  // Read failures throw rather than look like an empty mailbox: callers advance the history
+  // watermark after a sync, so a swallowed error would skip mail for good.
   private async messageIdsFromHistory(token: string, startHistoryId: string): Promise<string[] | null> {
-    const { ok, status, json } = await this.gmail<{ history?: Array<{ messagesAdded?: Array<{ message: { id: string } }> }> }>(
-      token,
-      `/history?startHistoryId=${encodeURIComponent(startHistoryId)}&historyTypes=messageAdded`,
-    );
-    if (status === 404) return null; // watermark too old ⇒ caller does a full resync
-    if (!ok) return [];
     const ids = new Set<string>();
-    for (const h of json.history ?? []) for (const m of h.messagesAdded ?? []) ids.add(m.message.id);
+    let pageToken: string | undefined;
+    do {
+      const { ok, status, json } = await this.gmail<{
+        history?: Array<{ messagesAdded?: Array<{ message: { id: string } }> }>;
+        nextPageToken?: string;
+      }>(
+        token,
+        `/history?startHistoryId=${encodeURIComponent(startHistoryId)}&historyTypes=messageAdded` +
+          (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""),
+      );
+      if (status === 404) return null; // watermark too old ⇒ caller does a full resync
+      if (!ok) throw new Error(`GoogleChannel: history read failed (${status})`);
+      for (const h of json.history ?? []) for (const m of h.messagesAdded ?? []) ids.add(m.message.id);
+      pageToken = json.nextPageToken;
+    } while (pageToken);
     return [...ids];
   }
 
   private async recentMessageIds(token: string): Promise<string[]> {
-    const { ok, json } = await this.gmail<{ messages?: Array<{ id: string }> }>(
+    const { ok, status, json } = await this.gmail<{ messages?: Array<{ id: string }> }>(
       token,
       `/messages?labelIds=INBOX&maxResults=25`,
     );
-    return ok ? (json.messages ?? []).map((m) => m.id) : [];
+    if (!ok) throw new Error(`GoogleChannel: inbox read failed (${status})`);
+    return (json.messages ?? []).map((m) => m.id);
   }
 
   private async getRaw(token: string, id: string): Promise<GmailMessage> {
-    const { json } = await this.gmail<GmailMessage>(token, `/messages/${id}?format=full`);
+    const { ok, status, json } = await this.gmail<GmailMessage>(token, `/messages/${id}?format=full`);
+    if (!ok) throw new Error(`GoogleChannel: message ${id} read failed (${status})`);
     return json;
+  }
+
+  async currentWatermark(): Promise<string | null> {
+    const token = await this.token();
+    const { ok, status, json } = await this.gmail<{ historyId?: string | number }>(token, `/profile`);
+    if (!ok) throw new Error(`GoogleChannel: profile read failed (${status})`);
+    return json.historyId != null ? String(json.historyId) : null;
   }
 
   private async hydrate(token: string, msg: InboundMessage): Promise<InboundMessage> {

@@ -9,6 +9,7 @@ const BAD = new Set([
   "line_parent_sku",
   "line_blocked_by_assortment",
   "line_sku_description_conflict",
+  "line_unpriced",
   "price_mismatch",
 ]);
 
