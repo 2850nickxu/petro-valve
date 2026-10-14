@@ -138,23 +138,24 @@ describe("simulated conversation — reply mode", () => {
     expect(second.session.rules?.records.at(-1)?.reply_status).toBe("sent");
   });
 
-  it("escalates with an acknowledgment, then stays quiet on the human-owned thread (T6)", async () => {
+  it("escalates without replying, then stays quiet on the human-owned thread (T6)", async () => {
     const { channel, send } = setup();
     const first = await send(`Can you do better on price? We need a discount.\n${QUOTE}`);
     expect(first.record.action).toBe("ESCALATE");
     expect(first.record.reason_codes).toContain("discount_request");
     expect(first.session.state).toBe("escalated");
     expect(first.session.rules?.humanOwned).toBe(true);
-    expect(channel.sent).toHaveLength(1);
-    expect(channel.sent[0].reply.text).toContain("A specialist will review it");
-    expect(channel.sent[0].reply.text).not.toMatch(/\$\d/);
-    const events = first.session.audit.map((a) => a.event);
-    expect(events.indexOf("handoff")).toBeLessThan(events.indexOf("outbound"));
+    // No reply of any kind — sent or drafted. The handoff is for a sales agent.
+    expect(channel.sent).toHaveLength(0);
+    expect(first.session.messages?.map((m) => m.direction)).toEqual(["in"]);
+    expect(first.record.reply).toBeNull();
+    expect(first.record.reply_status).toBe("none");
+    expect(first.session.audit.map((a) => a.event)).toContain("handoff");
 
     const second = await send("Hello? Any update?", { threadId: first.session.threadId });
     expect(second.record.action).toBe("NO_RESPONSE");
     expect(second.record.matched_scenarios).toEqual(["T6"]);
-    expect(channel.sent).toHaveLength(1);
+    expect(channel.sent).toHaveLength(0);
     expect(second.session.state).toBe("escalated");
   });
 
@@ -198,7 +199,7 @@ describe("simulated conversation — reply mode", () => {
     const { session, record } = await send(QUOTE);
     expect(record.action).toBe("ESCALATE");
     expect(record.reason_codes).toEqual(["system_error"]);
-    expect(channel.sent[0].reply.text).not.toContain("Total:");
+    expect(channel.sent).toHaveLength(0);
     expect(session.audit.some((a) => a.event === "submitted" && a.outcome === "failed")).toBe(true);
   });
 

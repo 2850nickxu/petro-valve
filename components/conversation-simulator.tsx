@@ -312,7 +312,11 @@ export function ConversationSimulator({ storeHash, modelConfigured }: { storeHas
             {latest.reply ? (
               <pre style={PREVIEW}>{latest.reply.body}</pre>
             ) : (
-              <span style={caption}>No reply: the rules send nothing for this message.</span>
+              <span style={caption}>
+                {latest.action === "ESCALATE"
+                  ? "No reply: escalated to a sales agent, who replies to the customer."
+                  : "No reply: the rules send nothing for this message."}
+              </span>
             )}
           </Panel>
         ) : null}

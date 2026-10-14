@@ -1,6 +1,10 @@
 // Rules configuration (doc §5). Launch defaults live here; the "Decision rules (draft)"
 // settings group overrides them at runtime. `reviewAll` comes from the caller — the
 // simulator has its own per-conversation toggle.
+//
+// The doc's `escalation_acknowledgment` (§6.4) is deliberately not implemented: an
+// escalation sends the customer nothing and a sales agent replies (owner decision,
+// 2026-10-14).
 
 type Env = Record<string, string | undefined>;
 
@@ -15,8 +19,6 @@ export interface RulesConfig {
   maxLinesBeforeHold: number;
   /** Clarification rounds before the next one becomes a HOLD (T5). */
   maxClarificationRounds: number;
-  /** Send "a specialist will follow up" on an escalation (§6.4). */
-  escalationAcknowledgment: boolean;
   /** A line quantity at or above this is held (Q7). The doc's "~50x the customer's norm"
    * needs order history, which the agent doesn't read yet. */
   unusualQuantity: number;
@@ -34,7 +36,6 @@ export const RULES_DEFAULTS: RulesConfig = {
   orderValueHoldUsd: 50000,
   maxLinesBeforeHold: 50,
   maxClarificationRounds: 1,
-  escalationAcknowledgment: true,
   unusualQuantity: 10000,
   staffDomains: ["petrovalve.com"],
   modelRetryAttempts: 3,
@@ -45,11 +46,6 @@ function num(v: string | undefined, def: number): number {
   if (v == null || v === "") return def;
   const n = Number(v);
   return Number.isFinite(n) ? n : def;
-}
-
-function bool(v: string | undefined, def: boolean): boolean {
-  if (v == null || v === "") return def;
-  return /^(true|1|yes)$/i.test(v);
 }
 
 function domains(v: string | undefined, def: string[]): string[] {
@@ -67,7 +63,6 @@ export function getRulesConfig(env: Env = process.env, over: Partial<RulesConfig
     orderValueHoldUsd: num(env.PO_AGENT_RULES_HOLD_USD, RULES_DEFAULTS.orderValueHoldUsd),
     maxLinesBeforeHold: num(env.PO_AGENT_RULES_MAX_LINES, RULES_DEFAULTS.maxLinesBeforeHold),
     maxClarificationRounds: num(env.PO_AGENT_RULES_MAX_CLARIFY, RULES_DEFAULTS.maxClarificationRounds),
-    escalationAcknowledgment: bool(env.PO_AGENT_RULES_ESCALATION_ACK, RULES_DEFAULTS.escalationAcknowledgment),
     unusualQuantity: num(env.PO_AGENT_RULES_UNUSUAL_QTY, RULES_DEFAULTS.unusualQuantity),
     staffDomains: domains(env.PO_AGENT_RULES_STAFF_DOMAINS, RULES_DEFAULTS.staffDomains),
     modelRetryAttempts: Math.max(1, num(env.PO_AGENT_RULES_MODEL_RETRIES, RULES_DEFAULTS.modelRetryAttempts)),

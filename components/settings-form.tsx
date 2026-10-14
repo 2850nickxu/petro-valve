@@ -405,7 +405,6 @@ export function SettingsForm({
             {field("PO_AGENT_RULES_UNUSUAL_QTY")}
             {field("PO_AGENT_RULES_STAFF_DOMAINS")}
           </div>
-          {toggle("PO_AGENT_RULES_ESCALATION_ACK", true)}
           {saveBar()}
         </Panel>
       </TabPanel>

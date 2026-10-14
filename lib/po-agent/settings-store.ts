@@ -62,7 +62,6 @@ export const SETTINGS_FIELDS: FieldDef[] = [
   { key: "PO_AGENT_RULES_MAX_CLARIFY", label: "Clarification rounds", group: "Decision rules", type: "number", placeholder: "1", help: "After this many questions, the next reply is held for a person (T5)" },
   { key: "PO_AGENT_RULES_UNUSUAL_QTY", label: "Unusual quantity", group: "Decision rules", type: "number", placeholder: "10000", help: "A line at or above this quantity is held for review (Q7)" },
   { key: "PO_AGENT_RULES_STAFF_DOMAINS", label: "Staff email domains", group: "Decision rules", placeholder: "petrovalve.com", help: "Comma-separated. Mail from these domains is a staff forward; the draft goes back to the staff member (I11)" },
-  { key: "PO_AGENT_RULES_ESCALATION_ACK", label: "Acknowledge escalations", group: "Decision rules", type: "bool", help: "Send the customer a short 'a specialist will follow up' reply when a request escalates" },
 ];
 
 export const SECRET_KEYS = new Set(SETTINGS_FIELDS.filter((f) => f.secret).map((f) => f.key));

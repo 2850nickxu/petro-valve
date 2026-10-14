@@ -213,10 +213,11 @@ describe("decideByRules — precedence and thread rules", () => {
     expect(o.scenarios.map((h) => h.id)).toContain("T4");
   });
 
-  it("acknowledges an escalation only when the setting is on", () => {
-    const esc = input({ classification: classification({}, ["human_requested"]) });
-    expect(decideByRules(esc, CFG).replyKind).toBe("ack");
-    expect(decideByRules(esc, { ...CFG, escalationAcknowledgment: false }).replyKind).toBe("none");
+  it("never replies on an escalation: a sales agent answers", () => {
+    const o = decideByRules(input({ classification: classification({}, ["human_requested"]) }), CFG);
+    expect(o.action).toBe("ESCALATE");
+    expect(o.replyKind).toBe("none");
+    expect(o.notesForRep).toContain("Nothing was sent to the customer");
   });
 
   it("free-mail guests are C4, other guests C2", () => {

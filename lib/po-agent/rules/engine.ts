@@ -118,7 +118,7 @@ function notesFor(action: RulesAction, codes: ReasonCode[], input: RulesInput, h
     case "ESCALATE": {
       const lines = total ? ` ${quotable} of ${total} lines matched and priced (${money(input.requestTotal)}).` : "";
       const next = NEXT_STEP[codes[0]] ?? "review the request";
-      return `Needs a person: ${reasons}.${lines} Recommended next step: ${next}.`;
+      return `Needs a person: ${reasons}.${lines} Nothing was sent to the customer. Recommended next step: ${next}.`;
     }
     case "HOLD":
       return `Draft held for review: ${reasons}. Approve it as written, edit it, or take over the thread.`;
@@ -339,7 +339,8 @@ function finalize(input: RulesInput, cfg: RulesConfig, hits: ScenarioHit[], rese
       replyKind = "none";
       break;
     case "ESCALATE":
-      replyKind = cfg.escalationAcknowledgment ? "ack" : "none";
+      // No reply: the handoff goes to a sales agent, who answers the customer.
+      replyKind = "none";
       break;
     case "CLARIFY":
       replyKind = "clarify";

@@ -34,7 +34,8 @@ import type { Classification, DecisionRecord, ReplyKind, RulesAction, RulesOutco
 // One turn of a simulated email conversation, decided by the Petro Valve rules: the
 // customer's message comes in, the agent classifies it, reads and prices the request
 // against the store, applies the rules, and answers — a quote with a checkout link, a
-// question, a held draft, an escalation acknowledgment, or nothing.
+// question, a held draft, or nothing. An escalation sends nothing: it's handed to a sales
+// agent, who replies to the customer from the session.
 //
 // "decide" mode stops at the answer: nothing is stored, no quote is created and the reply
 // is only a preview. "reply" mode is the full conversation: the session is saved (marked
@@ -72,7 +73,6 @@ const PURPOSE: Record<Exclude<ReplyKind, "none">, MessagePurpose> = {
   quote: "quote_confirmation",
   resend_link: "checkout_link_resend",
   clarify: "clarification",
-  ack: "escalation_notice",
 };
 
 function ym(iso: string): string {
@@ -332,7 +332,7 @@ export async function runSimulatedTurn(
   });
 
   if (outcome.action === "ESCALATE") {
-    // §6.4: the handoff exists before any acknowledgment goes out.
+    // The handoff to a sales agent; the customer is sent nothing.
     step(handoffStep(resolved.length, submittableLines(resolved).filter((l) => l.calculatedUnitPrice != null).length));
   }
 
@@ -419,5 +419,5 @@ export async function runSimulatedTurn(
 
 /** The action a held draft carries out once a person approves it. */
 export function actionForPurpose(purpose: MessagePurpose | undefined): RulesAction {
-  return purpose === "clarification" ? "CLARIFY" : purpose === "escalation_notice" ? "ESCALATE" : "AUTO_RESPOND";
+  return purpose === "clarification" ? "CLARIFY" : "AUTO_RESPOND";
 }

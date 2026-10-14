@@ -855,7 +855,7 @@ export function handoffStep(lines: number, quotable: number): DecisionStep {
     event: "handoff",
     stage: "outbound",
     outcome: "needs_review",
-    summary: `Created the handoff for a person with the decision record (${quotable} of ${plural(lines, "line")} matched and priced). In the simulator this stands in for the HubSpot ticket.`,
+    summary: `Escalated to a sales agent with the decision record (${quotable} of ${plural(lines, "line")} matched and priced). Nothing was sent to the customer; the sales agent replies. In the simulator this stands in for the HubSpot ticket.`,
     detail: { lines, quotable },
   };
 }

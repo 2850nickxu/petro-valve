@@ -126,7 +126,7 @@ export interface ScenarioHit {
 }
 
 /** What the reply for this action is built from. HOLD keeps the kind of the reply it holds. */
-export type ReplyKind = "quote" | "resend_link" | "clarify" | "ack" | "none";
+export type ReplyKind = "quote" | "resend_link" | "clarify" | "none";
 
 export type RulesLineStatus = "ok" | "clarify" | "hold" | "escalate";
 
@@ -176,7 +176,7 @@ export interface DecisionRecord {
   checkout_url: string | null;
   clarification_rounds_used: number;
   reply: { to: string; subject: string; body: string } | null;
-  /** What the customer was actually sent this turn (the acknowledgment on an escalation). */
+  /** What the customer was actually sent this turn. */
   already_sent_to_customer: string | null;
   notes_for_rep: string;
   /** Pipeline run this record belongs to. */

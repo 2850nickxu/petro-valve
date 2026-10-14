@@ -62,7 +62,7 @@ export function DecisionRecordView({ record, currency }: { record: DecisionRecor
         <Badge tone={ACTION_TONE[record.action]}>{ACTION_LABEL[record.action]}</Badge>
         <span style={caption}>
           {record.intent.type.replace("_", " ")} · {Math.round(record.intent.confidence * 100)}% confident ·{" "}
-          {record.customer.guest ? "guest" : record.customer.company || "known customer"} · {REPLY_TEXT[record.reply_status]}
+          {record.customer.guest ? "guest" : record.customer.company || "known customer"} · {record.action === "ESCALATE" ? "No reply; a sales agent replies" : REPLY_TEXT[record.reply_status]}
         </span>
       </div>
 

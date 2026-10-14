@@ -135,11 +135,6 @@ export function clarifyReply(ctx: ReplyContext): string {
   return wrap(ctx, `${body}\n\nReply to this email and we'll send your quote with a checkout link.`);
 }
 
-/** §6.4: no prices, no product details, no promised response time. */
-export function acknowledgmentReply(ctx: Pick<ReplyContext, "forStaff">): string {
-  return wrap(ctx, "Thank you for your request. A specialist will review it and follow up with you.");
-}
-
 export function draftRulesReply(kind: ReplyKind, ctx: ReplyContext): string | null {
   switch (kind) {
     case "quote":
@@ -148,8 +143,6 @@ export function draftRulesReply(kind: ReplyKind, ctx: ReplyContext): string | nu
       return resendLinkReply(ctx);
     case "clarify":
       return clarifyReply(ctx);
-    case "ack":
-      return acknowledgmentReply(ctx);
     case "none":
       return null;
   }
