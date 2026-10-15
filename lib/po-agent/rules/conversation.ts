@@ -12,13 +12,16 @@ import { evaluate, evaluateCatalog } from "../pipeline";
 import { capText, recordDraft, recordInbound, reSubject, sendRecordedReply } from "../messages";
 import {
   classifiedStep,
+  draftedStep,
   errorStep,
   extractedStep,
   handoffStep,
   heldDraftStep,
   identifiedStep,
   outboundStep,
+  pricedStep,
   receivedStep,
+  resolvedStep,
   rulesDecidedStep,
   submittedStep,
   type DecisionStep,
@@ -28,7 +31,7 @@ import { detectPaymentData, heuristicClassify, newestMessage, redactPaymentData,
 import type { RulesConfig } from "./config";
 import { decideByRules, isFreeDomain, isStaffSender, type RulesInput } from "./engine";
 import { buildDecisionRecord } from "./record";
-import { draftRulesReply } from "./reply";
+import { clarifyQuestions, draftRulesReply, type ReplyContext } from "./reply";
 import type { Classification, DecisionRecord, ReplyKind, RulesAction, RulesOutcome, RulesThreadState } from "./types";
 
 // One turn of a simulated email conversation, decided by the Petro Valve rules: the
@@ -247,6 +250,13 @@ export async function runSimulatedTurn(
       }
       session.resolution = resolved;
       session.validation = issues;
+      // The catalog and price lookups, so the trail shows what was searched and what came back.
+      if (extracted.lines.length) {
+        const buyer = idres?.buyer;
+        const pricedFor = buyer ? `${buyer.companyName || `company #${buyer.companyId}`}'s account pricing` : "guest pricing";
+        step(resolvedStep(resolved));
+        step(pricedStep(resolved, deps.config, now(), pricedFor));
+      }
     } catch (err) {
       systemError = "store";
       step(errorStep("resolve", err instanceof Error ? err.message : String(err)));
@@ -287,6 +297,8 @@ export async function runSimulatedTurn(
   // A quote reply needs a quote: create it in the store (reply mode only).
   let checkoutUrl: string | undefined;
   let quoteNumber: string | undefined;
+  /** The quote the reply is about: created on this turn, or the one a resend points at. */
+  let replyQuote: { quoteId: number; quoteNumber?: string } | undefined;
   const wantsQuote = (outcome.action === "AUTO_RESPOND" || outcome.action === "HOLD") && outcome.replyKind === "quote";
   if (wantsQuote && reply) {
     const res = await submitQuote(deps.ctx, {
@@ -304,6 +316,7 @@ export async function runSimulatedTurn(
       session.result = { quoteId: res.quoteId, quoteNumber: res.quoteNumber, checkoutUrl: res.checkoutUrl, quoteUrl: res.quoteUrl };
       checkoutUrl = res.checkoutUrl;
       quoteNumber = res.quoteNumber;
+      replyQuote = { quoteId: res.quoteId, quoteNumber: res.quoteNumber };
     } else {
       // T14: never send a quote the store didn't create.
       step(submittedStep({ kind: "quote", ok: false, reason: res.reason }));
@@ -313,11 +326,12 @@ export async function runSimulatedTurn(
   } else if (outcome.replyKind === "resend_link") {
     checkoutUrl = rules.quote?.checkoutUrl;
     quoteNumber = rules.quote?.quoteNumber;
+    replyQuote = rules.quote ? { quoteId: rules.quote.quoteId, quoteNumber: rules.quote.quoteNumber } : undefined;
   }
 
   // The reply.
   const subject = reSubject(safe.subject);
-  const text = draftRulesReply(outcome.replyKind, {
+  const replyCtx: ReplyContext = {
     resolved,
     total: estimatedSubtotal(submittableLines(resolved)),
     poNumber: extracted?.poNumber ?? null,
@@ -329,7 +343,24 @@ export async function runSimulatedTurn(
     checkoutUrl,
     preview: !reply,
     forStaff: input.sender.staff,
-  });
+  };
+  const text = draftRulesReply(outcome.replyKind, replyCtx);
+  if (text && outcome.replyKind !== "none") {
+    step(
+      draftedStep({
+        kind: outcome.replyKind,
+        pricedLines: submittableLines(resolved).filter((l) => l.calculatedUnitPrice != null).length,
+        total: replyCtx.total,
+        questions: outcome.replyKind === "clarify" ? clarifyQuestions(replyCtx) : [],
+        hits: outcome.scenarios,
+        quote: replyQuote,
+        checkoutLink: Boolean(checkoutUrl),
+        availability: replyCtx.availability,
+        preview: !reply,
+        forStaff: input.sender.staff,
+      }),
+    );
+  }
 
   if (outcome.action === "ESCALATE") {
     // The handoff to a sales agent; the customer is sent nothing.

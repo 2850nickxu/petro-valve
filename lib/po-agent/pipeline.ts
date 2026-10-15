@@ -449,7 +449,8 @@ export async function processInbound(
     session.validation = issues;
     session.decision = decision;
     const readAt = now();
-    for (const s of evaluationSteps(evaluated, deps.config, { clarificationRounds: session.clarificationRounds, readAt })) step(s);
+    const pricedFor = `${buyer.companyName || `company #${buyer.companyId}`}'s account pricing`;
+    for (const s of evaluationSteps(evaluated, deps.config, { clarificationRounds: session.clarificationRounds, readAt, pricedFor })) step(s);
 
     if (opts.dryRun) {
       session.state = "validating";

@@ -183,7 +183,7 @@ describe("parent SKU + price difference (the PO-5567 case)", () => {
     expect((priced.detail as { lines: unknown[] }).lines[0]).toMatchObject({ line: 1, stated: 9.84, store: 11.2, diffPct: -12.1, withinTolerance: false });
 
     const resolved = session.audit.find((a) => a.run === 1 && a.event === "resolved")!;
-    expect(resolved.summary).toBe("1 of 2 lines can be ordered. Matched by exact SKU: line 1. Parent SKU, version needed: line 2.");
+    expect(resolved.summary).toBe("Searched the catalog for 2 SKUs: GE-T8-17W-41K and EA-EXEM-SR. 1 of 2 lines can be ordered. Matched by exact SKU: line 1. Parent SKU, version needed: line 2.");
 
     const decided = session.audit.find((a) => a.run === 1 && a.event === "decided")!;
     expect(decided.outcome).toBe("clarify");

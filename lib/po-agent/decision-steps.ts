@@ -6,7 +6,7 @@ import { money } from "./ai/respond";
 import { actorLabel } from "./people";
 import { REASON_TEXT, scenarioLabel } from "./rules/catalog";
 import type { RulesConfig } from "./rules/config";
-import type { Classification, RulesAction, RulesOutcome } from "./rules/types";
+import type { Classification, ReplyKind, RulesAction, RulesOutcome, ScenarioHit } from "./rules/types";
 import type {
   AuditEntry,
   Decision,
@@ -299,6 +299,19 @@ const MATCH_TEXT: Record<LineMatch, string> = {
 };
 const MATCH_ORDER: LineMatch[] = ["exact_sku", "parent_sku", "not_found", "no_sku", "not_purchasable", "not_in_assortment"];
 
+/** How many searched SKUs are named before the rest are counted. */
+const SKU_NAMES = 5;
+
+/** "Searched the catalog for 3 SKUs: W-1, W-2 and W-3." — what was looked up, before what came back. */
+function searchedSentence(resolved: ResolvedLine[]): string | undefined {
+  const skus = [...new Set(resolved.flatMap((r) => (r.line.sku ? [clip(r.line.sku, 40)] : [])))];
+  if (!skus.length) return undefined;
+  if (skus.length === 1) return `Searched the catalog for SKU ${skus[0]}.`;
+  const named = skus.slice(0, SKU_NAMES);
+  const rest = skus.length - named.length;
+  return `Searched the catalog for ${plural(skus.length, "SKU")}: ${joinAnd(rest ? [...named, `${rest} more`] : named)}.`;
+}
+
 export function resolvedStep(resolved: ResolvedLine[]): DecisionStep {
   const submittable = submittableLines(resolved).length;
   const total = resolved.length;
@@ -308,8 +321,9 @@ export function resolvedStep(resolved: ResolvedLine[]): DecisionStep {
     total === 1
       ? `The line ${submittable ? "can" : "can't"} be ordered.`
       : `${submittable} of ${plural(total, "line")} can be ordered.`;
+  const searched = searchedSentence(resolved);
   const summary = total
-    ? [head, ...groups.map((g) => `${cap(MATCH_TEXT[g.m])}: ${lineList(g.lines)}.`)].join(" ")
+    ? [...(searched ? [searched] : []), head, ...groups.map((g) => `${cap(MATCH_TEXT[g.m])}: ${lineList(g.lines)}.`)].join(" ")
     : "The PO had no lines to match.";
 
   return {
@@ -349,6 +363,8 @@ export function pricedStep(
   resolved: ResolvedLine[],
   config: Pick<PoAgentConfig, "priceTolerancePct">,
   readAt: string,
+  /** Whose prices were read: "Bayou Fabrication LLC's account pricing", "guest pricing". */
+  pricedFor?: string,
 ): DecisionStep {
   const lines = resolved.slice(0, LINE_CAP).map((r, i) => ({ r, line: i + 1, sku: r.matchedSku ?? r.line.sku ?? undefined }));
   // A parent-SKU line has no single price yet: each version is priced instead.
@@ -372,6 +388,8 @@ export function pricedStep(
   const nums = (xs: Array<{ line: number }>) => cap(lineList(xs.map((x) => x.line)));
 
   const parts: string[] = [];
+  const looked = priced.length + parents.length;
+  if (looked) parts.push(`Looked up store prices for ${plural(looked, "line")}${pricedFor ? ` at ${pricedFor}` : ""}.`);
   for (const p of flagged.slice(0, PRICE_SENTENCES)) {
     parts.push(
       `Line ${p.line}: PO ${money(p.stated!)} vs store ${money(p.store!)} (${signedPct(p.diffPct ?? 0)}), outside the ${config.priceTolerancePct}% price tolerance.`,
@@ -379,7 +397,13 @@ export function pricedStep(
   }
   if (flagged.length > PRICE_SENTENCES) parts.push(`${plural(flagged.length - PRICE_SENTENCES, "more line")} outside tolerance.`);
   if (within.length) parts.push(`${nums(within)} ${within.length === 1 ? "is" : "are"} within tolerance.`);
-  if (noPoPrice.length) parts.push(`${nums(noPoPrice)}: no PO price, so the store price applies.`);
+  if (noPoPrice.length) {
+    const found = noPoPrice.slice(0, PRICE_SENTENCES).map((p) => `${p.sku ? clip(p.sku, 40) : `line ${p.line}`} ${money(p.store!)}`);
+    const rest = noPoPrice.length - found.length;
+    parts.push(
+      `${nums(noPoPrice)}: no PO price, so the store price applies (${joinAnd(rest ? [...found, `${rest} more`] : found)}).`,
+    );
+  }
   if (parents.length) parts.push(`${nums(parents)}: priced per version until the buyer picks one.`);
   if (unpriced.length) parts.push(`${nums(unpriced)}: the store returned no price.`);
 
@@ -541,11 +565,11 @@ export function decidedStep(
 export function evaluationSteps(
   result: { resolved: ResolvedLine[]; issues: ValidationIssue[]; decision: Decision; checks: EvaluateChecks },
   config: Pick<PoAgentConfig, "priceTolerancePct" | "maxClarifications">,
-  opts: { clarificationRounds: number; readAt: string },
+  opts: { clarificationRounds: number; readAt: string; pricedFor?: string },
 ): DecisionStep[] {
   return [
     resolvedStep(result.resolved),
-    pricedStep(result.resolved, config, opts.readAt),
+    pricedStep(result.resolved, config, opts.readAt, opts.pricedFor),
     validatedStep(result.issues, result.resolved, result.checks),
     decidedStep(result.decision, result.resolved, config, opts.clarificationRounds),
   ];
@@ -836,6 +860,82 @@ export function rulesDecidedStep(o: RulesOutcome, cfg: RulesConfig): DecisionSte
     summary: `${summary} Scenarios: ${ids.join(", ")}.`,
     ...(setting ? { setting } : {}),
     detail: { action: o.action, scenarios: ids, reasonCodes: o.reasonCodes, replyKind: o.replyKind },
+  };
+}
+
+/** What a drafted rules reply was built from — counts and figures, never the text itself. */
+export interface DraftFacts {
+  kind: Exclude<ReplyKind, "none">;
+  /** Lines the reply lists with a store price. */
+  pricedLines: number;
+  total: number;
+  /** The questions a clarifying reply asks (clarify only). */
+  questions: string[];
+  hits: ScenarioHit[];
+  quote?: { quoteId: number; quoteNumber?: string };
+  checkoutLink: boolean;
+  availability: boolean;
+  /** Decide-only run: the reply is a preview and nothing is sent. */
+  preview: boolean;
+  /** I11: addressed to the staff member who forwarded the request. */
+  forStaff: boolean;
+}
+
+/** Short topics for the clarify scenarios that each add a question to the reply. */
+const QUESTION_TOPIC: Record<string, (line?: number) => string> = {
+  Q2: (n) => `price on line ${n}`,
+  Q8: (n) => `quantity on line ${n}`,
+  QB: (n) => `order limits on line ${n}`,
+  P15: () => "repeated SKU",
+  C11: () => "ship-to address",
+  A10: () => "missing attachment",
+};
+
+/** The reply was written: what it says and where its figures came from. */
+export function draftedStep(f: DraftFacts): DecisionStep {
+  const parts: string[] = [];
+  const quoteLabel = f.quote ? (f.quote.quoteNumber ?? String(f.quote.quoteId)) : undefined;
+  switch (f.kind) {
+    case "quote":
+      parts.push(
+        `Wrote the ${f.availability ? "availability and pricing" : "quote"} reply: ${plural(f.pricedLines, "line")} at store prices, total ${money(f.total)}` +
+          `${quoteLabel ? `, quote ${quoteLabel}` : ""}${f.checkoutLink ? " and its checkout link" : ""}.`,
+      );
+      if (!f.checkoutLink && f.preview) parts.push("No quote is created in a preview, so the checkout link is a placeholder.");
+      break;
+    case "resend_link":
+      parts.push(`Wrote the reply that resends the checkout link${quoteLabel ? ` for quote ${quoteLabel}` : ""}.`);
+      break;
+    case "clarify": {
+      const topics = [
+        ...new Set(f.hits.filter((h) => h.action === "CLARIFY" && QUESTION_TOPIC[h.id]).map((h) => QUESTION_TOPIC[h.id](h.line))),
+      ];
+      const n = f.questions.length;
+      parts.push(
+        n
+          ? `Wrote a clarifying reply with ${plural(n, "question")}${topics.length ? ` (${joinAnd(topics)})` : ""}.`
+          : "Wrote a clarifying reply asking for more detail.",
+      );
+      break;
+    }
+  }
+  if (f.kind !== "resend_link") parts.push("It's built from a template: every SKU, quantity and price is copied from the store's answers.");
+  if (f.forStaff) parts.push("It's addressed to the staff member who forwarded the request.");
+  if (f.preview) parts.push("Decide only: this is a preview and nothing is sent.");
+  return {
+    event: "drafted",
+    stage: "draft",
+    summary: parts.join(" "),
+    ...(f.quote ? { sources: [{ system: "bigcommerce", type: "quote", id: String(f.quote.quoteId), label: `Quote ${quoteLabel}` }] } : {}),
+    detail: {
+      kind: f.kind,
+      pricedLines: f.pricedLines,
+      total: f.total,
+      questions: f.questions.map((q) => clip(q)),
+      checkoutLink: f.checkoutLink,
+      preview: f.preview,
+      forStaff: f.forStaff,
+    },
   };
 }
 

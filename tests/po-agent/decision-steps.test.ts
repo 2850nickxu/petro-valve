@@ -15,7 +15,9 @@ import {
   noteStep,
   remindedStep,
   errorStep,
+  draftedStep,
   type DecisionStep,
+  type DraftFacts,
   type EvaluateChecks,
 } from "@/lib/po-agent/decision-steps";
 import type { ExtractedPo, PoLineItem, ResolvedLine, SessionMessage, ValidationIssue } from "@/lib/po-agent/types";
@@ -138,7 +140,7 @@ describe("resolve", () => {
     ]);
     expect(step.outcome).toBe("flagged");
     expect(step.summary).toBe(
-      "1 of 6 lines can be ordered. Matched by exact SKU: line 1. Parent SKU, version needed: line 4. " +
+      "Searched the catalog for 2 SKUs: W-1 and KITZ-150. 1 of 6 lines can be ordered. Matched by exact SKU: line 1. Parent SKU, version needed: line 4. " +
         "SKU not in the online catalog: line 2. No SKU given: line 3. Product hidden or disabled: line 6. " +
         "Not in the company's assortment: line 5.",
     );
@@ -150,8 +152,14 @@ describe("resolve", () => {
   });
 
   it("is ok only when every line matched by exact SKU", () => {
-    expect(resolvedStep([resolvedLine()])).toMatchObject({ outcome: "ok", summary: "The line can be ordered. Matched by exact SKU: line 1." });
+    expect(resolvedStep([resolvedLine()])).toMatchObject({ outcome: "ok", summary: "Searched the catalog for SKU W-1. The line can be ordered. Matched by exact SKU: line 1." });
     expect(resolvedStep([]).summary).toBe("The PO had no lines to match.");
+  });
+
+  it("names the first five SKUs it searched for and counts the rest", () => {
+    const skus = ["A-1", "A-2", "A-3", "A-4", "A-5", "A-6", "A-7"];
+    const step = resolvedStep(skus.map((sku) => resolvedLine({}, { sku })));
+    expect(step.summary).toMatch(/^Searched the catalog for 7 SKUs: A-1, A-2, A-3, A-4, A-5 and 2 more\. /);
   });
 });
 
@@ -167,12 +175,14 @@ describe("price", () => {
       ],
       CONFIG,
       readAt,
+      "Bayou Fabrication LLC's account pricing",
     );
     expect(step.outcome).toBe("flagged");
     expect(step.setting).toEqual({ key: "priceTolerancePct", label: "Price tolerance", value: "2%" });
     expect(step.summary).toBe(
-      "Line 1: PO $132.00 vs store $148.20 (−10.9%), outside the 2% price tolerance. " +
-        "Line 2 is within tolerance. Line 3: no PO price, so the store price applies.",
+      "Looked up store prices for 3 lines at Bayou Fabrication LLC's account pricing. " +
+        "Line 1: PO $132.00 vs store $148.20 (−10.9%), outside the 2% price tolerance. " +
+        "Line 2 is within tolerance. Line 3: no PO price, so the store price applies (W-1 $38.75).",
     );
     // The store price is kept as read, with when it was read.
     expect(step.sources?.[0]).toMatchObject({ type: "price", label: "Store price · BV3-SS-200-NPT", value: 148.2, readAt });
@@ -199,9 +209,66 @@ describe("price", () => {
       CONFIG,
       readAt,
     );
-    expect(step.summary).toBe("Line 1: priced per version until the buyer picks one. Line 2: the store returned no price.");
+    expect(step.summary).toBe(
+      "Looked up store prices for 2 lines. Line 1: priced per version until the buyer picks one. Line 2: the store returned no price.",
+    );
     expect(step.outcome).toBe("flagged");
     expect(pricedStep([resolvedLine({ productId: undefined })], CONFIG, readAt).summary).toBe("No matched lines to price.");
+  });
+});
+
+describe("drafted reply", () => {
+  const base: DraftFacts = {
+    kind: "quote",
+    pricedLines: 2,
+    total: 182.4,
+    questions: [],
+    hits: [],
+    checkoutLink: true,
+    availability: false,
+    preview: false,
+    forStaff: false,
+  };
+
+  it("says what the quote reply carries and that its figures come from the store", () => {
+    const step = draftedStep({ ...base, quote: { quoteId: 9001, quoteNumber: "Q-9001" } });
+    expect(step).toMatchObject({ event: "drafted", stage: "draft" });
+    expect(step.summary).toBe(
+      "Wrote the quote reply: 2 lines at store prices, total $182.40, quote Q-9001 and its checkout link. " +
+        "It's built from a template: every SKU, quantity and price is copied from the store's answers.",
+    );
+    expect(step.sources).toEqual([{ system: "bigcommerce", type: "quote", id: "9001", label: "Quote Q-9001" }]);
+    clean(step);
+  });
+
+  it("marks a decide-only preview, whose checkout link is a placeholder", () => {
+    const step = draftedStep({ ...base, checkoutLink: false, preview: true });
+    expect(step.summary).toContain("No quote is created in a preview, so the checkout link is a placeholder.");
+    expect(step.summary).toContain("Decide only: this is a preview and nothing is sent.");
+    expect(step.sources).toBeUndefined();
+    clean(step);
+  });
+
+  it("counts a clarifying reply's questions and names what they ask about", () => {
+    const step = draftedStep({
+      ...base,
+      kind: "clarify",
+      questions: ["Line 2 (W-1): how many do you need?", "Please confirm the ship-to address: …"],
+      hits: [
+        { id: "Q8", action: "CLARIFY", line: 2 },
+        { id: "C11", action: "CLARIFY" },
+        { id: "I1", action: "AUTO_RESPOND" },
+      ],
+    });
+    expect(step.summary).toMatch(/^Wrote a clarifying reply with 2 questions \(quantity on line 2 and ship-to address\)\./);
+    clean(step);
+  });
+
+  it("names the quote a resent link belongs to, and a reply drafted for staff", () => {
+    const step = draftedStep({ ...base, kind: "resend_link", quote: { quoteId: 9001 }, forStaff: true });
+    expect(step.summary).toBe(
+      "Wrote the reply that resends the checkout link for quote 9001. It's addressed to the staff member who forwarded the request.",
+    );
   });
 });
 

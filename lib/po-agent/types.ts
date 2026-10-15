@@ -173,6 +173,7 @@ export type DecisionStage =
   | "price"
   | "validate"
   | "decide"
+  | "draft"
   | "outbound"
   | "human"
   | "lifecycle";

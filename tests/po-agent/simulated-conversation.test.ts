@@ -82,6 +82,15 @@ describe("simulated conversation — reply mode", () => {
     expect(text).toContain("Shipping and tax are calculated at checkout.");
     expect(session.messages?.map((m) => m.status)).toEqual(["received", "captured"]);
 
+    // The trail shows the catalog search, the price lookup and the reply being written.
+    const events = session.audit.map((a) => a.event);
+    expect(events).toEqual(["received", "classified", "identified", "extracted", "resolved", "priced", "rules_decided", "submitted", "drafted", "outbound"]);
+    const step = (e: string) => session.audit.find((a) => a.event === e)!;
+    expect(step("resolved").summary).toMatch(/^Searched the catalog for 2 SKUs: WIDGET-100 and BOLT-250\. /);
+    expect(step("priced").summary).toMatch(/^Looked up store prices for 2 lines at .+'s account pricing\. /);
+    expect(step("priced").sources?.map((s) => s.value)).toEqual([9.84, 2.1]);
+    expect(step("drafted").summary).toMatch(/^Wrote the quote reply: 2 lines at store prices, total \$182\.40, quote .+ and its checkout link\./);
+
     // Saved, and kept out of the dashboard counters.
     expect(await store.loadSession(session.id)).toMatchObject({ simulated: true, state: "completed_quote" });
     expect(await store.getCounters("202610")).toEqual({});
@@ -89,7 +98,7 @@ describe("simulated conversation — reply mode", () => {
 
   it("quotes a guest at list price with no company on the quote", async () => {
     const { http, channel, send } = setup({ usersEmpty: true });
-    const { record } = await send(QUOTE, { from: "jane@newco.com" });
+    const { session, record } = await send(QUOTE, { from: "jane@newco.com" });
 
     expect(record.action).toBe("AUTO_RESPOND");
     expect(record.customer.guest).toBe(true);
@@ -99,6 +108,7 @@ describe("simulated conversation — reply mode", () => {
     expect((created.body as { contactInfo: { email: string } }).contactInfo.email).toBe("jane@newco.com");
     expect(http.callsTo("/v3/pricing/products")[0].body).toMatchObject({ customer_group_id: 0 });
     expect(channel.sent[0].reply.text).toContain("guest checkout");
+    expect(session.audit.find((a) => a.event === "priced")?.summary).toContain("at guest pricing.");
   });
 
   it("asks, then quotes when the customer answers on the same thread (Q8 → T2/T3)", async () => {
@@ -108,6 +118,7 @@ describe("simulated conversation — reply mode", () => {
     expect(first.session.state).toBe("clarifying");
     expect(channel.sent[0].reply.text).toContain("how many do you need? The price at quantity 1 is $9.84 each.");
     expect(channel.sent[0].reply.text).not.toContain("http");
+    expect(first.session.audit.find((a) => a.event === "drafted")?.summary).toMatch(/^Wrote a clarifying reply with 1 question \(quantity on line 1\)\./);
 
     const second = await send("SKU: WIDGET-100 Qty: 25", { threadId: first.session.threadId });
     expect(second.session.id).toBe(first.session.id);
@@ -151,6 +162,7 @@ describe("simulated conversation — reply mode", () => {
     expect(first.record.reply).toBeNull();
     expect(first.record.reply_status).toBe("none");
     expect(first.session.audit.map((a) => a.event)).toContain("handoff");
+    expect(first.session.audit.map((a) => a.event)).not.toContain("drafted");
 
     const second = await send("Hello? Any update?", { threadId: first.session.threadId });
     expect(second.record.action).toBe("NO_RESPONSE");
@@ -227,6 +239,9 @@ describe("simulated conversation — decide only", () => {
     expect(http.calls.filter((c) => c.method === "POST" && c.url.includes("/rfq"))).toHaveLength(0);
     expect(channel.sent).toHaveLength(0);
     expect(session.state).toBe("validating");
+    const drafted = session.audit.find((a) => a.event === "drafted");
+    expect(drafted?.summary).toContain("Decide only: this is a preview and nothing is sent.");
+    expect(session.audit.map((a) => a.event)).not.toContain("outbound");
   });
 });
 
