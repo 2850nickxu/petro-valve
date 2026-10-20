@@ -27,7 +27,7 @@ export interface CloseButtonProps {
   label?: string;
 }
 
-/* The overlay contract, shared by Modal, Drawer and CommandPalette:
+/* The overlay contract (the kit shares it with Drawer and CommandPalette):
    role="dialog" aria-modal, a label tied to the title, Escape to dismiss,
    focus moved in on open and returned to the invoker on close, and Tab wrapped
    inside the surface. Overlays appear; they do not animate in. */

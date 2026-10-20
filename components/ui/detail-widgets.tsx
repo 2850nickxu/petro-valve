@@ -1,7 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 import { InlineMessage } from "@/components/backbone";
 
-// App-specific, presentation-only widgets the PO inbox detail screens need. Backbone ships
+// App-specific, presentation-only widgets the PO inbox detail screens need. The Backbone kit has
 // a Timeline and a FieldList, but the audit trail here carries a tone dot, an actor pill and
 // a free-form detail per row, and the record's key/value blocks have their own layouts — so
 // these are composed directly from Backbone tokens (the system explicitly allows building

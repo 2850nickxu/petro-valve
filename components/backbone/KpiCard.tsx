@@ -23,7 +23,7 @@ export interface KpiCardProps {
   note?: string;
   /** Mono figures. Use for identifiers and dense numeric views, not for ordinary counts. */
   mono?: boolean;
-  /** A Sparkline, ProgressBar or small legend under the value. */
+  /** A small chart or legend under the value. */
   children?: React.ReactNode;
   style?: React.CSSProperties;
 }

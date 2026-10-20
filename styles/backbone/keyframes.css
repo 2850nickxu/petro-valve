@@ -1,4 +1,3 @@
 /* Backbone keyframes. Components reference these by name; include this file
-   (or copy the two rules) wherever Spinner, Skeleton or <Button loading> is used. */
+   (or copy the rule) wherever Spinner or <Button loading> is used. */
 @keyframes bb-spin { to { transform: rotate(360deg); } }
-@keyframes bb-shimmer { from { background-position: -400px 0; } to { background-position: 400px 0; } }

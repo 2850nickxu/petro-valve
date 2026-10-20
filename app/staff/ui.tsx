@@ -8,7 +8,7 @@ import { LinkButton } from "@/components/ui/link-button";
 // No client hooks here, so async server pages can import them directly.
 
 export function PageHead({ title, sub, children }: { title: ReactNode; sub?: ReactNode; children?: ReactNode }) {
-  // Implemented directly (not via Backbone PageHeader) because some screens pass a rich
+  // Implemented directly (the Backbone kit's PageHeader is not vendored) because some screens pass a rich
   // ReactNode subtitle, while PageHeader.description is a plain string. Type + spacing come
   // from tokens, so it reads identically to PageHeader.
   return (

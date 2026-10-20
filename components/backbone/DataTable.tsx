@@ -49,14 +49,6 @@ export interface DataTableProps {
   style?: React.CSSProperties;
 }
 
-export interface BulkBarProps {
-  /** "12 selected" — pre-formatted. */
-  label: string;
-  actions?: React.ReactNode;
-  onClear?: () => void;
-  style?: React.CSSProperties;
-}
-
 /* Row height follows density by default: 40px in a standard region, 32px in a
    compact one. Pass `density` to override for one table — the common case is a
    compact table inside a standard page shell, which you can also do by wrapping
@@ -243,32 +235,5 @@ function Box({ on, mixed = false, onChange, label }: BoxProps) {
           : on ? <Icon name="done" size={11} /> : null}
       </span>
     </span>
-  );
-}
-
-export function BulkBar({ label, actions, onClear, style }: BulkBarProps) {
-  return (
-    <div role="status" style={{
-      display: 'flex', alignItems: 'center', gap: 'var(--space-2-5)',
-      padding: 'var(--space-2) var(--cell-pad-x)',
-      background: 'var(--surface-inverse)', color: 'var(--text-inverse)', flexWrap: 'wrap', ...style
-    }}>
-      <span style={{
-        fontFamily: 'var(--font-ui)', fontSize: 'var(--control-font-size)',
-        fontWeight: 'var(--weight-medium)', fontVariantNumeric: 'var(--numeric-tabular)'
-      }}>{label}</span>
-      {onClear ? (
-        <button
-          type="button" onClick={onClear}
-          style={{
-            height: 'var(--control-h-micro)', padding: '0 10px', background: 'transparent',
-            border: 'var(--border-w) solid rgba(255,255,255,0.28)', borderRadius: 'var(--radius-md)',
-            fontFamily: 'var(--font-ui)', fontSize: 'calc(var(--control-font-size) - 1px)',
-            fontWeight: 'var(--weight-medium)', color: 'var(--text-inverse)', cursor: 'pointer'
-          }}
-        >Deselect</button>
-      ) : null}
-      {actions ? <span style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--space-1-5)' }}>{actions}</span> : null}
-    </div>
   );
 }
