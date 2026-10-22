@@ -18,6 +18,9 @@
 .env.local
 .env.*.local
 
+# local engagement notes — never commit
+/context.txt
+
 # misc
 .DS_Store
 *.pem
