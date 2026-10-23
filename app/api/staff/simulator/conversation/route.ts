@@ -9,6 +9,7 @@ import { createPoStore, sessionId } from "@/lib/po-agent/store";
 import { getRulesConfig } from "@/lib/po-agent/rules/config";
 import { resolveClassifier } from "@/lib/po-agent/rules/classify";
 import { runSimulatedTurn } from "@/lib/po-agent/rules/conversation";
+import { resolveCommerce } from "@/lib/commerce";
 
 // Simulated email conversation, decided by the Petro Valve rules (staff only — the
 // middleware gates /api/staff/**). The customer's message is injected through the
@@ -17,8 +18,11 @@ import { runSimulatedTurn } from "@/lib/po-agent/rules/conversation";
 //   mode "decide": classify, read, price and decide; return the decision and the reply it
 //                  would send. Nothing is stored and nothing is created in the store.
 //   mode "reply":  the full turn. The session is saved (marked simulated); a quote reply
-//                  creates a real quote in the connected test store, tagged as a sandbox
-//                  artifact. Pass the `threadId` of an earlier turn to reply on it.
+//                  creates a real quote in the connected store — a BigCommerce quote tagged
+//                  as a sandbox artifact, or a Magento guest cart when guest-cart writes are
+//                  on. Pass the `threadId` of an earlier turn to reply on it.
+//
+// The store is the deployment's commerce adapter (PO_AGENT_COMMERCE, lib/commerce).
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -55,10 +59,9 @@ export async function POST(req: Request) {
   const config = getPoAgentConfig(env);
   const rules = getRulesConfig(env, { reviewAll: Boolean(body.reviewAll) });
 
-  const ctx = await resolveRequestStoreContext();
-  if (!ctx) {
-    return NextResponse.json({ error: "Connect a BigCommerce store in Settings to run the simulator." }, { status: 503 });
-  }
+  const bcCtx = config.commerce === "bigcommerce" ? await resolveRequestStoreContext() : null;
+  const commerce = resolveCommerce(config, env, bcCtx);
+  if ("error" in commerce) return NextResponse.json({ error: commerce.error }, { status: 503 });
   const redis = getRedis(env);
   if (mode === "reply" && !redis) {
     return NextResponse.json({ error: "Redis isn't configured, so a conversation can't be kept. Use Decide only." }, { status: 503 });
@@ -81,7 +84,7 @@ export async function POST(req: Request) {
   try {
     const turn = await runSimulatedTurn(
       {
-        ctx,
+        commerce: commerce.adapter,
         config,
         rules,
         // Decide-only uses the store only to record token usage; nothing else is saved.

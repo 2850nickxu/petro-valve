@@ -35,10 +35,14 @@ function jsonObj<T>(v: string | undefined, def: T): T {
 }
 
 export type PoAgentMode = "auto" | "review";
+/** The commerce platform this deployment sells through (lib/commerce picks the adapter). */
+export type CommercePlatform = "bigcommerce" | "magento";
 export type QuoteEmailMode = "own" | "native";
 
 export interface PoAgentConfig {
   enabled: boolean;
+  /** PO_AGENT_COMMERCE; BigCommerce unless set to "magento". */
+  commerce: CommercePlatform;
   mode: PoAgentMode;
   channel: Channel;
   model?: string;
@@ -74,6 +78,7 @@ export function getPoAgentConfig(env: Env = process.env): PoAgentConfig {
   const codes = csv(env.PO_AGENT_PO_PAYMENT_CODES);
   return {
     enabled: bool(env.PO_AGENT_ENABLED, false),
+    commerce: env.PO_AGENT_COMMERCE?.trim().toLowerCase() === "magento" ? "magento" : "bigcommerce",
     mode: env.PO_AGENT_MODE === "review" ? "review" : "auto",
     channel: env.PO_AGENT_CHANNEL === "microsoft" ? "microsoft" : "google",
     model: env.PO_AGENT_MODEL || undefined,

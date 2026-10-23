@@ -44,7 +44,7 @@ function sourceHref(s: SourceRef, links: AdminLinks | null): { href: string; ext
   const id = s.id ? Number(s.id) : NaN;
   if (s.type === "message" && s.id) return { href: `#msg-${s.id}`, external: false };
   if (s.type === "setting") return { href: "/staff/settings", external: false };
-  if (!links || !Number.isFinite(id)) return undefined;
+  if (!links || s.system !== "bigcommerce" || !Number.isFinite(id)) return undefined;
   if (s.type === "customer") return { href: links.customer(id), external: true };
   if (s.type === "order") return { href: links.order(id), external: true };
   return undefined;

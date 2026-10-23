@@ -40,11 +40,18 @@ documented). The `.vercelignore` already excludes `.env*` from deploys.
 - **BigCommerce store context** — `BIGCOMMERCE_STORE_HASH`, `BIGCOMMERCE_ACCESS_TOKEN`
   (the single store token with **B2B Edition = modify**; there is no separate
   `B2B_*` token), `BIGCOMMERCE_CHANNEL_ID`.
+- **Commerce platform** — `PO_AGENT_COMMERCE` = `bigcommerce` (default) or `magento`. Picks
+  the store adapter in `lib/commerce` for the rules flow, the simulator, Settings → Store and
+  the dashboard. Settable in Settings → Store.
 - **Magento store context** (Petro Valve) — `MAGENTO_BASE_URL`, `MAGENTO_ADMIN_USERNAME`,
   `MAGENTO_ADMIN_PASSWORD`, `MAGENTO_GUEST_CART_WRITES`, read only through
   `lib/magento/magento-context.ts`. The store is **read-only** for this app except two
   guest-cart writes (create cart, add item), which stay off unless
-  `MAGENTO_GUEST_CART_WRITES=true`.
+  `MAGENTO_GUEST_CART_WRITES=true`. `MAGENTO_STORE=sandbox` switches everything to the
+  sandbox (test site) via `MAGENTO_SANDBOX_*`; the sandbox has its own write switch
+  (`MAGENTO_SANDBOX_GUEST_CART_WRITES`) and borrows the production admin login unless it
+  has one. `MAGENTO_CART_LINK_SECRET` / `_PATH` / `_TTL_DAYS` sign
+  the cart links a Silk Magento module will open (no secret = no link).
 - **PO agent core** — `PO_AGENT_ENABLED` / `PO_AGENT_MODE` / `PO_AGENT_CHANNEL`.
 - **AI provider (BYO)** — `PO_AGENT_MODEL` + the matching provider key
   (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` / Azure).

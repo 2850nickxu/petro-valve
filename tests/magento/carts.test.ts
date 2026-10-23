@@ -31,13 +31,21 @@ const CATALOG = [
 ];
 
 /** Guest-cart routes; `cartPrice` lets a test simulate Epicor repricing a line. */
-function cartRoutes(opts: { cartPrice?: Record<string, number> } = {}): MockRoute[] {
+function cartRoutes(opts: { cartPrice?: Record<string, number>; uncharged?: number[] } = {}): MockRoute[] {
   let nextId = 100;
   return [
     {
       method: "GET",
       url: `/guest-carts/${CART}/totals`,
-      body: { subtotal: 553, grand_total: 553, quote_currency_code: "USD", items: [{ item_id: 100, name: "VO 12111-1", qty: 2, price: 135, row_total: 270 }] },
+      body: {
+        subtotal: 553,
+        grand_total: 553,
+        quote_currency_code: "USD",
+        items: [
+          { item_id: 100, name: "VO 12111-1", qty: 2, price: 135, row_total: opts.uncharged?.includes(100) ? 0 : 270 },
+          { item_id: 101, name: "VO 12111-1-1/2", qty: 1, price: 283, row_total: opts.uncharged?.includes(101) ? 0 : 283 },
+        ],
+      },
     },
     {
       method: "POST",
@@ -86,6 +94,7 @@ describe("buildGuestCart", () => {
     ]);
     expect(cart.totals).toMatchObject({ grandTotal: 553, currency: "USD" });
     expect(cart.priceMismatches).toEqual([]);
+    expect(cart.excludedItems).toEqual([]);
 
     const adds = mock.calls.filter((c) => c.method === "POST" && c.url.endsWith("/items"));
     expect(adds.map((c) => c.body)).toEqual([
@@ -100,6 +109,15 @@ describe("buildGuestCart", () => {
       `/guest-carts/${CART}/items`,
       `/guest-carts/${CART}/items`,
     ]);
+  });
+
+  it("reports lines Magento accepted but left out of the totals (row total 0)", async () => {
+    installMockFetch([...cartRoutes({ uncharged: [101] }), ...catalogRoutes(CATALOG)]);
+    const cart = await buildGuestCart(WRITES_ON, [
+      { sku: "VO 12111-1", qty: 2 },
+      { sku: "VO 12111-1-1/2", qty: 1 },
+    ]);
+    expect(cart.excludedItems).toEqual([{ sku: "VO 12111-1-1/2", qty: 1 }]);
   });
 
   it("reports cart prices that differ from the catalog (Epicor repricing)", async () => {

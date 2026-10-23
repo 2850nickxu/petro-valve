@@ -39,6 +39,10 @@ export interface SettingsDefaults {
   priceTolerancePct: number;
   maxClarifications: number;
   channel: "google" | "microsoft";
+  commerce: "bigcommerce" | "magento";
+  magentoStore: "production" | "sandbox";
+  guestCartWrites: boolean;
+  sandboxGuestCartWrites: boolean;
 }
 
 /** Per-tab health dot, computed server-side. */
@@ -57,7 +61,7 @@ const TABS: Array<{ id: TabId; label: string; sub: string }> = [
   { id: "ai", label: "AI model", sub: "Bring your own model, or run the free heuristic extractor." },
   { id: "channel", label: "Email channel", sub: "The mailbox buyers send purchase orders to." },
   { id: "escalation", label: "Escalation", sub: "Where a human gets pulled in when the agent stops." },
-  { id: "store", label: "Store", sub: "The BigCommerce store the agent transacts against." },
+  { id: "store", label: "Store", sub: "The store the agent matches, prices and quotes against." },
 ];
 
 const GRID_TWO: React.CSSProperties = {
@@ -240,6 +244,8 @@ export function SettingsForm({
   }
 
   const selectedChannel = (values.PO_AGENT_CHANNEL || defaults.channel) as "google" | "microsoft";
+  const selectedCommerce = (values.PO_AGENT_COMMERCE || defaults.commerce) as "bigcommerce" | "magento";
+  const selectedMagentoStore = (values.MAGENTO_STORE || defaults.magentoStore) as "production" | "sandbox";
 
   const field = (k: string, wide?: boolean) => (
     <SettingField
@@ -283,7 +289,7 @@ export function SettingsForm({
     const target =
       tab === "ai" ? "ai"
       : tab === "escalation" ? "slack"
-      : tab === "store" ? "bigcommerce"
+      : tab === "store" ? selectedCommerce
       : tab === "channel" ? (selectedChannel === "microsoft" ? "microsoft" : "gmail")
       : null;
     if (!target) return;
@@ -496,53 +502,121 @@ export function SettingsForm({
         idPrefix="settings"
         style={{ display: "flex", flexDirection: "column", gap: "var(--gap-section)" }}
       >
-        <Panel title="Store" actions={healthBadge} bodyStyle={{ gap: "var(--gap-group)" }}>
-          <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-            Installing the app supplies its own per-store OAuth token automatically. These fields are the manual
-            single-store override.
-          </span>
-          <div style={GRID_TWO}>
-            {field("BIGCOMMERCE_STORE_HASH")}
-            {field("BIGCOMMERCE_ACCESS_TOKEN")}
-            {field("BIGCOMMERCE_CHANNEL_ID")}
+        <Panel title="Store" meta={subOf("store")} actions={healthBadge} bodyStyle={{ gap: "var(--gap-group)" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {(["bigcommerce", "magento"] as const).map((c) => (
+              <Button
+                key={c}
+                variant={selectedCommerce === c ? "primary" : "secondary"}
+                onClick={() => set("PO_AGENT_COMMERCE", c)}
+              >
+                {c === "bigcommerce" ? "BigCommerce" : "Magento"}
+              </Button>
+            ))}
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-            <span style={{ fontWeight: "var(--weight-semibold)" }}>Installed stores</span>
-            {installs.length ? (
-              <div style={{ border: "var(--border-w) solid var(--border-default)", borderRadius: "var(--radius-md)" }}>
-                {installs.map((i, idx) => (
-                  <div
-                    key={i.storeHash}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      flexWrap: "wrap",
-                      gap: 10,
-                      padding: "var(--space-2-5) var(--space-3)",
-                      borderTop: idx > 0 ? "var(--border-w) solid var(--border-subtle)" : undefined,
-                    }}
-                  >
-                    <span style={{ flex: "1 1 200px", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-primary)" }}>{i.storeHash}</span>
-                      <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>{i.ownerEmail ?? "unknown owner"}</span>
-                    </span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
-                      {i.installedAt.slice(0, 16).replace("T", " ")}
-                    </span>
-                    <Badge tone="neutral">OAuth (per-store)</Badge>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
-                No app installs yet — the agent uses the deployment (env/global) settings.
+          {selectedCommerce === "magento" ? (
+            <>
+              <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                The agent reads the catalog and prices with an admin login. The only thing it ever writes is a guest
+                cart with items in it, and only when guest-cart writes are on.
               </span>
-            )}
-          </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                <span style={{ fontWeight: "var(--weight-semibold)" }}>Active store</span>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {(["production", "sandbox"] as const).map((s) => (
+                    <Button
+                      key={s}
+                      size="micro"
+                      variant={selectedMagentoStore === s ? "primary" : "secondary"}
+                      onClick={() => set("MAGENTO_STORE", s)}
+                    >
+                      {s === "production" ? "Production" : "Sandbox"}
+                    </Button>
+                  ))}
+                </div>
+                <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
+                  Each store has its own guest-cart switch, so writes turned on for one never apply to the other.
+                </span>
+              </div>
+              {selectedMagentoStore === "production" ? (
+                <>
+                  <div style={GRID_TWO}>
+                    {field("MAGENTO_BASE_URL", true)}
+                    {field("MAGENTO_ADMIN_USERNAME")}
+                    {field("MAGENTO_ADMIN_PASSWORD")}
+                  </div>
+                  {toggle("MAGENTO_GUEST_CART_WRITES", defaults.guestCartWrites)}
+                </>
+              ) : (
+                <>
+                  <div style={GRID_TWO}>
+                    {field("MAGENTO_SANDBOX_BASE_URL", true)}
+                    {field("MAGENTO_SANDBOX_ADMIN_USERNAME")}
+                    {field("MAGENTO_SANDBOX_ADMIN_PASSWORD")}
+                  </div>
+                  {toggle("MAGENTO_SANDBOX_GUEST_CART_WRITES", defaults.sandboxGuestCartWrites)}
+                </>
+              )}
+              <div style={GRID_TWO}>
+                {field("MAGENTO_CART_LINK_SECRET")}
+                {field("MAGENTO_CART_LINK_PATH")}
+              </div>
+              <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
+                Cart links open once the Silk Magento module that serves the path above is deployed.
+              </span>
+              {saveBar("Test store")}
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                Installing the app supplies its own per-store OAuth token automatically. These fields are the manual
+                single-store override.
+              </span>
+              <div style={GRID_TWO}>
+                {field("BIGCOMMERCE_STORE_HASH")}
+                {field("BIGCOMMERCE_ACCESS_TOKEN")}
+                {field("BIGCOMMERCE_CHANNEL_ID")}
+              </div>
 
-          {saveBar("Test store")}
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                <span style={{ fontWeight: "var(--weight-semibold)" }}>Installed stores</span>
+                {installs.length ? (
+                  <div style={{ border: "var(--border-w) solid var(--border-default)", borderRadius: "var(--radius-md)" }}>
+                    {installs.map((i, idx) => (
+                      <div
+                        key={i.storeHash}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: 10,
+                          padding: "var(--space-2-5) var(--space-3)",
+                          borderTop: idx > 0 ? "var(--border-w) solid var(--border-subtle)" : undefined,
+                        }}
+                      >
+                        <span style={{ flex: "1 1 200px", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-primary)" }}>{i.storeHash}</span>
+                          <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>{i.ownerEmail ?? "unknown owner"}</span>
+                        </span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
+                          {i.installedAt.slice(0, 16).replace("T", " ")}
+                        </span>
+                        <Badge tone="neutral">OAuth (per-store)</Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span style={{ fontSize: "var(--text-caption-size)", color: "var(--text-metadata)" }}>
+                    No app installs yet — the agent uses the deployment (env/global) settings.
+                  </span>
+                )}
+              </div>
+
+              {saveBar("Test store")}
+            </>
+          )}
         </Panel>
         <PreviewAccess />
       </TabPanel>

@@ -44,6 +44,20 @@ export const SETTINGS_FIELDS: FieldDef[] = [
   { key: "BIGCOMMERCE_STORE_HASH", label: "Store hash", group: "BigCommerce", help: "Short alphanumeric identifier in your store URL, e.g. abc123" },
   { key: "BIGCOMMERCE_ACCESS_TOKEN", label: "Store access token", group: "BigCommerce", secret: true, help: "Store API token with B2B Edition scope = modify (skip if using the installed app — it provides its own token)" },
   { key: "BIGCOMMERCE_CHANNEL_ID", label: "Channel id", group: "BigCommerce", type: "number", help: "Storefront channel to associate orders/quotes with (default 1 for the main channel)" },
+  // Commerce platform — which store adapter this deployment quotes from (lib/commerce)
+  { key: "PO_AGENT_COMMERCE", label: "Commerce platform", group: "Store", type: "select", options: ["bigcommerce", "magento"], help: "The store the agent matches, prices and quotes against" },
+  // Magento (Petro Valve) — read-only except guest carts. Two stores, one switch.
+  { key: "MAGENTO_STORE", label: "Active store", group: "Magento", type: "select", options: ["production", "sandbox"], help: "Which Magento store the agent uses: production or the sandbox (test site)" },
+  { key: "MAGENTO_BASE_URL", label: "Store URL", group: "Magento", placeholder: "https://petrovalve.com", help: "The store's https origin; the REST API lives under /rest/V1" },
+  { key: "MAGENTO_ADMIN_USERNAME", label: "Admin username", group: "Magento", help: "Admin user the agent signs in as to read the catalog" },
+  { key: "MAGENTO_ADMIN_PASSWORD", label: "Admin password", group: "Magento", secret: true, help: "Password for the admin user above" },
+  { key: "MAGENTO_GUEST_CART_WRITES", label: "Allow guest-cart writes on production", group: "Magento", type: "bool", help: "Lets the agent create guest carts and add items to them on the production store. It never writes anything else." },
+  { key: "MAGENTO_SANDBOX_BASE_URL", label: "Sandbox URL", group: "Magento", placeholder: "https://petrovalve-test.epicorcommerce.com", help: "The sandbox (test site) https origin" },
+  { key: "MAGENTO_SANDBOX_ADMIN_USERNAME", label: "Sandbox admin username", group: "Magento", help: "Leave empty to use the production admin login" },
+  { key: "MAGENTO_SANDBOX_ADMIN_PASSWORD", label: "Sandbox admin password", group: "Magento", secret: true, help: "Leave empty to use the production admin password" },
+  { key: "MAGENTO_SANDBOX_GUEST_CART_WRITES", label: "Allow guest-cart writes on the sandbox", group: "Magento", type: "bool", help: "Same as above, for the sandbox only. Production keeps its own switch." },
+  { key: "MAGENTO_CART_LINK_SECRET", label: "Cart link secret", group: "Magento", secret: true, help: "Signs cart links. Shared with the Silk Magento module that opens them" },
+  { key: "MAGENTO_CART_LINK_PATH", label: "Cart link path", group: "Magento", placeholder: "/silk/cart/open", help: "Path the Silk Magento module serves cart links on" },
   // Workflow
   { key: "PO_AGENT_ENABLED", label: "Enabled", group: "Workflow", type: "bool" },
   { key: "PO_AGENT_MODE", label: "Mode", group: "Workflow", type: "select", options: ["auto", "review"], help: "auto: submit orders without human approval; review: hold every PO in a queue for staff sign-off" },

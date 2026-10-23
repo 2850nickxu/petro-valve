@@ -24,6 +24,12 @@ function detectPoNumber(text: string): string | null {
 }
 
 const SKU_RE = /\b([A-Z][A-Z0-9]*-[A-Z0-9-]+)\b/i;
+/** Brand-prefixed SKUs with a space and inch fractions: "VO 12111-1-1/2", "CR 147XU-2".
+ * Uppercase only, so prose like "ships in 3-5 days" never reads as a SKU. */
+const PREFIXED_SKU_RE = /\b([A-Z]{2} [A-Z]*\d[A-Z0-9]*(?:-[A-Z0-9]+(?:\/\d+)?)+)/;
+/** A part number that starts with a digit ("12111-1-1/2") — only right after an explicit
+ * SKU/item/part marker, so dates and ranges in prose aren't read as SKUs. */
+const MARKED_NUMERIC_SKU_RE = /\b(?:sku|item|part\s*(?:no\.?|number|#)?)\s*[:#]?\s*(\d[A-Z0-9]*(?:-[A-Z0-9]+(?:\/\d+)?)+)/i;
 const QTY_MARKED_RE = /\b(?:qty|quantity)[:\s]*([0-9]+)\b/i;
 const QTY_X_RE = /\b([0-9]+)\s*(?:x|×|units?|pcs?|ea)\b/i;
 const PRICE_RE = /\$\s*([0-9]+(?:\.[0-9]{1,2})?)/;
@@ -47,7 +53,7 @@ function inlineDescription(line: string, sku: string): string | null {
  * item's description — unless it's a PO number, payment wording or another SKU. */
 function describesNextLine(line: string): boolean {
   const t = line.trim();
-  if (!/[a-z]{3}/i.test(t) || SKU_RE.test(t)) return false;
+  if (!/[a-z]{3}/i.test(t) || SKU_RE.test(t) || PREFIXED_SKU_RE.test(t)) return false;
   if (detectPoNumber(t) || detectPaymentIntent(t) !== "unspecified") return false;
   return !/[:?]$/.test(t);
 }
@@ -56,15 +62,18 @@ function parseLine(line: string): PoLineItem | null {
   // Skip PO-number lines to avoid capturing the PO id as a SKU.
   if (/\bP\.?O\.?\s*(?:#|no\.?|number)/i.test(line) && !SKU_MARKER_RE.test(line)) return null;
 
-  const skuMatch = line.match(SKU_RE);
+  const skuMatch = line.match(PREFIXED_SKU_RE) ?? line.match(SKU_RE) ?? line.match(MARKED_NUMERIC_SKU_RE);
   if (!skuMatch) return null;
 
-  const qtyMatch = line.match(QTY_MARKED_RE) ?? line.match(QTY_X_RE);
+  // Quantity and price are read from the rest of the line: "CR 147XU-2 x 4" is 4, not the 2
+  // at the end of the SKU.
+  const rest = line.replace(skuMatch[1], " ");
+  const qtyMatch = rest.match(QTY_MARKED_RE) ?? rest.match(QTY_X_RE);
   const hasMarker = SKU_MARKER_RE.test(line);
   // Only count as a line item if there is an explicit quantity or a SKU/item marker.
   if (!qtyMatch && !hasMarker) return null;
 
-  const priceMatch = line.match(PRICE_RE);
+  const priceMatch = rest.match(PRICE_RE);
   const quantity = qtyMatch ? parseInt(qtyMatch[1], 10) : null;
   const statedUnitPrice = priceMatch ? Number(priceMatch[1]) : null;
 

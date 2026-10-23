@@ -45,12 +45,15 @@ export function AppShell({
   escalated,
   status,
   view,
+  catalog = false,
   children,
 }: {
   escalated: number;
   status: ShellStatus;
   /** Silk sees everything; the customer view drops Token usage. */
   view: AdminView;
+  /** Show the Catalog page (Magento deployments). */
+  catalog?: boolean;
   children: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -81,6 +84,7 @@ export function AppShell({
         },
         { id: "/staff/sessions", label: "Sessions", icon: "layers" },
         { id: "/staff/simulator", label: "Simulator", icon: "build" },
+        ...(catalog ? [{ id: "/staff/catalog", label: "Catalog", icon: "search" as const }] : []),
       ],
     },
     {

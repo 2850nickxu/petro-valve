@@ -36,6 +36,11 @@ export interface GuestCart {
   totals: GuestCartTotals;
   /** Lines whose cart price differs from the catalog price we read beforehand. */
   priceMismatches: Array<{ sku: string; catalogPrice: number; cartPrice: number }>;
+  /**
+   * Lines Magento accepted into the cart but left out of its totals (row total 0) — the store
+   * won't sell them right now (e.g. Epicor stock or availability), so checkout can't charge them.
+   */
+  excludedItems: Array<{ sku: string; qty: number }>;
 }
 
 export type PreflightReason = "not_found" | "not_purchasable" | "disabled" | "price_anomaly" | "bad_quantity";
@@ -158,7 +163,11 @@ export async function buildGuestCart(ctx: MagentoContext, lines: CartLine[]): Pr
     const priceMismatches = items
       .map((i) => ({ sku: i.sku, catalogPrice: catalog.get(i.sku.toUpperCase())?.price ?? NaN, cartPrice: i.price }))
       .filter((m) => Math.abs(m.catalogPrice - m.cartPrice) > 0.005);
-    return { maskedId, items, totals, priceMismatches };
+    const counted = new Map(totals.items.map((t) => [t.itemId, t.rowTotal]));
+    const excludedItems = items
+      .filter((i) => i.qty > 0 && !((counted.get(i.itemId) ?? 0) > 0))
+      .map((i) => ({ sku: i.sku, qty: i.qty }));
+    return { maskedId, items, totals, priceMismatches, excludedItems };
   } catch (err) {
     throw new GuestCartBuildError(maskedId, items, err);
   }

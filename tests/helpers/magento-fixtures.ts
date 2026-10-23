@@ -1,15 +1,18 @@
 // Fixtures for the read-only Magento layer: a throwaway context and mock-fetch routes that
 // answer the admin-token login, `sku in (...)` / `sku like` searches and configurable children.
 
+import type { MagentoContext } from "@/lib/magento/magento-context";
 import type { MockRequest, MockRoute } from "./mock-fetch";
 
-export const TEST_MAGENTO_CTX = {
+export const TEST_MAGENTO_CTX: MagentoContext = {
+  store: "production",
   baseUrl: "https://shop.example.com",
   username: "agent",
   password: "secret-pw",
 };
 
 export interface RawFixtureProduct {
+  id?: number;
   sku: string;
   name?: string;
   price: number;

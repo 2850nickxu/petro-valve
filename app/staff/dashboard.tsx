@@ -76,9 +76,21 @@ export async function Dashboard({ view }: { view: AdminView }) {
 
   const hasChannel = status.channelCreds.google || status.channelCreds.microsoft;
   const hasEscalation = status.escalation.email || status.escalation.slack;
-  const health = [
+  const magento = status.commerce.magento;
+  type HealthItem = { ok: boolean; warn?: boolean; name: string; detail: string; action: { label: string; href: string } };
+  const storeRow: HealthItem = magento
+    ? {
+        ok: magento.configured,
+        name: `Magento store (${magento.store})`,
+        detail: magento.baseUrl
+          ? `${magento.baseUrl.replace(/^https:\/\//, "")} · ${magento.guestCartWrites ? "guest-cart writes on" : "read-only"}`
+          : "not configured",
+        action: { label: "Connect", href: SETTINGS },
+      }
+    : { ok: active.source !== "none", name: "BigCommerce store", detail: active.storeHash ? `${active.storeHash} · token: ${active.source}` : "not configured", action: { label: "Connect", href: SETTINGS } };
+  const health: HealthItem[] = [
     { ok: status.enabled, warn: !status.enabled, name: "PO agent", detail: status.enabled ? "enabled" : "disabled", action: { label: "Enable", href: SETTINGS } },
-    { ok: active.source !== "none", name: "BigCommerce store", detail: active.storeHash ? `${active.storeHash} · token: ${active.source}` : "not configured", action: { label: "Connect", href: SETTINGS } },
+    storeRow,
     { ok: status.redis, name: "Redis (state)", detail: status.redis ? "connected" : "not configured", action: { label: "Set up", href: SETTINGS } },
     ...(canSeeAiModel(view)
       ? [{ ok: status.ai.configured, warn: !status.ai.configured, name: "AI model", detail: status.ai.model ?? "heuristic fallback", action: { label: "Add model", href: SETTINGS } }]
@@ -98,7 +110,10 @@ export async function Dashboard({ view }: { view: AdminView }) {
 
   return (
     <>
-      <PageHead title="Dashboard" sub={`Email → purchase-order agent for BigCommerce B2B Edition · ${monthLabel}`}>
+      <PageHead
+        title="Dashboard"
+        sub={`${magento ? "Email → quote agent for Magento" : "Email → purchase-order agent for BigCommerce B2B Edition"} · ${monthLabel}`}
+      >
         <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap" }}>
           <ViewToggle view={view} />
           <AutoRefresh />
@@ -115,7 +130,7 @@ export async function Dashboard({ view }: { view: AdminView }) {
       {firstRun && (
         <Banner kind="info" title="Finish setup to start processing POs">
           <ol style={{ margin: "6px 0 8px", paddingLeft: 18 }}>
-            <li>Connect your <strong>BigCommerce store</strong> and <strong>Redis</strong>.</li>
+            <li>Connect your <strong>{magento ? "Magento" : "BigCommerce"} store</strong> and <strong>Redis</strong>.</li>
             {canSeeAiModel(view) ? <li>Add an <strong>AI model</strong> — optional, a heuristic extractor works without one.</li> : null}
             <li>Connect your <strong>email channel</strong> (Gmail or Microsoft).</li>
             <li><strong>Enable</strong> the agent.</li>

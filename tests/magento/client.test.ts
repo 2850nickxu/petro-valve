@@ -33,10 +33,42 @@ describe("getMagentoContext", () => {
 
   it("reads env, trims the username and the trailing slash", () => {
     expect(getMagentoContext(env)).toEqual({
+      store: "production",
       baseUrl: "https://petrovalve.com",
       username: "agent",
       password: "pw",
       guestCartWrites: false,
+    });
+  });
+
+  describe("MAGENTO_STORE switch", () => {
+    const both = {
+      ...env,
+      MAGENTO_GUEST_CART_WRITES: "true",
+      MAGENTO_SANDBOX_BASE_URL: "https://petrovalve-test.epicorcommerce.com",
+    };
+
+    it("sandbox uses MAGENTO_SANDBOX_* and falls back to the production login", () => {
+      expect(getMagentoContext({ ...both, MAGENTO_STORE: "sandbox" })).toEqual({
+        store: "sandbox",
+        baseUrl: "https://petrovalve-test.epicorcommerce.com",
+        username: "agent",
+        password: "pw",
+        guestCartWrites: false,
+      });
+    });
+    it("a sandbox login of its own wins", () => {
+      const ctx = getMagentoContext({ ...both, MAGENTO_STORE: "Sandbox", MAGENTO_SANDBOX_ADMIN_USERNAME: "test-admin", MAGENTO_SANDBOX_ADMIN_PASSWORD: "tpw" });
+      expect([ctx.username, ctx.password]).toEqual(["test-admin", "tpw"]);
+    });
+    it("each store has its own write switch — neither inherits the other's", () => {
+      expect(getMagentoContext({ ...both, MAGENTO_STORE: "sandbox" }).guestCartWrites).toBe(false);
+      expect(getMagentoContext({ ...env, MAGENTO_SANDBOX_GUEST_CART_WRITES: "true" }).guestCartWrites).toBe(false);
+      expect(getMagentoContext({ ...both, MAGENTO_STORE: "sandbox", MAGENTO_SANDBOX_GUEST_CART_WRITES: "true" }).guestCartWrites).toBe(true);
+    });
+    it("anything but 'sandbox' means production; an unconfigured sandbox names its variables", () => {
+      expect(getMagentoContext({ ...both, MAGENTO_STORE: "staging" }).store).toBe("production");
+      expect(() => getMagentoContext({ ...env, MAGENTO_STORE: "sandbox" })).toThrow(/MAGENTO_SANDBOX_BASE_URL/);
     });
   });
   it("guest-cart writes are on only for an explicit MAGENTO_GUEST_CART_WRITES=true", () => {

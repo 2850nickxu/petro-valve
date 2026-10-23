@@ -34,6 +34,7 @@ export type OutcomeTone = "neutral" | "warning" | "danger";
 export const OUTCOME: Record<StepOutcome, { label: string; tone: OutcomeTone }> = {
   known_account: { label: "Known account", tone: "neutral" },
   unknown_sender: { label: "Unknown sender", tone: "warning" },
+  guest: { label: "Guest", tone: "neutral" },
   confidence_high: { label: "Confidence high", tone: "neutral" },
   confidence_medium: { label: "Confidence medium", tone: "warning" },
   confidence_low: { label: "Confidence low", tone: "danger" },

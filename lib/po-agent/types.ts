@@ -109,6 +109,13 @@ export interface ResolvedLine {
   note?: string;
   /** Why the buyer's description contradicts the product their SKU matched (validate). */
   descriptionConflict?: string;
+  /**
+   * How the SKU was matched when it wasn't exact (adapters with SKU normalization, e.g.
+   * Magento): "recommended" — one likely product, to confirm with the buyer (P4);
+   * "ambiguous" — several plausible products, listed in `candidates` (P5).
+   */
+  matchKind?: "recommended" | "ambiguous";
+  candidates?: Array<{ sku: string; name?: string; unitPrice?: number }>;
 }
 
 export interface Buyer {
@@ -148,7 +155,8 @@ export type PoSessionState =
 
 export interface PoResult {
   orderId?: number;
-  quoteId?: number;
+  /** BigCommerce quote id, or a Magento masked guest-cart id. */
+  quoteId?: number | string;
   quoteNumber?: string;
   checkoutUrl?: string;
   quoteUrl?: string;
@@ -182,6 +190,7 @@ export type DecisionStage =
 export type StepOutcome =
   | "known_account"
   | "unknown_sender"
+  | "guest"
   | "confidence_high"
   | "confidence_medium"
   | "confidence_low"
@@ -209,7 +218,7 @@ export interface StepSetting {
 /** A piece of evidence a step read. `value` is stored as read, so a later catalog change
  * doesn't alter the record. */
 export interface SourceRef {
-  system: "bigcommerce" | "email" | "settings";
+  system: "bigcommerce" | "magento" | "email" | "settings";
   type: "customer" | "company" | "product" | "price" | "message" | "attachment" | "setting" | "order" | "quote";
   /** Record id, session message id ("m2") or setting key. */
   id?: string;

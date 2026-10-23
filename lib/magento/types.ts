@@ -35,6 +35,8 @@ export const SAFE_ATTRIBUTES = [
 export type SafeAttribute = (typeof SAFE_ATTRIBUTES)[number];
 
 export interface MagentoProduct {
+  /** Magento entity id (0 if the response omitted it). */
+  id: number;
   sku: string;
   name: string;
   /** "simple" variants carry the price; "configurable" parents are priced 0 and not purchasable. */

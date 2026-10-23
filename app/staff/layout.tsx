@@ -28,7 +28,7 @@ export default async function StaffLayout({ children }: { children: ReactNode })
   };
 
   return (
-    <AppShell escalated={escalated} status={shellStatus} view={view}>
+    <AppShell escalated={escalated} status={shellStatus} view={view} catalog={status.commerce.platform === "magento"}>
       {children}
     </AppShell>
   );

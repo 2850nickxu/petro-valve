@@ -224,6 +224,17 @@ export function identifiedStep(idres: IdentifyResult, from: string): DecisionSte
   };
 }
 
+/** A store with no customer lookup yet (Magento, Phase 1): every sender is quoted as a guest. */
+export function guestIdentifiedStep(from: string, storeLabel: string): DecisionStep {
+  return {
+    event: "identified",
+    stage: "identify",
+    outcome: "guest",
+    summary: `Quoting ${from} as a guest: ${storeLabel} customer lookup isn't connected, and every buyer gets the same web pricing.`,
+    detail: { found: false, guest: true, email: from },
+  };
+}
+
 const PAYMENT_TEXT: Record<ExtractedPo["paymentIntent"], string> = {
   on_account: "pay on account",
   credit_card: "pay by card",
@@ -278,26 +289,50 @@ export function priceAnswerStep(kind: "review" | "accept"): DecisionStep {
 
 // ── Resolve / price / validate / decide ──────────────────────────────────────
 
-export type LineMatch = "exact_sku" | "parent_sku" | "not_found" | "no_sku" | "not_purchasable" | "not_in_assortment";
+export type LineMatch =
+  | "exact_sku"
+  | "recommended"
+  | "ambiguous"
+  | "parent_sku"
+  | "not_found"
+  | "no_sku"
+  | "not_purchasable"
+  | "not_in_assortment";
 
 export function lineMatch(r: ResolvedLine): LineMatch {
   if (!r.line.sku) return "no_sku";
+  if (r.matchKind === "ambiguous") return "ambiguous";
   if (r.productId == null) return "not_found";
   if (r.parentSku) return "parent_sku";
   if (r.blockedByAssortment) return "not_in_assortment";
   if (r.issues.includes("line_unresolved")) return "not_purchasable";
+  if (r.matchKind === "recommended") return "recommended";
   return "exact_sku";
 }
 
 const MATCH_TEXT: Record<LineMatch, string> = {
   exact_sku: "matched by exact SKU",
+  recommended: "likely match, to confirm with the buyer",
+  ambiguous: "several possible products",
   parent_sku: "parent SKU, version needed",
   not_found: "SKU not in the online catalog",
   no_sku: "no SKU given",
   not_purchasable: "product hidden or disabled",
   not_in_assortment: "not in the company's assortment",
 };
-const MATCH_ORDER: LineMatch[] = ["exact_sku", "parent_sku", "not_found", "no_sku", "not_purchasable", "not_in_assortment"];
+const MATCH_ORDER: LineMatch[] = [
+  "exact_sku",
+  "recommended",
+  "ambiguous",
+  "parent_sku",
+  "not_found",
+  "no_sku",
+  "not_purchasable",
+  "not_in_assortment",
+];
+
+/** Which store a catalog/price/quote source came from. */
+export type CommerceSystem = Extract<SourceRef["system"], "bigcommerce" | "magento">;
 
 /** How many searched SKUs are named before the rest are counted. */
 const SKU_NAMES = 5;
@@ -312,7 +347,7 @@ function searchedSentence(resolved: ResolvedLine[]): string | undefined {
   return `Searched the catalog for ${plural(skus.length, "SKU")}: ${joinAnd(rest ? [...named, `${rest} more`] : named)}.`;
 }
 
-export function resolvedStep(resolved: ResolvedLine[]): DecisionStep {
+export function resolvedStep(resolved: ResolvedLine[], system: CommerceSystem = "bigcommerce"): DecisionStep {
   const submittable = submittableLines(resolved).length;
   const total = resolved.length;
   const matches = resolved.map(lineMatch);
@@ -333,7 +368,7 @@ export function resolvedStep(resolved: ResolvedLine[]): DecisionStep {
     summary,
     sources: resolved.slice(0, LINE_CAP).flatMap((r): SourceRef[] =>
       r.productId != null
-        ? [{ system: "bigcommerce", type: "product", id: String(r.productId), label: `Product · ${r.matchedSku ?? r.line.sku}`, value: r.productName }]
+        ? [{ system, type: "product", id: String(r.productId), label: `Product · ${r.matchedSku ?? r.line.sku}`, value: r.productName }]
         : [],
     ),
     detail: {
@@ -365,6 +400,7 @@ export function pricedStep(
   readAt: string,
   /** Whose prices were read: "Bayou Fabrication LLC's account pricing", "guest pricing". */
   pricedFor?: string,
+  system: CommerceSystem = "bigcommerce",
 ): DecisionStep {
   const lines = resolved.slice(0, LINE_CAP).map((r, i) => ({ r, line: i + 1, sku: r.matchedSku ?? r.line.sku ?? undefined }));
   // A parent-SKU line has no single price yet: each version is priced instead.
@@ -415,7 +451,7 @@ export function pricedStep(
     summary: parts.length ? parts.join(" ") : "No matched lines to price.",
     sources: priced.flatMap((p): SourceRef[] =>
       p.store != null
-        ? [{ system: "bigcommerce", type: "price", id: `${p.productId}:${p.variantId ?? ""}`, label: `Store price · ${p.sku}`, value: p.store, readAt }]
+        ? [{ system, type: "price", id: `${p.productId}:${p.variantId ?? ""}`, label: `Store price · ${p.sku}`, value: p.store, readAt }]
         : [],
     ),
     detail: { tolerancePct: config.priceTolerancePct, readAt, lines: [...priced, ...parents].sort((a, b) => a.line - b.line) },
@@ -579,7 +615,7 @@ export function evaluationSteps(
 
 export type SubmitOutcome =
   | { kind: "order"; ok: true; orderId: number; grandTotal: number; statusWarning?: string }
-  | { kind: "quote"; ok: true; quoteId: number; quoteNumber?: string; checkoutUrl?: string }
+  | { kind: "quote"; ok: true; quoteId: number | string; quoteNumber?: string; checkoutUrl?: string; system?: CommerceSystem }
   | { kind: "order" | "quote"; ok: false; reason: string };
 
 export function submittedStep(res: SubmitOutcome): DecisionStep {
@@ -604,15 +640,32 @@ export function submittedStep(res: SubmitOutcome): DecisionStep {
       detail: { kind: "order", ok: true, orderId: res.orderId, grandTotal: res.grandTotal, ...(res.statusWarning ? { statusWarning: res.statusWarning } : {}) },
     };
   }
+  if (res.system === "magento") {
+    return {
+      event: "submitted",
+      stage: "decide",
+      outcome: "quote",
+      summary: `Created a Magento guest cart${res.checkoutUrl ? " and its signed cart link" : " (no cart link: the link secret isn't set)"}.`,
+      sources: [quoteSource(res)],
+      detail: { kind: "quote", ok: true, quoteId: res.quoteId, system: "magento" },
+    };
+  }
   const label = res.quoteNumber ?? String(res.quoteId);
   return {
     event: "submitted",
     stage: "decide",
     outcome: "quote",
     summary: `Created quote ${label}${res.checkoutUrl ? " with a checkout link" : ""}.`,
-    sources: [{ system: "bigcommerce", type: "quote", id: String(res.quoteId), label: `Quote ${label}` }],
+    sources: [quoteSource(res)],
     detail: { kind: "quote", ok: true, quoteId: res.quoteId, quoteNumber: res.quoteNumber },
   };
+}
+
+/** The quote (BigCommerce) or guest cart (Magento) a reply points at. */
+function quoteSource(q: { quoteId: number | string; quoteNumber?: string; system?: CommerceSystem }): SourceRef {
+  return q.system === "magento"
+    ? { system: "magento", type: "quote", id: String(q.quoteId), label: `Guest cart ${String(q.quoteId).slice(0, 8)}…` }
+    : { system: "bigcommerce", type: "quote", id: String(q.quoteId), label: `Quote ${q.quoteNumber ?? q.quoteId}` };
 }
 
 export function heldStep(
@@ -708,7 +761,7 @@ export function dismissedStep(actor: string | undefined): DecisionStep {
 export function forcedStep(
   actor: string | undefined,
   action: "force_order" | "force_quote",
-  result: { orderId?: number; quoteId?: number; quoteNumber?: string },
+  result: { orderId?: number; quoteId?: number | string; quoteNumber?: string },
 ): DecisionStep {
   const made =
     action === "force_order"
@@ -872,7 +925,7 @@ export interface DraftFacts {
   /** The questions a clarifying reply asks (clarify only). */
   questions: string[];
   hits: ScenarioHit[];
-  quote?: { quoteId: number; quoteNumber?: string };
+  quote?: { quoteId: number | string; quoteNumber?: string; system?: CommerceSystem };
   checkoutLink: boolean;
   availability: boolean;
   /** Decide-only run: the reply is a preview and nothing is sent. */
@@ -887,6 +940,8 @@ const QUESTION_TOPIC: Record<string, (line?: number) => string> = {
   Q8: (n) => `quantity on line ${n}`,
   QB: (n) => `order limits on line ${n}`,
   P15: () => "repeated SKU",
+  P4: (n) => `likely product on line ${n}`,
+  P5: (n) => `which product on line ${n}`,
   C11: () => "ship-to address",
   A10: () => "missing attachment",
 };
@@ -894,7 +949,11 @@ const QUESTION_TOPIC: Record<string, (line?: number) => string> = {
 /** The reply was written: what it says and where its figures came from. */
 export function draftedStep(f: DraftFacts): DecisionStep {
   const parts: string[] = [];
-  const quoteLabel = f.quote ? (f.quote.quoteNumber ?? String(f.quote.quoteId)) : undefined;
+  const quoteLabel = f.quote
+    ? f.quote.system === "magento"
+      ? "guest cart"
+      : (f.quote.quoteNumber ?? String(f.quote.quoteId))
+    : undefined;
   switch (f.kind) {
     case "quote":
       parts.push(
@@ -926,7 +985,7 @@ export function draftedStep(f: DraftFacts): DecisionStep {
     event: "drafted",
     stage: "draft",
     summary: parts.join(" "),
-    ...(f.quote ? { sources: [{ system: "bigcommerce", type: "quote", id: String(f.quote.quoteId), label: `Quote ${quoteLabel}` }] } : {}),
+    ...(f.quote ? { sources: [quoteSource(f.quote)] } : {}),
     detail: {
       kind: f.kind,
       pricedLines: f.pricedLines,

@@ -194,7 +194,7 @@ export interface RulesThreadState {
   humanOwned: boolean;
   lastAction?: RulesAction;
   /** The quote sent (or drafted) on this thread, so "looks good" can resend its link (T1). */
-  quote?: { quoteId: number; quoteNumber?: string; checkoutUrl?: string; quoteUrl?: string };
+  quote?: { quoteId: number | string; quoteNumber?: string; checkoutUrl?: string; quoteUrl?: string };
   /** The hold-every-reply toggle the conversation was run with. */
   reviewAll: boolean;
   /** Clarify scenarios the customer has answered (Q2, C11, P15), so they aren't asked again. */

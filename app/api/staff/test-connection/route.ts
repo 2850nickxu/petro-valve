@@ -8,6 +8,8 @@ import { resolveStoreContextForHash } from "@/lib/bc-app/resolve-context";
 import { currentAdminView, sessionStoreHash } from "@/lib/bc-app/request-context";
 import { canSeeAiModel } from "@/lib/po-agent/admin-view";
 import { bcFetch } from "@/lib/bc/bc-client";
+import { magentoGet } from "@/lib/magento/client";
+import { tryGetMagentoContext } from "@/lib/magento/magento-context";
 import { poModel } from "@/lib/po-agent/ai/registry";
 import { postSlack } from "@/lib/po-agent/escalate/slack";
 import { mintAccessToken, googleCredsFromEnv } from "@/lib/po-agent/channel/google-auth";
@@ -37,6 +39,15 @@ export async function POST(req: Request) {
         if (!ctx) return done(false, "No store hash/token configured.");
         const store = await bcFetch<{ name?: string; features?: unknown }>(ctx, "/v2/store");
         return done(true, `Connected to “${store.name ?? ctx.storeHash}”.`);
+      }
+      case "magento": {
+        // Read-only: one admin login and one GET.
+        const ctx = tryGetMagentoContext(env);
+        if (!ctx) return done(false, "Set the store URL, admin username and password.");
+        const views = await magentoGet<Array<{ code: string; name: string }>>(ctx, "/store/storeViews");
+        const store = views.find((v) => v.code === "default")?.name ?? ctx.baseUrl;
+        const writes = ctx.guestCartWrites ? "guest-cart writes on" : "read-only";
+        return done(true, `Connected to “${store}” on ${ctx.baseUrl.replace(/^https:\/\//, "")} (${ctx.store}, ${writes}).`);
       }
       case "ai": {
         if (!canSeeAiModel(await currentAdminView())) return NextResponse.json({ ok: false, detail: "Not available in this view." }, { status: 403 });

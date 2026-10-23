@@ -23,9 +23,19 @@ token as core BigCommerce — `BIGCOMMERCE_ACCESS_TOKEN`, sent as `X-Auth-Token`
 
 This is a standalone server-to-server app — there is **no buyer session**. Nothing in`lib/bc/*` reads `process.env.BIGCOMMERCE_*` directly; it all takes a `StoreContext`(`lib/bc/store-context.ts`). All B2B data is read via the Management API keyed by explicit `companyId`/`customerId`. Keep it that way — it's what makes the code mockable and what makes the future extraction into a per-store BigCommerce app (Phase B) turn-key.
 
+## One core, per-platform adapters (lib/commerce)
+
+The agent core is shared across clients; the commerce platform is configuration
+(`PO_AGENT_COMMERCE` = `bigcommerce` | `magento`), never a fork or a client branch. The
+Petro Valve rules flow (`lib/po-agent/rules/conversation.ts`) talks to the store only
+through a `CommerceAdapter` (`lib/commerce/types.ts`): `bigcommerce.ts` wraps `lib/bc`
+unchanged, `magento.ts` wraps `lib/magento`. Add a platform by adding an adapter, not by
+branching the core. Never strip BigCommerce code paths to make Magento work. The B2B order
+pipeline (`lib/po-agent/pipeline.ts`) is still BigCommerce-only.
+
 ## Magento (Petro Valve): production store, read-only except guest carts
 
-`lib/magento/*` talks to Petro Valve's **production** Magento 2 store. It may make exactly two writes — create a guest cart, add an item to it — through `magentoGuestCartPost()`, which is path-allow-listed and off unless `MAGENTO_GUEST_CART_WRITES=true`. Everything else is a GET (plus the admin-token login). Never touch customer carts (`/customers/{id}/carts`, `/carts/mine`), catalog, customers or orders, never PUT/DELETE, and never set an email on a guest cart (Amasty + HubSpot key on it) — `tests/magento/write-guard.test.ts` fails the build otherwise. Everything takes a `MagentoContext` (`lib/magento/magento-context.ts`), like `StoreContext` for BigCommerce. Product `cost` must never leave the layer: attributes pass through the `SAFE_ATTRIBUTES` allow-list in `lib/magento/types.ts`.
+`lib/magento/*` talks to Petro Valve's Magento 2 store — production by default, or the sandbox (test site) when `MAGENTO_STORE=sandbox`; test cart writes on the sandbox. Each store has its own guest-cart write switch. It may make exactly two writes — create a guest cart, add an item to it — through `magentoGuestCartPost()`, which is path-allow-listed and off unless `MAGENTO_GUEST_CART_WRITES=true`. Everything else is a GET (plus the admin-token login). Never touch customer carts (`/customers/{id}/carts`, `/carts/mine`), catalog, customers or orders, never PUT/DELETE, and never set an email on a guest cart (Amasty + HubSpot key on it) — `tests/magento/write-guard.test.ts` fails the build otherwise. Everything takes a `MagentoContext` (`lib/magento/magento-context.ts`), like `StoreContext` for BigCommerce. Product `cost` must never leave the layer: attributes pass through the `SAFE_ATTRIBUTES` allow-list in `lib/magento/types.ts`.
 
 ## UI — Backbone design system
 

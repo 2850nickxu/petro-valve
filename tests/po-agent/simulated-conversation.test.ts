@@ -6,6 +6,7 @@ import { resolveClassifier } from "@/lib/po-agent/rules/classify";
 import { SimulatorChannel } from "@/lib/po-agent/channel/simulator";
 import { resolveExtractor } from "@/lib/po-agent/ai/extractor";
 import { getPoAgentConfig } from "@/lib/po-agent/config";
+import { bigcommerceAdapter } from "@/lib/commerce/bigcommerce";
 import { createPoStore, type PoStore } from "@/lib/po-agent/store";
 import { createMockRedis } from "@/tests/helpers/mock-redis";
 import { installMockFetch, TEST_CTX } from "@/tests/helpers/mock-fetch";
@@ -31,9 +32,10 @@ function setup(opts: { reviewAll?: boolean; usersEmpty?: boolean; failQuote?: bo
   const channel = new SimulatorChannel();
   const store = createPoStore(createMockRedis());
   let tick = 0;
+  const config = getPoAgentConfig({});
   const deps: ConversationDeps = {
-    ctx: TEST_CTX,
-    config: getPoAgentConfig({}),
+    commerce: bigcommerceAdapter(TEST_CTX, config),
+    config,
     rules: getRulesConfig({}, { reviewAll: opts.reviewAll ?? false }),
     store,
     channel,

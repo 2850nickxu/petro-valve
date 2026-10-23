@@ -6,7 +6,7 @@ import { magentoGet, searchQuery } from "./client";
 import type { MagentoContext } from "./magento-context";
 import { PRICE_ANOMALY_MAX, SAFE_ATTRIBUTES, type MagentoProduct, type SafeAttribute } from "./types";
 
-const BASE_FIELDS = "sku,name,price,type_id,status,visibility";
+const BASE_FIELDS = "id,sku,name,price,type_id,status,visibility";
 const SAFE_SET = new Set<string>(SAFE_ATTRIBUTES);
 /** SKUs per `in` search — keeps the URL well under server limits. */
 const MAX_SKUS_PER_REQUEST = 50;
@@ -17,6 +17,7 @@ export interface LookupOptions {
 }
 
 interface RawProduct {
+  id?: number;
   sku: string;
   name?: string;
   price?: number;
@@ -33,11 +34,25 @@ interface RawSearch {
 
 const productFields = (opts: LookupOptions) => (opts.withAttributes ? `${BASE_FIELDS},custom_attributes` : BASE_FIELDS);
 
+/** Description attributes are page HTML (some carry embedded video): keep only the text. */
+const HTML_ATTRIBUTES = new Set<string>(["description", "short_description"]);
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", apos: "'", nbsp: " " };
+
+export function plainText(html: string): string {
+  return html
+    .replace(/<(script|style|iframe)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&(amp|lt|gt|quot|#39|apos|nbsp);/g, (_, e: string) => ENTITIES[e])
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Map a raw Magento product to the safe domain shape. Drops every non-allow-listed attribute. */
 export function toProduct(raw: RawProduct, opts: LookupOptions = {}): MagentoProduct {
   const typeId = raw.type_id ?? "simple";
   const price = Number(raw.price ?? 0);
   const product: MagentoProduct = {
+    id: raw.id ?? 0,
     sku: raw.sku,
     name: raw.name ?? raw.sku,
     typeId,
@@ -50,7 +65,8 @@ export function toProduct(raw: RawProduct, opts: LookupOptions = {}): MagentoPro
     const attributes: Partial<Record<SafeAttribute, string>> = {};
     for (const a of raw.custom_attributes ?? []) {
       if (SAFE_SET.has(a.attribute_code) && a.value != null) {
-        attributes[a.attribute_code as SafeAttribute] = Array.isArray(a.value) ? a.value.join(",") : String(a.value);
+        const value = Array.isArray(a.value) ? a.value.join(",") : String(a.value);
+        attributes[a.attribute_code as SafeAttribute] = HTML_ATTRIBUTES.has(a.attribute_code) ? plainText(value) : value;
       }
     }
     product.attributes = attributes;

@@ -1,20 +1,18 @@
-import type { StoreContext } from "@/lib/bc/store-context";
+import type { CommerceAdapter } from "@/lib/commerce/types";
 import type { PoAgentConfig } from "../config";
 import type { PoStore } from "../store";
 import { sessionId as makeSessionId } from "../store";
 import type { EmailChannel, Extractor, InboundMessage, ThreadRef } from "../channel/types";
-import { identify, type IdentifyResult } from "../core/identify";
-import { resolveChannel } from "../core/channel";
+import type { IdentifyResult } from "../core/identify";
 import { estimatedSubtotal } from "../core/price";
 import { submittableLines } from "../core/resolve";
-import { submitQuote } from "../core/submit-quote";
-import { evaluate, evaluateCatalog } from "../pipeline";
 import { capText, recordDraft, recordInbound, reSubject, sendRecordedReply } from "../messages";
 import {
   classifiedStep,
   draftedStep,
   errorStep,
   extractedStep,
+  guestIdentifiedStep,
   handoffStep,
   heldDraftStep,
   identifiedStep,
@@ -40,14 +38,18 @@ import type { Classification, DecisionRecord, ReplyKind, RulesAction, RulesOutco
 // question, a held draft, or nothing. An escalation sends nothing: it's handed to a sales
 // agent, who replies to the customer from the session.
 //
+// The store is whatever CommerceAdapter the deployment uses (lib/commerce): BigCommerce
+// quotes, or Magento guest carts with a signed cart link.
+//
 // "decide" mode stops at the answer: nothing is stored, no quote is created and the reply
 // is only a preview. "reply" mode is the full conversation: the session is saved (marked
-// simulated), a real quote is created in the connected test store (tagged as a sandbox
-// artifact), and every reply goes through the simulator channel — captured, never emailed.
-// Code drives every action; the model only classifies and extracts.
+// simulated), a real quote (or guest cart) is created in the connected store, tagged as a
+// sandbox artifact where the store allows, and every reply goes through the simulator
+// channel — captured, never emailed. Code drives every action; the model only classifies
+// and extracts.
 
 export interface ConversationDeps {
-  ctx: StoreContext;
+  commerce: CommerceAdapter;
   config: PoAgentConfig;
   rules: RulesConfig;
   /** Required in reply mode. In decide mode it's only used to record token usage — the
@@ -70,7 +72,7 @@ export interface TurnResult {
 const MAX_RECORDS = 50;
 
 /** Clarify scenarios a customer's answer resolves (see RulesInput.thread.answered). */
-const ANSWERABLE = ["Q2", "C11", "P15"];
+const ANSWERABLE = ["Q2", "C11", "P15", "P4"];
 
 const PURPOSE: Record<Exclude<ReplyKind, "none">, MessagePurpose> = {
   quote: "quote_confirmation",
@@ -207,13 +209,15 @@ export async function runSimulatedTurn(
   let resolved: ResolvedLine[] = [];
   let issues: ValidationIssue[] = [];
   let defaultShipTo: { line1?: string; zip?: string } | undefined;
-  let channelId = deps.ctx.channelId;
+  let channelId = 1;
+  const commerce = deps.commerce;
   if (!systemError) {
     try {
-      idres = await identify(deps.ctx, safe.from);
+      const who = await commerce.identify(safe.from, { mailbox: deps.mailbox });
+      idres = who.idres;
+      channelId = who.channelId;
       session.buyer = idres.buyer ?? undefined;
-      step(identifiedStep(idres, safe.from));
-      channelId = resolveChannel({ channelMap: deps.config.channelMap, fallbackChannelId: deps.ctx.channelId, mailbox: deps.mailbox, buyer: idres.buyer }).channelId;
+      step(commerce.identifiesCustomers ? identifiedStep(idres, safe.from) : guestIdentifiedStep(safe.from, commerce.label));
       session.channelId = channelId;
     } catch (err) {
       systemError = "store";
@@ -235,27 +239,18 @@ export async function runSimulatedTurn(
       step(errorStep("extract", err instanceof Error ? err.message : String(err)));
     }
   }
-  if (!systemError && extracted) {
+  if (!systemError && extracted && idres) {
     try {
-      if (idres?.buyer) {
-        const ev = await evaluate(
-          { ctx: deps.ctx, config: deps.config },
-          { idres, channelId, channelAmbiguous: false, channelAccessDenied: false, extracted, clarificationRounds: 0 },
-        );
-        resolved = ev.resolved;
-        issues = ev.issues;
-        defaultShipTo = ev.defaultShipTo;
-      } else {
-        resolved = await evaluateCatalog({ ctx: deps.ctx, config: deps.config }, { extracted, channelId });
-      }
+      const ev = await commerce.evaluate(extracted, { idres, channelId });
+      resolved = ev.resolved;
+      issues = ev.issues;
+      defaultShipTo = ev.defaultShipTo;
       session.resolution = resolved;
       session.validation = issues;
       // The catalog and price lookups, so the trail shows what was searched and what came back.
       if (extracted.lines.length) {
-        const buyer = idres?.buyer;
-        const pricedFor = buyer ? `${buyer.companyName || `company #${buyer.companyId}`}'s account pricing` : "guest pricing";
-        step(resolvedStep(resolved));
-        step(pricedStep(resolved, deps.config, now(), pricedFor));
+        step(resolvedStep(resolved, commerce.platform));
+        step(pricedStep(resolved, deps.config, now(), ev.pricedFor, commerce.platform));
       }
     } catch (err) {
       systemError = "store";
@@ -298,25 +293,26 @@ export async function runSimulatedTurn(
   let checkoutUrl: string | undefined;
   let quoteNumber: string | undefined;
   /** The quote the reply is about: created on this turn, or the one a resend points at. */
-  let replyQuote: { quoteId: number; quoteNumber?: string } | undefined;
+  let replyQuote: { quoteId: number | string; quoteNumber?: string; system: CommerceAdapter["platform"] } | undefined;
   const wantsQuote = (outcome.action === "AUTO_RESPOND" || outcome.action === "HOLD") && outcome.replyKind === "quote";
-  if (wantsQuote && reply) {
-    const res = await submitQuote(deps.ctx, {
-      buyer: idres?.buyer ?? undefined,
-      guest: idres?.buyer ? undefined : { email: safe.from },
-      channelId,
-      resolvedLines: resolved,
-      poNumber: extracted?.poNumber ?? undefined,
-      expiryDays: deps.rules.quoteExpiryDays,
-      sandbox: true,
-    }).catch((err: unknown) => ({ ok: false as const, reason: err instanceof Error ? err.message : String(err) }));
+  if (wantsQuote && reply && idres) {
+    const res = await commerce
+      .createQuote({
+        who: { idres, channelId },
+        email: safe.from,
+        resolved,
+        poNumber: extracted?.poNumber ?? undefined,
+        expiryDays: deps.rules.quoteExpiryDays,
+        sandbox: true,
+      })
+      .catch((err: unknown) => ({ ok: false as const, reason: err instanceof Error ? err.message : String(err) }));
     if (res.ok) {
-      step(submittedStep({ kind: "quote", ok: true, quoteId: res.quoteId, quoteNumber: res.quoteNumber, checkoutUrl: res.checkoutUrl }));
+      step(submittedStep({ kind: "quote", ok: true, quoteId: res.quoteId, quoteNumber: res.quoteNumber, checkoutUrl: res.checkoutUrl, system: commerce.platform }));
       rules.quote = { quoteId: res.quoteId, quoteNumber: res.quoteNumber, checkoutUrl: res.checkoutUrl, quoteUrl: res.quoteUrl };
       session.result = { quoteId: res.quoteId, quoteNumber: res.quoteNumber, checkoutUrl: res.checkoutUrl, quoteUrl: res.quoteUrl };
       checkoutUrl = res.checkoutUrl;
       quoteNumber = res.quoteNumber;
-      replyQuote = { quoteId: res.quoteId, quoteNumber: res.quoteNumber };
+      replyQuote = { quoteId: res.quoteId, quoteNumber: res.quoteNumber, system: commerce.platform };
     } else {
       // T14: never send a quote the store didn't create.
       step(submittedStep({ kind: "quote", ok: false, reason: res.reason }));
@@ -326,7 +322,7 @@ export async function runSimulatedTurn(
   } else if (outcome.replyKind === "resend_link") {
     checkoutUrl = rules.quote?.checkoutUrl;
     quoteNumber = rules.quote?.quoteNumber;
-    replyQuote = rules.quote ? { quoteId: rules.quote.quoteId, quoteNumber: rules.quote.quoteNumber } : undefined;
+    replyQuote = rules.quote ? { quoteId: rules.quote.quoteId, quoteNumber: rules.quote.quoteNumber, system: commerce.platform } : undefined;
   }
 
   // The reply.

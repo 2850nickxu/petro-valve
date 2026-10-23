@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { clearMagentoTokens } from "@/lib/magento/client";
-import { getProductBySku, getProductsBySkus, searchProductsBySkuLike } from "@/lib/magento/catalog";
+import { getProductBySku, getProductsBySkus, plainText, searchProductsBySkuLike } from "@/lib/magento/catalog";
 import { resolveSkus } from "@/lib/magento/sku-resolver";
 import { installMockFetch } from "@/tests/helpers/mock-fetch";
 import { catalogRoutes, TEST_MAGENTO_CTX, type RawFixtureProduct } from "@/tests/helpers/magento-fixtures";
@@ -45,6 +45,7 @@ describe("getProductsBySkus", () => {
     const found = await getProductsBySkus(TEST_MAGENTO_CTX, ["VO 12111-1", "VO 12111-1-1/2", "NOPE 1"]);
     expect([...found.keys()]).toEqual(["VO 12111-1", "VO 12111-1-1/2"]);
     expect(found.get("VO 12111-1")).toEqual({
+      id: 0,
       sku: "VO 12111-1",
       name: "VO 12111-1",
       typeId: "simple",
@@ -54,7 +55,7 @@ describe("getProductsBySkus", () => {
       priceAnomaly: false,
     });
     const fields = new URL(mock.callsTo("/rest/V1/products?")[0].url).searchParams.get("fields");
-    expect(fields).toBe("items[sku,name,price,type_id,status,visibility],total_count");
+    expect(fields).toBe("items[id,sku,name,price,type_id,status,visibility],total_count");
   });
 
   it("withAttributes keeps allow-listed attributes and drops cost and everything else", async () => {
@@ -79,6 +80,14 @@ describe("getProductsBySkus", () => {
     expect(mock.calls.filter((c) => c.method !== "GET").map((c) => c.url)).toEqual([
       "https://shop.example.com/rest/V1/integration/admin/token",
     ]);
+  });
+});
+
+describe("plainText", () => {
+  it("strips page HTML and embedded video from description attributes", () => {
+    expect(
+      plainText('<p>GATE 800# A105 THD BB OS&amp;Y</p>\n<p><iframe width="400" src="https://www.youtube.com/embed/x"></iframe></p>'),
+    ).toBe("GATE 800# A105 THD BB OS&Y");
   });
 });
 

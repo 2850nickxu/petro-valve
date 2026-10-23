@@ -228,6 +228,11 @@ export function decideByRules(input: RulesInput, cfg: RulesConfig): RulesOutcome
         notSellable++;
         return;
       }
+      if (r.matchKind === "ambiguous") {
+        // Several brands carry the number the customer gave: ask which one (P5).
+        add("P5", n);
+        return;
+      }
       if (r.productId == null || k.includes("line_blocked_by_assortment")) {
         add("P2", n);
         notSellable++;
@@ -242,6 +247,8 @@ export function decideByRules(input: RulesInput, cfg: RulesConfig): RulesOutcome
         add("P14", n);
         return;
       }
+      // A likely match the SKU didn't name exactly: offer it as a recommendation to confirm (P4).
+      if (r.matchKind === "recommended") add("P4", n);
       if (k.includes("line_sku_description_conflict")) add("P7", n);
       if (k.includes("line_unpriced")) add("Q5", n);
       if (k.includes("line_inventory_short")) add("P9", n);

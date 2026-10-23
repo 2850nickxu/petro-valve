@@ -92,6 +92,31 @@ const PRESETS: Preset[] = [
   },
 ];
 
+// The same rows against the Magento catalog (real Petro Valve SKUs; the sender is fictional).
+const MAGENTO_FROM = "purchasing@gulfcoast-fab.com";
+const MAGENTO_PRESETS: Preset[] = [
+  {
+    id: "I1",
+    label: "Quote request",
+    from: MAGENTO_FROM,
+    subject: "Quote request",
+    body: "Hello,\n\nPlease quote the following:\n\nSKU: VO 12111-1 Qty: 2\nSKU: VO 12111-1-1/2 Qty: 1\n\nThanks",
+  },
+  { id: "P4", label: "No brand prefix", from: MAGENTO_FROM, subject: "Pricing", body: "Could you send pricing for:\n\nPart #: 12111-1 Qty: 4" },
+  { id: "Q5", label: "Placeholder price", from: MAGENTO_FROM, subject: "Quote request", body: "Please quote:\n\nSKU: VO 12111-3 Qty: 1" },
+  { id: "P2", label: "Not in catalog", from: MAGENTO_FROM, subject: "Quote request", body: "Please quote:\n\nSKU: VO 99999-9 Qty: 1" },
+  { id: "Q7", label: "Unusual quantity", from: MAGENTO_FROM, subject: "Quote request", body: "Please quote:\n\nSKU: VO 12111-1 Qty: 25000" },
+  { id: "Q4", label: "Discount ask", from: MAGENTO_FROM, subject: "Quote request", body: "Can you do better on price for 50?\n\nSKU: VO 12111-1 Qty: 50" },
+  { id: "Q8", label: "Missing quantity", from: MAGENTO_FROM, subject: "Price check", body: "What's your price on SKU: VO 12111-1-1/2?" },
+  {
+    id: "I14",
+    label: "Vendor spam",
+    from: "sales@valve-supplier-example.com",
+    subject: "Our new price list",
+    body: "We are a leading supplier of industrial valves. Our latest price list is attached. Unsubscribe anytime.",
+  },
+];
+
 /** Follow-ups that exercise the thread rules (T1–T4, T8, T10). */
 const FOLLOW_UPS = [
   { label: "Accept", body: "Looks good, go ahead." },
@@ -130,15 +155,33 @@ interface TurnResponse {
 
 // Takes the store hash, not prebuilt links: AdminLinks holds functions, which can't cross
 // from the server page into this client component.
-export function ConversationSimulator({ storeHash, modelConfigured }: { storeHash?: string; modelConfigured: boolean }) {
+export function ConversationSimulator({
+  storeHash,
+  modelConfigured,
+  platform = "bigcommerce",
+  guestCartWrites = false,
+  magentoStore = "production",
+}: {
+  storeHash?: string;
+  modelConfigured: boolean;
+  /** The deployment's commerce platform: picks the presets and the copy. */
+  platform?: "bigcommerce" | "magento";
+  /** Magento: whether a quote reply can create a guest cart. */
+  guestCartWrites?: boolean;
+  /** Magento: the active store (MAGENTO_STORE). */
+  magentoStore?: "production" | "sandbox";
+}) {
   const toast = useToast();
-  const links = useMemo(() => adminLinks(storeHash), [storeHash]);
+  const magento = platform === "magento";
+  const presets = magento ? MAGENTO_PRESETS : PRESETS;
+  // BigCommerce admin links; Magento sources are shown without links.
+  const links = useMemo(() => (magento ? null : adminLinks(storeHash)), [magento, storeHash]);
   const [mode, setMode] = useState<Mode>("reply");
   const [reviewAll, setReviewAll] = useState(false);
-  const [preset, setPreset] = useState<string>(PRESETS[0].id);
-  const [from, setFrom] = useState(PRESETS[0].from);
-  const [subject, setSubject] = useState(PRESETS[0].subject);
-  const [body, setBody] = useState(PRESETS[0].body);
+  const [preset, setPreset] = useState<string>(presets[0].id);
+  const [from, setFrom] = useState(presets[0].from);
+  const [subject, setSubject] = useState(presets[0].subject);
+  const [body, setBody] = useState(presets[0].body);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The ongoing conversation (reply mode) or the last decide-only run.
@@ -162,7 +205,7 @@ export function ConversationSimulator({ storeHash, modelConfigured }: { storeHas
   function startOver() {
     setSession(null);
     setError(null);
-    pick(PRESETS.find((p) => p.id === preset) ?? PRESETS[0]);
+    pick(presets.find((p) => p.id === preset) ?? presets[0]);
   }
 
   async function send() {
@@ -220,9 +263,13 @@ export function ConversationSimulator({ storeHash, modelConfigured }: { storeHas
           style={{ alignSelf: "flex-start" }}
         />
         <span style={caption}>
-          {mode === "reply"
-            ? "The agent answers like it would by email. Replies are captured here, never emailed. A quote reply creates a real quote in the connected test store, tagged “[PO agent sandbox]”."
-            : "The agent decides and shows the reply it would send. Nothing is stored and nothing is created in the store."}
+          {mode === "decide"
+            ? "The agent decides and shows the reply it would send. Nothing is stored and nothing is created in the store."
+            : !magento
+              ? "The agent answers like it would by email. Replies are captured here, never emailed. A quote reply creates a real quote in the connected test store, tagged “[PO agent sandbox]”."
+              : guestCartWrites
+                ? `The agent answers like it would by email. Replies are captured here, never emailed. A quote reply creates a real guest cart on the Magento ${magentoStore === "sandbox" ? "sandbox" : "production store"}, with no email or customer on it.`
+                : `The agent answers like it would by email. Replies are captured here, never emailed. Guest-cart writes are off for the ${magentoStore} store, so a request it would quote goes to a person instead.`}
         </span>
         <Checkbox
           checked={reviewAll}
@@ -234,7 +281,7 @@ export function ConversationSimulator({ storeHash, modelConfigured }: { storeHas
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
             <span style={sectionLabel}>Start from a scenario</span>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {PRESETS.map((p) => (
+              {presets.map((p) => (
                 <Button key={p.id} size="micro" variant={preset === p.id ? "primary" : "secondary"} onClick={() => pick(p)}>
                   {p.id} · {p.label}
                 </Button>

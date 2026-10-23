@@ -7,6 +7,7 @@ import { listStoreInstalls } from "@/lib/bc-app/store-tokens";
 import { effectiveEnv } from "@/lib/po-agent/effective-env";
 import { getPoAgentConfig } from "@/lib/po-agent/config";
 import { adminStatus } from "@/lib/po-agent/admin-status";
+import { magentoStore } from "@/lib/magento/magento-context";
 import { activeStoreSource } from "@/lib/bc-app/request-context";
 import { SettingsForm, type SettingsDefaults, type SettingsHealth } from "@/components/settings-form";
 import { PageHead } from "../ui";
@@ -43,6 +44,11 @@ export default async function SettingsPage() {
     priceTolerancePct: config.priceTolerancePct,
     maxClarifications: config.maxClarifications,
     channel: config.channel === "microsoft" ? "microsoft" : "google",
+    commerce: config.commerce,
+    magentoStore: magentoStore(env),
+    // Each store's own switch, read straight from the effective env.
+    guestCartWrites: env.MAGENTO_GUEST_CART_WRITES?.trim().toLowerCase() === "true",
+    sandboxGuestCartWrites: env.MAGENTO_SANDBOX_GUEST_CART_WRITES?.trim().toLowerCase() === "true",
   };
 
   const health: SettingsHealth = {
@@ -50,7 +56,7 @@ export default async function SettingsPage() {
     ai: status.ai.configured,
     channel: status.channelCreds.google || status.channelCreds.microsoft,
     escalation: status.escalation.email || status.escalation.slack,
-    store: active.source !== "none",
+    store: config.commerce === "magento" ? Boolean(status.commerce.magento?.configured) : active.source !== "none",
   };
 
   return (

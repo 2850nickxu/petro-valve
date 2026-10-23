@@ -113,6 +113,21 @@ export function clarifyQuestions(ctx: ReplyContext): string[] {
         out.push(`${lineRef(r, h.line!)}: this item is sold in quantities of ${limits}. How many would you like?`);
         break;
       }
+      case "P4":
+        if (r.matchedSku) {
+          const name = r.productName && r.productName !== r.matchedSku ? ` (${r.productName})` : "";
+          out.push(
+            `Line ${h.line} (${r.line.sku}): we didn't find that part number exactly. Our closest match is ${r.matchedSku}${name}${calc != null ? ` at ${money(calc)} each` : ""}. Please confirm that's the item you need.`,
+          );
+        }
+        break;
+      case "P5": {
+        const options = (r.candidates ?? []).map((c) => `${c.sku}${c.unitPrice != null && c.unitPrice > 0.01 ? ` (${money(c.unitPrice)} each)` : ""}`);
+        if (options.length) {
+          out.push(`Line ${h.line} (${r.line.sku}): this part number matches several products: ${options.join(", ")}. Which one do you need?`);
+        }
+        break;
+      }
       case "P15": {
         const sku = (r.matchedSku ?? r.line.sku ?? "").toUpperCase();
         const lines = ctx.resolved.flatMap((x, i) => ((x.matchedSku ?? x.line.sku ?? "").toUpperCase() === sku ? [i + 1] : []));
