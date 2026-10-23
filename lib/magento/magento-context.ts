@@ -1,7 +1,8 @@
 // MagentoContext — the Magento counterpart of StoreContext (lib/bc/store-context.ts).
 // Everything in lib/magento takes a MagentoContext; nothing else reads process.env.MAGENTO_*.
-// Phase 1 (Petro Valve) points at the PRODUCTION store, which is READ-ONLY for this app:
-// the client in ./client.ts can only issue GETs (plus the admin-token login).
+// Phase 1 (Petro Valve) points at the PRODUCTION store. The client in ./client.ts issues GETs,
+// the admin-token login, and — only when `guestCartWrites` is on — two guest-cart writes
+// (create a guest cart, add an item to it). Nothing else may write to the store.
 
 export interface MagentoContext {
   /** Store origin, e.g. https://petrovalve.com (REST lives under /rest/V1). */
@@ -9,6 +10,8 @@ export interface MagentoContext {
   /** Admin user for POST /V1/integration/admin/token (bearer token, ~4h lifetime). */
   username: string;
   password: string;
+  /** MAGENTO_GUEST_CART_WRITES=true. Off by default: guest-cart writes throw without it. */
+  guestCartWrites?: boolean;
 }
 
 /**
@@ -27,7 +30,12 @@ export function getMagentoContext(env: Record<string, string | undefined> = proc
   if (!/^https:\/\//i.test(baseUrl)) {
     throw new Error("MAGENTO_BASE_URL must be an https:// origin.");
   }
-  return { baseUrl: baseUrl.replace(/\/+$/, ""), username, password };
+  return {
+    baseUrl: baseUrl.replace(/\/+$/, ""),
+    username,
+    password,
+    guestCartWrites: env.MAGENTO_GUEST_CART_WRITES?.trim().toLowerCase() === "true",
+  };
 }
 
 /** Non-throwing variant: returns null when the store context is not configured. */

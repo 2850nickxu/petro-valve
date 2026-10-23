@@ -23,9 +23,9 @@ token as core BigCommerce — `BIGCOMMERCE_ACCESS_TOKEN`, sent as `X-Auth-Token`
 
 This is a standalone server-to-server app — there is **no buyer session**. Nothing in`lib/bc/*` reads `process.env.BIGCOMMERCE_*` directly; it all takes a `StoreContext`(`lib/bc/store-context.ts`). All B2B data is read via the Management API keyed by explicit `companyId`/`customerId`. Keep it that way — it's what makes the code mockable and what makes the future extraction into a per-store BigCommerce app (Phase B) turn-key.
 
-## Magento (Petro Valve): production store, READ-ONLY
+## Magento (Petro Valve): production store, read-only except guest carts
 
-`lib/magento/*` talks to Petro Valve's **production** Magento 2 store and must never modify or delete anything there. The client exposes only `magentoGet()`; the single non-GET is the admin-token login. Do not add POST/PUT/DELETE calls (guest carts included) — `tests/magento/read-only.test.ts` fails the build if you do. Everything takes a `MagentoContext` (`lib/magento/magento-context.ts`), like `StoreContext` for BigCommerce. Product `cost` must never leave the layer: attributes pass through the `SAFE_ATTRIBUTES` allow-list in `lib/magento/types.ts`.
+`lib/magento/*` talks to Petro Valve's **production** Magento 2 store. It may make exactly two writes — create a guest cart, add an item to it — through `magentoGuestCartPost()`, which is path-allow-listed and off unless `MAGENTO_GUEST_CART_WRITES=true`. Everything else is a GET (plus the admin-token login). Never touch customer carts (`/customers/{id}/carts`, `/carts/mine`), catalog, customers or orders, never PUT/DELETE, and never set an email on a guest cart (Amasty + HubSpot key on it) — `tests/magento/write-guard.test.ts` fails the build otherwise. Everything takes a `MagentoContext` (`lib/magento/magento-context.ts`), like `StoreContext` for BigCommerce. Product `cost` must never leave the layer: attributes pass through the `SAFE_ATTRIBUTES` allow-list in `lib/magento/types.ts`.
 
 ## UI — Backbone design system
 

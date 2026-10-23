@@ -41,8 +41,10 @@ documented). The `.vercelignore` already excludes `.env*` from deploys.
   (the single store token with **B2B Edition = modify**; there is no separate
   `B2B_*` token), `BIGCOMMERCE_CHANNEL_ID`.
 - **Magento store context** (Petro Valve) — `MAGENTO_BASE_URL`, `MAGENTO_ADMIN_USERNAME`,
-  `MAGENTO_ADMIN_PASSWORD`, read only through `lib/magento/magento-context.ts`. The store is
-  **read-only** for this app (GETs plus the admin-token login).
+  `MAGENTO_ADMIN_PASSWORD`, `MAGENTO_GUEST_CART_WRITES`, read only through
+  `lib/magento/magento-context.ts`. The store is **read-only** for this app except two
+  guest-cart writes (create cart, add item), which stay off unless
+  `MAGENTO_GUEST_CART_WRITES=true`.
 - **PO agent core** — `PO_AGENT_ENABLED` / `PO_AGENT_MODE` / `PO_AGENT_CHANNEL`.
 - **AI provider (BYO)** — `PO_AGENT_MODEL` + the matching provider key
   (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` / Azure).

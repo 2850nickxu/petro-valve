@@ -32,7 +32,16 @@ describe("getMagentoContext", () => {
   const env = { MAGENTO_BASE_URL: "https://petrovalve.com/", MAGENTO_ADMIN_USERNAME: " agent ", MAGENTO_ADMIN_PASSWORD: "pw" };
 
   it("reads env, trims the username and the trailing slash", () => {
-    expect(getMagentoContext(env)).toEqual({ baseUrl: "https://petrovalve.com", username: "agent", password: "pw" });
+    expect(getMagentoContext(env)).toEqual({
+      baseUrl: "https://petrovalve.com",
+      username: "agent",
+      password: "pw",
+      guestCartWrites: false,
+    });
+  });
+  it("guest-cart writes are on only for an explicit MAGENTO_GUEST_CART_WRITES=true", () => {
+    expect(getMagentoContext({ ...env, MAGENTO_GUEST_CART_WRITES: "true" }).guestCartWrites).toBe(true);
+    expect(getMagentoContext({ ...env, MAGENTO_GUEST_CART_WRITES: "1" }).guestCartWrites).toBe(false);
   });
   it("throws when anything is missing; the try-variant returns null", () => {
     expect(() => getMagentoContext({ ...env, MAGENTO_ADMIN_PASSWORD: "" })).toThrow(/not configured/);

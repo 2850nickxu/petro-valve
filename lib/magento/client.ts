@@ -1,7 +1,11 @@
-// Magento 2 REST client — READ-ONLY by construction. The only exported request function is
-// magentoGet(); the single non-GET in this module is the admin-token login, which writes no
-// catalog/customer/order data. Do not add a POST/PUT/DELETE helper here: the production store
-// is read-only for this app (tests/magento/read-only.test.ts enforces it).
+// Magento 2 REST client — read-only except for guest carts. Requests go out three ways:
+//   • magentoGet()            admin-authenticated GETs (catalog, store config)
+//   • magentoGuestCartPost()  the ONLY writes: create a guest cart, add an item to one —
+//                             path-allow-listed below and off unless ctx.guestCartWrites
+//   • magentoGuestCartGet()   anonymous GETs of a guest cart (e.g. totals)
+// plus the admin-token login. Customer carts, catalog, orders, PUT and DELETE are never sent
+// (tests/magento/write-guard.test.ts enforces it). Guest-cart calls are anonymous in Magento,
+// so they carry no admin token.
 //
 // Auth: POST /V1/integration/admin/token → bearer token (~4h by default). Tokens are cached
 // per store+user and shared across concurrent callers, because each login is a round trip,
@@ -98,6 +102,50 @@ export async function magentoGet<T>(ctx: MagentoContext, path: string): Promise<
     }
     return (await res.json()) as T;
   }
+}
+
+// ── Guest carts — the only writes ────────────────────────────────────────────
+
+/** Magento's masked guest-cart id (32 alphanumerics in practice). */
+export const MASKED_CART_ID_RE = /^[A-Za-z0-9]{16,64}$/;
+const ID = MASKED_CART_ID_RE.source.slice(1, -1);
+
+/** Every write this app may send to Magento. Nothing else — not even other guest-cart routes. */
+export const GUEST_CART_WRITE_PATHS: readonly RegExp[] = [
+  /^\/guest-carts$/, // create an empty guest cart → masked id
+  new RegExp(`^/guest-carts/${ID}/items$`), // add one item to that cart
+];
+const GUEST_CART_READ_PATH = new RegExp(`^/guest-carts/${ID}(/(items|totals))?$`);
+
+async function guestCartRequest<T>(ctx: MagentoContext, method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+  const res = await fetch(restUrl(ctx, path), {
+    method,
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new MagentoApiError(res.status, path, text);
+  }
+  return (await res.json()) as T;
+}
+
+/** POST to one of GUEST_CART_WRITE_PATHS. Throws unless ctx.guestCartWrites is on. */
+export async function magentoGuestCartPost<T>(ctx: MagentoContext, path: string, body?: unknown): Promise<T> {
+  if (!ctx.guestCartWrites) {
+    throw new Error("Magento guest-cart writes are disabled (set MAGENTO_GUEST_CART_WRITES=true).");
+  }
+  if (!GUEST_CART_WRITE_PATHS.some((re) => re.test(path))) {
+    throw new Error(`magentoGuestCartPost: "${path}" is not an allowed guest-cart write.`);
+  }
+  return guestCartRequest<T>(ctx, "POST", path, body);
+}
+
+/** Anonymous GET of a guest cart, its items or its totals. */
+export async function magentoGuestCartGet<T>(ctx: MagentoContext, path: string): Promise<T> {
+  if (!GUEST_CART_READ_PATH.test(path)) throw new Error(`magentoGuestCartGet: "${path}" is not a guest-cart read.`);
+  return guestCartRequest<T>(ctx, "GET", path);
 }
 
 // ── searchCriteria query builder ─────────────────────────────────────────────
