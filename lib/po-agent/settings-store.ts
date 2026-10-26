@@ -57,7 +57,7 @@ export const SETTINGS_FIELDS: FieldDef[] = [
   { key: "MAGENTO_SANDBOX_ADMIN_PASSWORD", label: "Sandbox admin password", group: "Magento", secret: true, help: "Leave empty to use the production admin password" },
   { key: "MAGENTO_SANDBOX_GUEST_CART_WRITES", label: "Allow guest-cart writes on the sandbox", group: "Magento", type: "bool", help: "Same as above, for the sandbox only. Production keeps its own switch." },
   { key: "MAGENTO_CART_LINK_SECRET", label: "Cart link secret", group: "Magento", secret: true, help: "Signs cart links. Shared with the Silk Magento module that opens them" },
-  { key: "MAGENTO_CART_LINK_PATH", label: "Cart link path", group: "Magento", placeholder: "/silk/cart/open", help: "Path the Silk Magento module serves cart links on" },
+  { key: "MAGENTO_CART_LINK_PATH", label: "Cart link path", group: "Magento", placeholder: "/silkcartlink/cart/open", help: "Path the Silk Magento module serves cart links on" },
   // Workflow
   { key: "PO_AGENT_ENABLED", label: "Enabled", group: "Workflow", type: "bool" },
   { key: "PO_AGENT_MODE", label: "Mode", group: "Workflow", type: "select", options: ["auto", "review"], help: "auto: submit orders without human approval; review: hold every PO in a queue for staff sign-off" },

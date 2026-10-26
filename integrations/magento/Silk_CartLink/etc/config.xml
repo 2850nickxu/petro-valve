@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!-- Off until an admin enables it and pastes the shared secret (Stores > Configuration > Silk > Cart links). -->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
+    <default>
+        <silk_cartlink>
+            <general>
+                <enabled>0</enabled>
+                <secret backend_model="Magento\Config\Model\Config\Backend\Encrypted"/>
+            </general>
+        </silk_cartlink>
+    </default>
+</config>

@@ -34,6 +34,15 @@ describe("signCartLink / verifyCartLink", () => {
     expect(verifyCartLink(cfg, link, NOW)).toBe(CART);
   });
 
+  it("matches the Magento module's test vector (integrations/magento/Silk_CartLink)", () => {
+    // Same vector as Model/Signature.php and the module README: both sides must produce it.
+    const vector = cartLinkConfig({ MAGENTO_CART_LINK_SECRET: "test-secret-do-not-use" }, "https://petrovalve.com")!;
+    const link = new URL(signCartLink({ ...vector, ttlDays: 1 }, CART, (1_790_000_000 - 86_400) * 1000));
+    expect(link.searchParams.get("exp")).toBe("1790000000");
+    expect(link.searchParams.get("sig")).toBe("o1Q0perHalq1gPwnSGigg30oGSn1A9UiUrytAewBPKs");
+    expect(link.pathname).toBe("/silkcartlink/cart/open");
+  });
+
   it("rejects a tampered cart, a tampered expiry, another secret, and an expired link", () => {
     const link = signCartLink(cfg, CART, NOW);
     const swapped = new URL(link);

@@ -1,5 +1,5 @@
 // Signed cart links. Stock Magento can't open an API-created guest cart from an email link,
-// so a small Silk Magento module will serve
+// so a small Silk Magento module (integrations/magento/Silk_CartLink) serves
 //   {store}{path}?cart={maskedId}&exp={unix seconds}&sig={base64url HMAC-SHA256("{maskedId}.{exp}")}
 // verify the signature and expiry, load the guest cart into the visitor's session and redirect
 // to /checkout/cart. The agent signs links in that format today; verifyCartLink() is the
@@ -18,7 +18,8 @@ export interface CartLinkConfig {
   ttlDays: number;
 }
 
-export const DEFAULT_CART_LINK_PATH = "/silk/cart/open";
+/** The route Silk_CartLink serves (integrations/magento/Silk_CartLink). */
+export const DEFAULT_CART_LINK_PATH = "/silkcartlink/cart/open";
 const DEFAULT_TTL_DAYS = 30;
 
 /** Link settings from env, or null when MAGENTO_CART_LINK_SECRET isn't set (no links then). */

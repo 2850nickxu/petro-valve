@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<!-- /silkcartlink/cart/open — a front name of its own, so it can't collide with other Silk_* routes. -->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:App/etc/routes.xsd">
+    <router id="standard">
+        <route id="silkcartlink" frontName="silkcartlink">
+            <module name="Silk_CartLink"/>
+        </route>
+    </router>
+</config>

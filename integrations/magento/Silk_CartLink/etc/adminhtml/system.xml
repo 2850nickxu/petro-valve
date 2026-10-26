@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
+    <system>
+        <tab id="silk" translate="label" sortOrder="900">
+            <label>Silk</label>
+        </tab>
+        <section id="silk_cartlink" translate="label" sortOrder="100" showInDefault="1" showInWebsite="1" showInStore="0">
+            <label>Cart links</label>
+            <tab>silk</tab>
+            <resource>Silk_CartLink::config</resource>
+            <group id="general" translate="label" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="0">
+                <label>Signed cart links from the PO agent</label>
+                <field id="enabled" translate="label" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Enabled</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="secret" translate="label comment" type="obscure" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Shared secret</label>
+                    <comment>Must equal MAGENTO_CART_LINK_SECRET in the PO agent. Stored encrypted.</comment>
+                    <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
+                </field>
+            </group>
+        </section>
+    </system>
+</config>
