@@ -1,0 +1,148 @@
+{
+  "rfq": "BPS-RFQ-TEST-001",
+  "source_prices": "petrovalve.com prod, 2026-10-16",
+  "lines": [
+    {
+      "source": "pdf",
+      "input": "VO 12111-1",
+      "qty": 4,
+      "case": "exact SKU",
+      "expect": "quote",
+      "sku": "VO 12111-1",
+      "unit_price": 135.0
+    },
+    {
+      "source": "pdf",
+      "input": "Vogt 12111 1-1/2\"",
+      "qty": 2,
+      "case": "partial SKU",
+      "expect": "quote",
+      "sku": "VO 12111-1-1/2",
+      "unit_price": 283.0
+    },
+    {
+      "source": "pdf",
+      "input": "Gate valve 3/4\", 800#, A105 forged, socket weld, Vogt",
+      "qty": 6,
+      "case": "description only",
+      "expect": "recommend",
+      "sku": "VO SW12141-3/4 or VO 12111-3/4",
+      "unit_price": null
+    },
+    {
+      "source": "pdf",
+      "input": "CR 147XU-2",
+      "qty": 1,
+      "case": "exact SKU",
+      "expect": "quote",
+      "sku": "CR 147XU-2",
+      "unit_price": 2674.39
+    },
+    {
+      "source": "pdf",
+      "input": "VO 12111-3",
+      "qty": 2,
+      "case": "exact SKU, $0.01 placeholder price",
+      "expect": "escalate:price_anomaly",
+      "sku": "VO 12111-3",
+      "unit_price": 0.01
+    },
+    {
+      "source": "pdf",
+      "input": "Fisher ED control valve 4\" CL300",
+      "qty": 1,
+      "case": "not in catalog",
+      "expect": "escalate:non_catalog",
+      "sku": null,
+      "unit_price": null
+    },
+    {
+      "source": "xlsx",
+      "input": "VO 12111-1/2",
+      "qty": 10,
+      "expect": "quote",
+      "sku": "VO 12111-1/2",
+      "unit_price": 98.0
+    },
+    {
+      "source": "xlsx",
+      "input": "VO 12111-3/4",
+      "qty": 10,
+      "expect": "quote",
+      "sku": "VO 12111-3/4",
+      "unit_price": 110.0
+    },
+    {
+      "source": "xlsx",
+      "input": "SW12141 1\"",
+      "qty": 5,
+      "expect": "quote",
+      "sku": "VO SW12141-1",
+      "unit_price": 237.0
+    },
+    {
+      "source": "xlsx",
+      "input": "VO SW12141-2",
+      "qty": 3,
+      "expect": "quote",
+      "sku": "VO SW12141-2",
+      "unit_price": 657.0
+    },
+    {
+      "source": "xlsx",
+      "input": "VO 12111F8M-1",
+      "qty": 4,
+      "expect": "quote",
+      "sku": "VO 12111F8M-1",
+      "unit_price": 305.0
+    },
+    {
+      "source": "xlsx",
+      "input": "12111F8M 2 inch",
+      "qty": 2,
+      "expect": "quote",
+      "sku": "VO 12111F8M-2",
+      "unit_price": 988.0
+    },
+    {
+      "source": "xlsx",
+      "input": "CR 147LUN-4",
+      "qty": 1,
+      "expect": "quote",
+      "sku": "CR 147LUN-4",
+      "unit_price": 10792.82
+    },
+    {
+      "source": "xlsx",
+      "input": "Crane 147XU 3\"",
+      "qty": 1,
+      "expect": "quote",
+      "sku": "CR 147XU-3",
+      "unit_price": 3398.97
+    },
+    {
+      "source": "xlsx",
+      "input": "VO SW12141-1-1/4",
+      "qty": 2,
+      "expect": "escalate:price_anomaly",
+      "sku": "VO SW12141-1-1/4",
+      "unit_price": 0.01
+    },
+    {
+      "source": "xlsx",
+      "input": "VO 12111-1",
+      "qty": 25000,
+      "expect": "escalate:unusual_quantity",
+      "sku": "VO 12111-1",
+      "unit_price": 135.0
+    },
+    {
+      "source": "email_body",
+      "input": "Vogt 12111 1/2\" gate valve",
+      "qty": 3,
+      "expect": "quote",
+      "sku": "VO 12111-1/2",
+      "unit_price": 98.0
+    }
+  ]
+}
